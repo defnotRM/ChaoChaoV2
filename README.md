@@ -145,9 +145,8 @@ ChaoChaoV2/
    - ให้แตก Branch ย่อยจาก `main` เช่น `feature/login-fix`, `feature/payment-ui`
 2. **ก่อนเริ่มงานทุกครั้ง ให้อัปเดต Branch ของตัวเองด้วย `main`**:
    ```bash
-   git fetch origin
    git switch <your-branch>
-   git merge origin/main
+   git pull origin main
    ```
 3. **เมื่อพัฒนาเสร็จสิ้น**:
    ```bash
