@@ -22,16 +22,19 @@ git clone <URL_REPOSITORY_ของโปรเจกต์>
 cd ChaoChaoV2
 ```
 
-### 2. สลับไปยัง Branch การทำงานของตัวเอง
+### 2. สลับไปยัง Branch ของตัวเองที่ถูกสร้างไว้ให้
+
+หัวหน้าโปรเจกต์จะสร้าง Branch ประจำตัวหรือฟีเจอร์ไว้ให้บน Remote Repository เรียบร้อยแล้ว ให้สลับไปยัง Branch ของตัวเอง:
 
 ```bash
-# ตรวจสอบ branch ทั้งหมด
-git branch -a
+# ตรวจสอบรายชื่อ branch ทั้งหมดบน remote
+git branch -r
 
-# สร้างหรือสลับไปยัง branch ทำงานของตัวเอง
-git switch <your-feature-branch>
-# หรือหากสร้างใหม่จาก main
-git checkout -b feature/<ชื่อฟีเจอร์หรือชื่อของคุณ>
+# สลับไปยัง branch ของตัวเอง (Git จะสร้าง local branch และ track ให้อัตโนมัติ)
+git switch <your-branch>
+
+# (เฉพาะกรณีที่ Git ไม่ดึง branch อัตโนมัติ ให้ใช้คำสั่งนี้)
+git switch --track origin/<your-branch>
 ```
 
 ### 3. ติดตั้ง Dependencies
@@ -141,20 +144,23 @@ ChaoChaoV2/
 
 เพื่อให้การทำงานในทีมเป็นระเบียบและลดปัญหา Code Conflict:
 
-1. **ห้าม Commit ลง Branch `main` โดยตรง**:
-   - ให้แตก Branch ย่อยจาก `main` เช่น `feature/login-fix`, `feature/payment-ui`
+1. **ทำงานบน Branch ของตัวเองเท่านั้น**:
+   - ทุกคนจะมี Branch ประจำตัวที่ถูกสร้างไว้ให้แล้ว ห้ามแก้ไขโค้ดหรือ Commit/Push ลง Branch `main` โดยตรงเด็ดขาด
 2. **ก่อนเริ่มงานทุกครั้ง ให้อัปเดต Branch ของตัวเองด้วย `main`**:
    ```bash
    git switch <your-branch>
    git pull origin main
    ```
-3. **เมื่อพัฒนาเสร็จสิ้น**:
+3. **เมื่อพัฒนาหรือแก้ไขงานเสร็จสิ้น**:
    ```bash
    git add .
    git commit -m "feat: อธิบายสิ่งที่คุณเพิ่มหรือแก้ไข"
    git push origin <your-branch>
    ```
-4. **เปิด Pull Request (PR)** บน GitHub เพื่อให้เพื่อนในทีมตรวจสอบและ Merge เข้า `main`
+4. **เปิด Pull Request (PR) เข้า Branch `main`**:
+   - เข้า GitHub ไปที่หน้า Repository ของโปรเจกต์
+   - เปิด **Pull Request** โดยเลือก base: `main` <- compare: `<your-branch>`
+   - ให้เพื่อนในทีมหรือเจ้าของโปรเจกต์ Review ก่อนกด Merge เข้า `main`
 5. **ทดสอบ Build ก่อนส่ง PR เสมอ**:
    ```bash
    npm run build
