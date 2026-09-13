@@ -1,6 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import RentOrderDetailClient, { type RentOrderDetailData } from "./RentOrderDetailClient";
+import { createClient } from "@/lib/supabase/server";
+import RentOrderDetailClient, {
+  type RentOrderDetailData,
+} from "./RentOrderDetailClient";
 
 export const dynamic = "force-dynamic";
 
@@ -12,16 +15,45 @@ export default async function UserRentalOrderDetailPage({
   const { id: userId, orderId } = await params;
   const admin = createAdminClient();
 
+  // ต้องล็อกอิน และต้องเป็นเจ้าของ dashboard นี้เอง (หรือ admin) เท่านั้นถึงจะเข้าดูได้
+  const supabase = await createClient();
+  const {
+    data: { user: sessionUser },
+  } = await supabase.auth.getUser();
+
+  if (!sessionUser) {
+    redirect("/login");
+  }
+
+  let isAdmin = false;
+  if (sessionUser.id !== userId) {
+    const { data: sessionRoles } = await admin
+      .from("user_role_assignment")
+      .select("role ( role_type )")
+      .eq("user_id", sessionUser.id);
+    isAdmin = (sessionRoles || []).some(
+      (r: any) => r.role?.role_type === "admin",
+    );
+    if (!isAdmin) {
+      notFound();
+    }
+  }
+
   // 1. ดึงข้อมูลคำสั่งเช่า
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
-      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at"
+      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at",
     )
     .eq("order_id", orderId)
     .maybeSingle();
 
   if (error || !order) {
+    notFound();
+  }
+
+  // ตรวจว่า order นี้เป็นของผู้เช่าที่ล็อกอินอยู่จริง (กันเดา orderId ของ order คนอื่น)
+  if (!isAdmin && order.user_id !== userId) {
     notFound();
   }
 
@@ -58,15 +90,14 @@ export default async function UserRentalOrderDetailPage({
     ownerId
       ? admin
           .from("useraccount")
-          .select("user_id, username, firstname, lastname, email, avatar_url, updated_at, status")
+          .select(
+            "user_id, username, firstname, lastname, email, avatar_url, updated_at, status",
+          )
           .eq("user_id", ownerId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     ownerId
-      ? admin
-          .from("userphones")
-          .select("phone")
-          .eq("user_id", ownerId)
+      ? admin.from("userphones").select("phone").eq("user_id", ownerId)
       : Promise.resolve({ data: [] }),
   ]);
 
