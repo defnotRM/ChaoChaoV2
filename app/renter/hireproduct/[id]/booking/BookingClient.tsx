@@ -24,8 +24,6 @@ import type { BookingDraft, BookingPageData, DateRange } from "./types";
 /* ────────────────────────────── ค่าคงที่ (UI rules) ──────────────────────────────
  * ค่าเหล่านี้เป็นกติกาฝั่ง UI ที่ยังไม่ผูกกับ schema — ปรับได้อิสระ
  */
-const LONG_RENTAL_MIN_DAYS = 3; // เช่า 3 วันขึ้นไปได้ส่วนลด
-const LONG_RENTAL_DISCOUNT_RATE = 0.1; // -10%
 const PLATFORM_FEE_RATE = 0; // ค่าธรรมเนียมแพลตฟอร์ม (ยังไม่กำหนดใน DB → 0)
 
 const DRAFT_STORAGE_KEY = "chaochao:bookingDraft";
@@ -191,12 +189,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
   /* ── pricing ── */
   const days = startKey && endKey ? inclusiveDays(startKey, endKey) : 0;
-  const rentalBase = days * item.rentalFeePerDay;
-  const discount =
-    days >= LONG_RENTAL_MIN_DAYS
-      ? Math.round(rentalBase * LONG_RENTAL_DISCOUNT_RATE)
-      : 0;
-  const rentalFee = rentalBase - discount;
+  const rentalFee = days * item.rentalFeePerDay;
   const platformFee = Math.round(rentalFee * PLATFORM_FEE_RATE);
   const netIncome = rentalFee - platformFee;
   const totalPayable = rentalFee + item.deposit;
@@ -583,17 +576,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   <dl className="space-y-2.5 text-sm">
                     <PriceRow
                       label={`ค่าเช่า (${thb.format(item.rentalFeePerDay)} × ${days} วัน)`}
-                      value={thb.format(rentalBase)}
+                      value={thb.format(rentalFee)}
                     />
-                    {discount > 0 && (
-                      <PriceRow
-                        label={`ส่วนลดเช่า ${LONG_RENTAL_MIN_DAYS} วันขึ้นไป (−${Math.round(
-                          LONG_RENTAL_DISCOUNT_RATE * 100
-                        )}%)`}
-                        value={`−${thb.format(discount)}`}
-                        highlight
-                      />
-                    )}
                     <PriceRow
                       label="เงินประกัน (คืนเมื่อจบการเช่า)"
                       value={thb.format(item.deposit)}

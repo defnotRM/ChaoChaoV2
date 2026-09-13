@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import {
-  Heart,
   Menu,
   MessageCircle,
   X,
@@ -169,14 +168,6 @@ export default function Navbarver2() {
           </Link>
 
           <Link
-            href={user ? "/renter/favorites" : "/login?redirect=/renter/favorites"}
-            aria-label="รายการโปรด"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
-          >
-            <Heart aria-hidden="true" className="h-6 w-6" />
-          </Link>
-
-          <Link
             href={user ? "/chat" : "/login?redirect=/chat"}
             aria-label="ข้อความ"
             className="relative flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
@@ -292,12 +283,6 @@ export default function Navbarver2() {
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
-            </Link>
-            <Link
-              href={user ? "/renter/favorites" : "/login?redirect=/renter/favorites"}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
-            >
-              <Heart aria-hidden="true" className="h-6 w-6" />
             </Link>
 
             {/* Circular Profile Button for Mobile Top Bar (เฉพาะเมื่อ Logged In) */}
