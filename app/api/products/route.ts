@@ -112,6 +112,36 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    if (!user) {
+      return apiError("กรุณาเข้าสู่ระบบก่อนลงประกาศสินค้า", 401);
+    }
+
+    const admin = createAdminClient();
+
+    // ตรวจสอบสิทธิ์ว่าผู้ใช้มีบทบาทเป็นผู้ให้เช่า (Lender) หรือ Admin หรือไม่
+    const { data: userRoles } = await admin
+      .from("user_role_assignment")
+      .select("role ( role_type )")
+      .eq("user_id", user.id);
+
+    let roles = (userRoles || [])
+      .map((item: any) => item.role?.role_type)
+      .filter(Boolean);
+
+    if (roles.length === 0) {
+      const uRole =
+        user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
+      roles = uRole === "both" ? ["renter", "lender"] : [uRole];
+    }
+
+    const isLender = roles.includes("lender") || roles.includes("admin");
+    if (!isLender) {
+      return apiError(
+        "เฉพาะบัญชีผู้ให้เช่า (Lender) เท่านั้นที่สามารถลงประกาศสินค้าได้",
+        403
+      );
+    }
+
     const body = await request.json();
     const parsed = createProductSchema.safeParse(body);
 
@@ -122,8 +152,7 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data;
-    const admin = createAdminClient();
-    const userId = user?.id || "b5041d3d-ba07-4230-96fa-3fbfb4411439";
+    const userId = user.id;
 
     const { data: itemId, error } = await admin.rpc("create_item_listing", {
       p_user_id: userId,

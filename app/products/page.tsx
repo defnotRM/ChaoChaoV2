@@ -6,15 +6,42 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string }>;
+  searchParams?: Promise<{
+    q?: string;
+    category?: string;
+    categoryId?: string;
+  }>;
 }) {
   const params = await searchParams;
   const initialQuery = params?.q || "";
+  const rawCategory = params?.category || params?.categoryId || "";
 
   const [itemCategories, products] = await Promise.all([
     getCategories(),
     getProducts(),
   ]);
+
+  let initialCategoryIds: string[] = [];
+  if (rawCategory) {
+    const tokens = rawCategory
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const matched = itemCategories.filter((cat) => {
+      const idStr = String(cat.category_id).toLowerCase();
+      const nameStr = cat.category_name.toLowerCase();
+      return tokens.some(
+        (tok) => tok === idStr || tok === nameStr || nameStr.includes(tok),
+      );
+    });
+
+    if (matched.length > 0) {
+      initialCategoryIds = matched.map((m) => String(m.category_id));
+    } else {
+      initialCategoryIds = [rawCategory];
+    }
+  }
 
   return (
     <section className="min-h-screen bg-[#f8fafc] py-8 sm:py-10">
@@ -32,9 +59,11 @@ export default async function ProductsPage({
         </div>
 
         <ProductCatalog
+          key={`${initialQuery}-${initialCategoryIds.join(",")}`}
           itemCategories={itemCategories}
           products={products}
           initialSearchQuery={initialQuery}
+          initialCategoryIds={initialCategoryIds}
         />
       </div>
     </section>

@@ -20,6 +20,7 @@ type ProductCatalogProps = {
   itemCategories: ItemCategoryRow[];
   products: Product[];
   initialSearchQuery?: string;
+  initialCategoryIds?: string[];
 };
 
 type CatalogLayout = "grid" | "list";
@@ -28,9 +29,10 @@ export default function ProductCatalog({
   itemCategories,
   products,
   initialSearchQuery = "",
+  initialCategoryIds = [],
 }: ProductCatalogProps) {
   const [filters, setFilters] = useState(() =>
-    createInitialProductFilters(initialSearchQuery),
+    createInitialProductFilters(initialSearchQuery, initialCategoryIds),
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [layout, setLayout] = useState<CatalogLayout>("grid");

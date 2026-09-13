@@ -112,7 +112,7 @@ function orderNo(orderId: string, createdAt: string) {
 
 const TIMELINE = [
   "ส่งคำขอ",
-  "ร้านอนุมัติ",
+  "ผู้ให้เช่าอนุมัติ",
   "รอชำระเงิน",
   "ตรวจการชำระ",
   "รับของ",
@@ -122,7 +122,7 @@ const TIMELINE = [
 function statusStep(status: string, hasPending: boolean): number {
   switch (status) {
     case "requested":
-      return 1; // อยู่ที่ขั้นที่ 2 "ร้านอนุมัติ" รอผู้ให้เช่ากดอนุมัติ
+      return 1; // อยู่ที่ขั้นที่ 2 "ผู้ให้เช่าอนุมัติ" รอผู้ให้เช่ากดอนุมัติ
     case "awaiting_payment":
       return hasPending ? 3 : 2;
     case "paid":

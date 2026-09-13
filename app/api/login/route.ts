@@ -145,8 +145,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Determine redirection path (เข้าสู่หน้าแดชบอร์ดหลักทันที)
-    const redirectTo = "/dashboard";
+    // 5. Determine redirection path (เข้าสู่หน้าแรก)
+    const redirectTo = "/";
 
     const response = NextResponse.json(
       {
