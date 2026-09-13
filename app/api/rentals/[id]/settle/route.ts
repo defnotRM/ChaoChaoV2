@@ -28,11 +28,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     return apiError("ข้อมูลไม่ถูกต้อง", 400, parsed.error.flatten());
   }
 
-  const { damageCost } = parsed.data;
+  const { damageFee, lateFee } = parsed.data;
 
   const { data, error } = await supabase.rpc("settle_rental_order", {
     p_order_id: id,
-    p_damage_cost: damageCost,
+    p_lender_id: user.id,
+    p_damage_fee: damageFee,
+    p_late_fee: lateFee,
   });
 
   if (error) {
