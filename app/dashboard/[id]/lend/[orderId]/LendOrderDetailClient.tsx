@@ -246,8 +246,6 @@ export default function LendOrderDetailClient({
   const rentalFee = Number(order.rental_fee) || 0;
   const deposit = Number(order.deposit) || 0;
   const totalPaid = Number(order.total_paid) || 0;
-  const rentalBase = rentPerDay * days;
-  const discount = rentalBase > rentalFee ? rentalBase - rentalFee : 0;
 
   const step = statusStep(currentStatus, hasPending);
   const isCancelled = step === -1;
@@ -805,11 +803,8 @@ export default function LendOrderDetailClient({
               <dl className="mb-4 space-y-2.5">
                 <SummaryRow
                   label={`ค่าเช่า (${days} วัน × ${thb.format(rentPerDay)})`}
-                  value={thb.format(rentalBase)}
+                  value={thb.format(rentalFee)}
                 />
-                {discount > 0 && (
-                  <SummaryRow label="ส่วนลดเช่าระยะยาว" value={`−${thb.format(discount)}`} accent />
-                )}
                 <SummaryRow label="เงินประกัน (พักไว้กับระบบ)" value={thb.format(deposit)} muted />
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <span className="text-sm font-bold text-slate-900">รายได้สุทธิของคุณ</span>

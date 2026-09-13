@@ -27,8 +27,6 @@ import type { BookingDraft, BookingPageData, DateRange } from "./types";
 /* ────────────────────────────── ค่าคงที่ (UI rules) ──────────────────────────────
  * ค่าเหล่านี้เป็นกติกาฝั่ง UI ที่ยังไม่ผูกกับ schema — ปรับได้อิสระ
  */
-const LONG_RENTAL_MIN_DAYS = 3; // เช่า 3 วันขึ้นไปได้ส่วนลด
-const LONG_RENTAL_DISCOUNT_RATE = 0.1; // -10%
 const PLATFORM_FEE_RATE = 0; // ค่าธรรมเนียมแพลตฟอร์ม (ยังไม่กำหนดใน DB → 0)
 
 const DRAFT_STORAGE_KEY = "chaochao:bookingDraft";
@@ -280,12 +278,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
   /* ── pricing ── */
   const days = startKey && endKey ? inclusiveDays(startKey, endKey) : 0;
-  const rentalBase = days * item.rentalFeePerDay;
-  const discount =
-    days >= LONG_RENTAL_MIN_DAYS
-      ? Math.round(rentalBase * LONG_RENTAL_DISCOUNT_RATE)
-      : 0;
-  const rentalFee = rentalBase - discount;
+  const rentalFee = days * item.rentalFeePerDay;
   const platformFee = Math.round(rentalFee * PLATFORM_FEE_RATE);
   const netIncome = rentalFee - platformFee;
   const totalPayable = rentalFee + item.deposit;
@@ -658,12 +651,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                     ถ่ายรูปหลักฐานสภาพอุปกรณ์ร่วมกันทั้งตอนรับและคืน เพื่อความปลอดภัยทั้งสองฝ่าย
                   </span>
                 </div>
-                <div className="flex items-start gap-2.5">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
-                  <span>
-                    เช่าตั้งแต่ 3 วันขึ้นไป รับส่วนลดทันที 10% จากค่าเช่าปกติ
-                  </span>
-                </div>
               </div>
             </section>
           </div>
@@ -737,15 +724,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   <dl className="space-y-2.5">
                     <PriceRow
                       label={`ค่าเช่า (${days} วัน × ${thb.format(item.rentalFeePerDay)})`}
-                      value={thb.format(rentalBase)}
+                      value={thb.format(rentalFee)}
                     />
-                    {discount > 0 && (
-                      <PriceRow
-                        label="ส่วนลดเช่าระยะยาว (-10%)"
-                        value={`-${thb.format(discount)}`}
-                        highlight
-                      />
-                    )}
                     <PriceRow
                       label="เงินประกัน (คืนเมื่อเสร็จสิ้น)"
                       value={thb.format(item.deposit)}

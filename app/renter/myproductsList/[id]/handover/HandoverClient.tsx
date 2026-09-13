@@ -313,27 +313,7 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  กลับไปรายการเช่า
                 </Link>
-                {data.status === "item_sent" || data.status === "item_returned" ? (
-                  <Link
-                    href={`/renter/myproductsList/${data.orderId}/return`}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
-                  >
-                    ไปหน้าคืนของ
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    title="ต้องรับของก่อนจึงจะคืนของได้"
-                    className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-400 opacity-70"
-                  >
-                    ไปหน้าคืนของ
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                )}
               </div>
             </section>
           </div>
