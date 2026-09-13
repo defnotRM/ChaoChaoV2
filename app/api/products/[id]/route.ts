@@ -61,7 +61,40 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return apiError("กรุณาเข้าสู่ระบบก่อนแก้ไขสินค้า", 401);
+    }
+
     const admin = createAdminClient();
+
+    // ตรวจสอบว่าสินค้ามีอยู่และเป็นของผู้ใช้นี้ หรือเป็น admin
+    const { data: existingItem } = await admin
+      .from("item")
+      .select("user_id")
+      .eq("item_id", id)
+      .maybeSingle();
+
+    if (!existingItem) {
+      return apiError("ไม่พบสินค้านี้", 404);
+    }
+
+    const { data: userRoles } = await admin
+      .from("user_role_assignment")
+      .select("role ( role_type )")
+      .eq("user_id", user.id);
+
+    const roles = (userRoles || []).map((r: any) => r.role?.role_type).filter(Boolean);
+    const isAdmin = roles.includes("admin");
+
+    if (existingItem.user_id !== user.id && !isAdmin) {
+      return apiError("คุณไม่มีสิทธิ์แก้ไขสินค้านี้", 403);
+    }
 
     const body = await request.json();
     const parsed = updateProductSchema.safeParse(body);
@@ -160,7 +193,40 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return apiError("กรุณาเข้าสู่ระบบก่อนดำเนินการ", 401);
+    }
+
     const admin = createAdminClient();
+
+    // ตรวจสอบว่าสินค้ามีอยู่และเป็นของผู้ใช้นี้ หรือเป็น admin
+    const { data: existingItem } = await admin
+      .from("item")
+      .select("user_id")
+      .eq("item_id", id)
+      .maybeSingle();
+
+    if (!existingItem) {
+      return apiError("ไม่พบสินค้านี้", 404);
+    }
+
+    const { data: userRoles } = await admin
+      .from("user_role_assignment")
+      .select("role ( role_type )")
+      .eq("user_id", user.id);
+
+    const roles = (userRoles || []).map((r: any) => r.role?.role_type).filter(Boolean);
+    const isAdmin = roles.includes("admin");
+
+    if (existingItem.user_id !== user.id && !isAdmin) {
+      return apiError("คุณไม่มีสิทธิ์ลบสินค้านี้", 403);
+    }
 
     const { data, error } = await admin
       .from("item")

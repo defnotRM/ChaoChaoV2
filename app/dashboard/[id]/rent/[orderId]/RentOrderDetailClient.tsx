@@ -113,7 +113,7 @@ function orderNo(orderId: string, createdAt: string) {
 
 const TIMELINE = [
   "ส่งคำขอ",
-  "ร้านอนุมัติ",
+  "ผู้ให้เช่าอนุมัติ",
   "รอชำระเงิน",
   "ตรวจการชำระ",
   "รับของ",
@@ -123,7 +123,7 @@ const TIMELINE = [
 function statusStep(status: string, hasPending: boolean): number {
   switch (status) {
     case "requested":
-      return 1; // ส่งคำขอแล้ว (มีเครื่องหมายถูก) ปัจจุบันรอร้านอนุมัติ (ขั้นที่ 2)
+      return 1; // ส่งคำขอแล้ว (มีเครื่องหมายถูก) ปัจจุบันรอผู้ให้เช่าอนุมัติ (ขั้นที่ 2)
     case "awaiting_payment":
       return hasPending ? 3 : 2; // ถ้ามี pending slip อยู่ที่ขั้น 4 "ตรวจการชำระ" ถ้าไม่มีอยู่ที่ขั้น 3 "รอชำระเงิน"
     case "paid":

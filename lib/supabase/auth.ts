@@ -41,9 +41,14 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
       .select("role ( role_type )")
       .eq("user_id", user.id);
 
-    const roles: UserRole[] = (roleAssignments || [])
+    let roles: UserRole[] = (roleAssignments || [])
       .map((item: any) => item.role?.role_type)
       .filter(Boolean) as UserRole[];
+
+    if (roles.length === 0) {
+      const uRole = user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
+      roles = (uRole === "both" ? ["renter", "lender"] : [uRole]) as UserRole[];
+    }
 
     return {
       id: user.id,
