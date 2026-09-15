@@ -12,18 +12,18 @@ const updateProfileSchema = z.object({
     .max(20, "ชื่อผู้ใช้ต้องไม่เกิน 20 ตัวอักษร")
     .regex(
       /^[a-zA-Z0-9_]+$/,
-      "ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _"
+      "ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _",
     ),
-  bio: z.string().max(500, "ประวัติย่อต้องไม่เกิน 500 ตัวอักษร").optional().nullable(),
+  bio: z
+    .string()
+    .max(500, "ประวัติย่อต้องไม่เกิน 500 ตัวอักษร")
+    .optional()
+    .nullable(),
   avatarUrl: z.string().optional().nullable(),
   bannerUrl: z.string().optional().nullable(),
   phones: z
-    .array(
-      z
-        .string()
-        .max(10, "เบอร์โทรศัพท์ต้องไม่เกิน 10 หลัก")
-    )
-    .max(2, "สามารถใส่เบอร์โทรศัพท์ได้สูงสุด 2 เบอร์")
+    .array(z.string().max(10, "เบอร์โทรศัพท์ต้องไม่เกิน 10 หลัก"))
+    .max(1, "สามารถใส่เบอร์โทรศัพท์ได้สูงสุด 1 เบอร์")
     .optional()
     .nullable(),
   password: z
@@ -48,17 +48,17 @@ export async function GET() {
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const admin = createAdminClient();
 
-    const [profileRes, roleAssignmentsRes, allRolesRes, phonesRes] = await Promise.all([
+    const [profileRes, roleAssignmentsRes, allRolesRes] = await Promise.all([
       admin
         .from("useraccount")
         .select(
-          "user_id, username, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at"
+          "user_id, username, email, national_id, bio, avatar_url, banner_url, phone, updated_at, status, created_at",
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -67,15 +67,14 @@ export async function GET() {
         .select("role_id")
         .eq("user_id", user.id),
       admin.from("role").select("role_id, role_type"),
-      admin
-        .from("userphones")
-        .select("phone")
-        .eq("user_id", user.id),
     ]);
 
     let profile = profileRes.data;
     if (!profile) {
-      const uName = user.user_metadata?.username || user.email?.split("@")[0] || "ผู้ใช้งาน";
+      const uName =
+        user.user_metadata?.username ||
+        user.email?.split("@")[0] ||
+        "ผู้ใช้งาน";
       const uEmail = user.email || `${uName.toLowerCase()}@chaochao.local`;
       const uNatId = user.user_metadata?.national_id || null;
 
@@ -87,7 +86,7 @@ export async function GET() {
           national_id: uNatId,
           status: "Active",
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id" },
       );
 
       profile = {
@@ -98,6 +97,7 @@ export async function GET() {
         bio: "",
         avatar_url: null,
         banner_url: null,
+        phone: null,
         updated_at: new Date().toISOString(),
         status: "Active",
         created_at: new Date().toISOString(),
@@ -114,13 +114,12 @@ export async function GET() {
       .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {
-      const uRole = user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
+      const uRole =
+        user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
       roles = uRole === "both" ? ["renter", "lender"] : [uRole];
     }
 
-    const phones = (phonesRes.data || [])
-      .map((p: any) => p.phone)
-      .filter(Boolean);
+    const phones = profile.phone ? [profile.phone] : [];
 
     const v = profile.updated_at
       ? new Date(profile.updated_at).getTime()
@@ -148,7 +147,7 @@ export async function GET() {
     console.error("Profile GET error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -164,7 +163,7 @@ export async function PATCH(request: Request) {
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -177,7 +176,8 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: firstError }, { status: 400 });
     }
 
-    const { username, bio, avatarUrl, bannerUrl, phones, password } = validation.data;
+    const { username, bio, avatarUrl, bannerUrl, phones, password } =
+      validation.data;
     const admin = createAdminClient();
 
     // 1. Check if new username is already taken by another user
@@ -191,7 +191,7 @@ export async function PATCH(request: Request) {
     if (existingUser) {
       return NextResponse.json(
         { message: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว กรุณาเลือกชื่ออื่น" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -224,45 +224,36 @@ export async function PATCH(request: Request) {
       console.error("Profile update error:", updateError);
       return NextResponse.json(
         { message: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // 3. Update userphones (Max 2 phone numbers, or 0/1)
+    // 3. Update useraccount.phone (เก็บได้ 1 เบอร์เท่านั้น ตั้งแต่ยุบ userphones เข้ามารวมแล้ว)
     let updatedPhones: string[] = [];
     if (phones !== undefined && phones !== null) {
       const cleanPhones = Array.from(
         new Set(
           phones
             .map((p) => p.replace(/\D/g, "").slice(0, 10))
-            .filter((p) => p.length === 10)
-        )
-      ).slice(0, 2);
+            .filter((p) => p.length === 10),
+        ),
+      ).slice(0, 1);
 
-      // Delete existing phones for this user
-      await admin.from("userphones").delete().eq("user_id", user.id);
-
-      // Insert new phone numbers (if any)
-      if (cleanPhones.length > 0) {
-        const phoneRows = cleanPhones.map((phone) => ({
-          user_id: user.id,
-          phone,
-        }));
-        const { error: phoneInsertError } = await admin
-          .from("userphones")
-          .insert(phoneRows);
-
-        if (phoneInsertError) {
-          console.error("userphones insert error:", phoneInsertError);
-        }
+      const { error: phoneUpdateError } = await admin
+        .from("useraccount")
+        .update({ phone: cleanPhones[0] ?? null })
+        .eq("user_id", user.id);
+      if (phoneUpdateError) {
+        console.error("useraccount phone update error:", phoneUpdateError);
       }
       updatedPhones = cleanPhones;
     } else {
-      const { data: currentPhones } = await admin
-        .from("userphones")
+      const { data: currentProfile } = await admin
+        .from("useraccount")
         .select("phone")
-        .eq("user_id", user.id);
-      updatedPhones = (currentPhones || []).map((p: any) => p.phone).filter(Boolean);
+        .eq("user_id", user.id)
+        .maybeSingle();
+      updatedPhones = currentProfile?.phone ? [currentProfile.phone] : [];
     }
 
     // 4. Update auth.users email and metadata
@@ -273,8 +264,8 @@ export async function PATCH(request: Request) {
         avatarUrl === ""
           ? null
           : avatarUrl
-          ? `/api/avatar?id=${user.id}`
-          : user.user_metadata?.avatar_url,
+            ? `/api/avatar?id=${user.id}`
+            : user.user_metadata?.avatar_url,
     };
 
     const authUpdatePayload: any = {
@@ -289,7 +280,7 @@ export async function PATCH(request: Request) {
 
     const { error: authUpdateError } = await admin.auth.admin.updateUserById(
       user.id,
-      authUpdatePayload
+      authUpdatePayload,
     );
 
     if (authUpdateError) {
@@ -304,15 +295,17 @@ export async function PATCH(request: Request) {
         username,
         bio: bio ?? "",
         phones: updatedPhones,
-        avatarUrl: avatarUrl === "" ? "" : (avatarUrl || updateData.avatar_url || ""),
-        bannerUrl: bannerUrl === "" ? "" : (bannerUrl || updateData.banner_url || ""),
+        avatarUrl:
+          avatarUrl === "" ? "" : avatarUrl || updateData.avatar_url || "",
+        bannerUrl:
+          bannerUrl === "" ? "" : bannerUrl || updateData.banner_url || "",
       },
     });
   } catch (error) {
     console.error("Profile PATCH error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

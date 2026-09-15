@@ -71,7 +71,7 @@ export default async function LenderOrderDetailPage({
         )
         .eq("user_id", order.user_id)
         .maybeSingle(),
-      admin.from("userphones").select("phone").eq("user_id", order.user_id),
+      admin.from("useraccount").select("phone").eq("user_id", order.user_id),
       admin
         .from("payment")
         .select("payment_id, amount, status, slip_image_url, date")

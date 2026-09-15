@@ -43,13 +43,13 @@ export async function POST(request: Request) {
     if (!itemId || !startDate || !endDate) {
       return NextResponse.json(
         { message: "ข้อมูลคำขอไม่ครบ (สินค้า/ช่วงวันที่)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (endDate < startDate) {
       return NextResponse.json(
         { message: "วันสิ้นสุดต้องไม่ก่อนวันเริ่ม" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -77,8 +77,11 @@ export async function POST(request: Request) {
 
       if (isLenderOnly) {
         return NextResponse.json(
-          { message: "บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น ไม่สามารถส่งคำขอเช่าได้" },
-          { status: 403 }
+          {
+            message:
+              "บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น ไม่สามารถส่งคำขอเช่าได้",
+          },
+          { status: 403 },
         );
       }
     }
@@ -99,7 +102,7 @@ export async function POST(request: Request) {
     if (item.status !== "available") {
       return NextResponse.json(
         { message: "สินค้านี้ไม่พร้อมให้เช่าในขณะนี้" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -118,8 +121,11 @@ export async function POST(request: Request) {
 
       if (!isWithinAvailability) {
         return NextResponse.json(
-          { message: "ช่วงเวลาที่คุณเลือกไม่อยู่ในขอบเขตวันที่ผู้ให้เช่าเปิดให้เช่า" },
-          { status: 400 }
+          {
+            message:
+              "ช่วงเวลาที่คุณเลือกไม่อยู่ในขอบเขตวันที่ผู้ให้เช่าเปิดให้เช่า",
+          },
+          { status: 400 },
         );
       }
     }
@@ -135,8 +141,11 @@ export async function POST(request: Request) {
 
     if (overlappingOrders && overlappingOrders.length > 0) {
       return NextResponse.json(
-        { message: "ช่วงเวลาดังกล่าวมีรายการเช่าที่ได้รับการอนุมัติไปแล้ว กรุณาเลือกช่วงเวลาอื่น" },
-        { status: 409 }
+        {
+          message:
+            "ช่วงเวลาดังกล่าวมีรายการเช่าที่ได้รับการอนุมัติไปแล้ว กรุณาเลือกช่วงเวลาอื่น",
+        },
+        { status: 409 },
       );
     }
 
@@ -152,7 +161,8 @@ export async function POST(request: Request) {
       const updatePayload: Record<string, any> = {};
       if (firstName) updatePayload.firstname = firstName;
       if (lastName) updatePayload.lastname = lastName;
-      if (nationalId && NATIONAL_ID_RE.test(nationalId)) updatePayload.national_id = nationalId;
+      if (nationalId && NATIONAL_ID_RE.test(nationalId))
+        updatePayload.national_id = nationalId;
       if (email) updatePayload.email = email;
 
       if (Object.keys(updatePayload).length > 0) {
@@ -163,15 +173,17 @@ export async function POST(request: Request) {
       }
 
       if (phone) {
-        await admin.from("userphones").delete().eq("user_id", renterUserId);
-        await admin.from("userphones").insert({ user_id: renterUserId, phone });
+        await admin
+          .from("useraccount")
+          .update({ phone })
+          .eq("user_id", renterUserId);
       }
     }
 
     // คำนวณราคากรณีไม่ได้ส่งมา
     const finalFee = rentalFee ?? item.rental_fee_per_day;
     const finalDeposit = deposit ?? item.deposit;
-    const finalTotal = totalPaid ?? (Number(finalFee) + Number(finalDeposit));
+    const finalTotal = totalPaid ?? Number(finalFee) + Number(finalDeposit);
 
     // 4) INSERT rentalorder
     const { data: order, error: orderError } = await admin
@@ -195,25 +207,25 @@ export async function POST(request: Request) {
       if (orderError.code === "23P01") {
         return NextResponse.json(
           { message: "ช่วงวันที่นี้ถูกจองแล้ว กรุณาเลือกช่วงอื่น" },
-          { status: 409 }
+          { status: 409 },
         );
       }
       console.error("Insert rentalorder error:", orderError);
       return NextResponse.json(
         { message: "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     return NextResponse.json(
       { orderId: order.order_id, userId: renterUserId, warnings },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("POST /api/rentals error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

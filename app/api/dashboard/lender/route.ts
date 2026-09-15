@@ -23,20 +23,25 @@ export async function GET(request: NextRequest) {
     }
 
     // 1. ดึงรายการสินค้าทั้งหมดที่ผู้ให้เช่าคนนี้ลงประกาศไว้
-    const [{ data: rawItems, error: itemsError }, { data: rawCategories }] = await Promise.all([
-      admin
-        .from("item")
-        .select("item_id, user_id, category_id, item_name, description, rental_fee_per_day, deposit, status, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-      admin.from("itemcategory").select("category_id, category_name"),
-    ]);
+    const [{ data: rawItems, error: itemsError }, { data: rawCategories }] =
+      await Promise.all([
+        admin
+          .from("item")
+          .select(
+            "item_id, user_id, category_id, item_name, description, rental_fee_per_day, deposit, status, created_at",
+          )
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+        admin.from("itemcategory").select("category_id, category_name"),
+      ]);
 
     if (itemsError) {
       console.error("Error fetching lender items:", itemsError);
     }
 
-    const catMap = new Map((rawCategories || []).map((c) => [c.category_id, c.category_name]));
+    const catMap = new Map(
+      (rawCategories || []).map((c) => [c.category_id, c.category_name]),
+    );
     const itemList = (rawItems || []).map((item) => ({
       ...item,
       category: {
@@ -52,7 +57,9 @@ export async function GET(request: NextRequest) {
     if (itemIds.length > 0) {
       const { data: rawOrders, error: ordersError } = await admin
         .from("rentalorder")
-        .select("order_id, item_id, user_id, start_date, end_date, rental_fee, deposit, total_paid, status, meetup_location, return_location, created_at")
+        .select(
+          "order_id, item_id, user_id, start_date, end_date, rental_fee, deposit, total_paid, status, meetup_location, return_location, created_at",
+        )
         .in("item_id", itemIds)
         .order("created_at", { ascending: false });
 
@@ -60,21 +67,35 @@ export async function GET(request: NextRequest) {
         console.error("Error fetching incoming orders:", ordersError);
       } else if (rawOrders && rawOrders.length > 0) {
         const orderIds = rawOrders.map((o) => o.order_id);
-        const renterUserIds = Array.from(new Set(rawOrders.map((o) => o.user_id).filter(Boolean)));
+        const renterUserIds = Array.from(
+          new Set(rawOrders.map((o) => o.user_id).filter(Boolean)),
+        );
 
-        const [{ data: renters }, { data: phones }, { data: rawPayments }] = await Promise.all([
-          renterUserIds.length > 0
-            ? admin.from("useraccount").select("user_id, username, avatar_url, firstname, lastname").in("user_id", renterUserIds)
-            : { data: [] },
-          renterUserIds.length > 0
-            ? admin.from("userphones").select("user_id, phone").in("user_id", renterUserIds)
-            : { data: [] },
-          orderIds.length > 0
-            ? admin.from("payment").select("order_id, status").in("order_id", orderIds)
-            : { data: [] },
-        ]);
+        const [{ data: renters }, { data: phones }, { data: rawPayments }] =
+          await Promise.all([
+            renterUserIds.length > 0
+              ? admin
+                  .from("useraccount")
+                  .select("user_id, username, avatar_url, firstname, lastname")
+                  .in("user_id", renterUserIds)
+              : { data: [] },
+            renterUserIds.length > 0
+              ? admin
+                  .from("useraccount")
+                  .select("user_id, phone")
+                  .in("user_id", renterUserIds)
+              : { data: [] },
+            orderIds.length > 0
+              ? admin
+                  .from("payment")
+                  .select("order_id, status")
+                  .in("order_id", orderIds)
+              : { data: [] },
+          ]);
 
-        const renterMap = new Map<string, any>((renters || []).map((r) => [r.user_id, r]));
+        const renterMap = new Map<string, any>(
+          (renters || []).map((r) => [r.user_id, r]),
+        );
         const phoneMap = new Map<string, string>();
         (phones || []).forEach((p) => {
           if (!phoneMap.has(p.user_id)) {
@@ -83,7 +104,9 @@ export async function GET(request: NextRequest) {
         });
 
         const pendingPaymentOrderIds = new Set(
-          (rawPayments || []).filter((p) => p.status === "pending").map((p) => p.order_id)
+          (rawPayments || [])
+            .filter((p) => p.status === "pending")
+            .map((p) => p.order_id),
         );
 
         incomingOrders = rawOrders.map((o: any) => {
@@ -94,7 +117,9 @@ export async function GET(request: NextRequest) {
           return {
             ...o,
             hasPendingPayment,
-            item: item ? { item_name: item.item_name } : { item_name: "รายการสินค้า" },
+            item: item
+              ? { item_name: item.item_name }
+              : { item_name: "รายการสินค้า" },
             renter: renter
               ? {
                   username:
@@ -114,10 +139,12 @@ export async function GET(request: NextRequest) {
 
     // 3. คำนวณสรุปสถิติสำหรับผู้ให้เช่า
     const totalItems = itemList.length;
-    const availableItems = itemList.filter((i) => i.status === "available").length;
+    const availableItems = itemList.filter(
+      (i) => i.status === "available",
+    ).length;
     const rentedItems = itemList.filter((i) => i.status === "rented").length;
     const pendingRequests = incomingOrders.filter(
-      (o) => o.status === "requested" || o.status === "awaiting_payment"
+      (o) => o.status === "requested" || o.status === "awaiting_payment",
     ).length;
 
     const estimatedIncome = incomingOrders
@@ -125,12 +152,11 @@ export async function GET(request: NextRequest) {
         (o) =>
           o.status === "paid" ||
           o.status === "completed" ||
-          o.status === "item_sent"
+          o.status === "item_sent",
       )
       .reduce(
-        (sum, o) =>
-          sum + (Number(o.rental_fee) || Number(o.total_paid) || 0),
-        0
+        (sum, o) => sum + (Number(o.rental_fee) || Number(o.total_paid) || 0),
+        0,
       );
 
     return NextResponse.json({
@@ -158,7 +184,7 @@ export async function GET(request: NextRequest) {
           estimatedIncome: 0,
         },
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

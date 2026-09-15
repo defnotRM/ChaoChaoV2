@@ -97,7 +97,7 @@ export default async function UserRentalOrderDetailPage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
     ownerId
-      ? admin.from("userphones").select("phone").eq("user_id", ownerId)
+      ? admin.from("useraccount").select("phone").eq("user_id", ownerId)
       : Promise.resolve({ data: [] }),
   ]);
 

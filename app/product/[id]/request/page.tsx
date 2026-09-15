@@ -44,7 +44,7 @@ export default async function ProductRequestPage({
       .eq("user_id", renterUserId)
       .maybeSingle(),
     admin
-      .from("userphones")
+      .from("useraccount")
       .select("phone")
       .eq("user_id", renterUserId)
       .limit(1)
