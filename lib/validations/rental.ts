@@ -1,14 +1,16 @@
 import { z } from "zod";
 
-export const createRentalOrderSchema = z.object({
-  itemId: z.string().min(1, "item ไม่ถูกต้อง"),
-  startDate: z.string().date("รูปแบบวันที่ไม่ถูกต้อง"),
-  endDate: z.string().date("รูปแบบวันที่ไม่ถูกต้อง"),
-  meetupLocation: z.string().max(500).optional(),
-}).refine((data) => data.endDate >= data.startDate, {
-  message: "วันคืนสินค้าต้องไม่มาก่อนวันเริ่มเช่า",
-  path: ["endDate"],
-});
+export const createRentalOrderSchema = z
+  .object({
+    itemId: z.string().min(1, "item ไม่ถูกต้อง"),
+    startDate: z.string().date("รูปแบบวันที่ไม่ถูกต้อง"),
+    endDate: z.string().date("รูปแบบวันที่ไม่ถูกต้อง"),
+    meetupLocation: z.string().max(500).optional(),
+  })
+  .refine((data) => data.endDate >= data.startDate, {
+    message: "วันคืนสินค้าต้องไม่มาก่อนวันเริ่มเช่า",
+    path: ["endDate"],
+  });
 
 export type CreateRentalOrderInput = z.infer<typeof createRentalOrderSchema>;
 
@@ -16,8 +18,8 @@ export type CreateRentalOrderInput = z.infer<typeof createRentalOrderSchema>;
 // การเปลี่ยนสถานะที่กระทบเงิน (paid, completed) ต้องผ่าน RPC/endpoint เฉพาะเท่านั้น
 export const simpleStatusTransitions = [
   "awaiting_payment", // เจ้าของสินค้า approve คำขอ
-  "rejected",          // เจ้าของสินค้า reject คำขอ
-  "cancelled",          // ผู้เช่ายกเลิกก่อนจ่ายเงิน
+  "rejected", // เจ้าของสินค้า reject คำขอ
+  "cancelled", // ผู้เช่ายกเลิกก่อนจ่ายเงิน
 ] as const;
 
 export const updateRentalOrderStatusSchema = z.object({
@@ -25,7 +27,8 @@ export const updateRentalOrderStatusSchema = z.object({
 });
 
 export const settleRentalOrderSchema = z.object({
-  damageCost: z.number().min(0).optional().default(0),
+  damageFee: z.number().min(0).optional().default(0),
+  lateFee: z.number().min(0).optional().default(0),
 });
 
 export const uploadEvidenceSchema = z.object({

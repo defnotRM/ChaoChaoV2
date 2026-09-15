@@ -1,6 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import LendOrderDetailClient, { type LendOrderData } from "./LendOrderDetailClient";
+import { createClient } from "@/lib/supabase/server";
+import LendOrderDetailClient, {
+  type LendOrderData,
+} from "./LendOrderDetailClient";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +15,34 @@ export default async function LenderOrderDetailPage({
   const { id: userId, orderId } = await params;
   const admin = createAdminClient();
 
+  // ต้องล็อกอิน และต้องเป็นเจ้าของ dashboard นี้เอง (หรือ admin) เท่านั้นถึงจะเข้าดูได้
+  const supabase = await createClient();
+  const {
+    data: { user: sessionUser },
+  } = await supabase.auth.getUser();
+
+  if (!sessionUser) {
+    redirect("/login");
+  }
+
+  let isAdmin = false;
+  if (sessionUser.id !== userId) {
+    const { data: sessionRoles } = await admin
+      .from("user_role_assignment")
+      .select("role ( role_type )")
+      .eq("user_id", sessionUser.id);
+    isAdmin = (sessionRoles || []).some(
+      (r: any) => r.role?.role_type === "admin",
+    );
+    if (!isAdmin) {
+      notFound();
+    }
+  }
   // 1. ดึงข้อมูลคำสั่งเช่า
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
-      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at"
+      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at",
     )
     .eq("order_id", orderId)
     .maybeSingle();
@@ -26,34 +52,38 @@ export default async function LenderOrderDetailPage({
   }
 
   // 2. ดึงข้อมูลสินค้า, รูปสินค้า, ผู้เช่า, เบอร์โทรผู้เช่า, และการชำระเงิน
-  const [itemRes, imageRes, renterRes, phoneRes, paymentsRes] = await Promise.all([
-    admin
-      .from("item")
-      .select("item_id, item_name, rental_fee_per_day, deposit, user_id")
-      .eq("item_id", order.item_id)
-      .maybeSingle(),
-    admin
-      .from("itemimage")
-      .select("image_url, is_primary, sequence")
-      .eq("item_id", order.item_id)
-      .order("sequence", { ascending: true }),
-    admin
-      .from("useraccount")
-      .select("user_id, username, firstname, lastname, email, avatar_url, updated_at")
-      .eq("user_id", order.user_id)
-      .maybeSingle(),
-    admin
-      .from("userphones")
-      .select("phone")
-      .eq("user_id", order.user_id),
-    admin
-      .from("payment")
-      .select("payment_id, amount, status, slip_image_url, date")
-      .eq("order_id", orderId),
-  ]);
+  const [itemRes, imageRes, renterRes, phoneRes, paymentsRes] =
+    await Promise.all([
+      admin
+        .from("item")
+        .select("item_id, item_name, rental_fee_per_day, deposit, user_id")
+        .eq("item_id", order.item_id)
+        .maybeSingle(),
+      admin
+        .from("itemimage")
+        .select("image_url, is_primary, sequence")
+        .eq("item_id", order.item_id)
+        .order("sequence", { ascending: true }),
+      admin
+        .from("useraccount")
+        .select(
+          "user_id, username, firstname, lastname, email, avatar_url, updated_at",
+        )
+        .eq("user_id", order.user_id)
+        .maybeSingle(),
+      admin.from("useraccount").select("phone").eq("user_id", order.user_id),
+      admin
+        .from("payment")
+        .select("payment_id, amount, status, slip_image_url, date")
+        .eq("order_id", orderId),
+    ]);
 
   const item = itemRes.data;
   if (!item) {
+    notFound();
+  }
+  // ตรวจว่า order นี้เป็นของ lender ที่ล็อกอินอยู่จริง (กันเดา orderId ของ order คนอื่น)
+  if (!isAdmin && item.user_id !== userId) {
     notFound();
   }
 
@@ -65,10 +95,13 @@ export default async function LenderOrderDetailPage({
   let renter = renterRes.data;
   if (!renter || !renter.username) {
     try {
-      const { data: authUser } = await admin.auth.admin.getUserById(order.user_id);
+      const { data: authUser } = await admin.auth.admin.getUserById(
+        order.user_id,
+      );
       if (authUser?.user) {
         const u = authUser.user;
-        const uName = u.user_metadata?.username || u.email?.split("@")[0] || "ผู้เช่า";
+        const uName =
+          u.user_metadata?.username || u.email?.split("@")[0] || "ผู้เช่า";
         const uEmail = u.email || `${uName.toLowerCase()}@chaochao.local`;
         const uNatId = u.user_metadata?.national_id || null;
 
@@ -80,7 +113,7 @@ export default async function LenderOrderDetailPage({
             national_id: uNatId,
             status: "Active",
           },
-          { onConflict: "user_id" }
+          { onConflict: "user_id" },
         );
 
         renter = {
@@ -98,7 +131,10 @@ export default async function LenderOrderDetailPage({
     }
   }
 
-  const renterFullName = renter?.username || `${renter?.firstname || ""} ${renter?.lastname || ""}`.trim() || "ผู้เช่า";
+  const renterFullName =
+    renter?.username ||
+    `${renter?.firstname || ""} ${renter?.lastname || ""}`.trim() ||
+    "ผู้เช่า";
 
   const renterPhones = (phoneRes.data || [])
     .map((p: any) => p.phone)
