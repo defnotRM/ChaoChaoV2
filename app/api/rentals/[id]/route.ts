@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
 
@@ -65,6 +66,18 @@ export async function GET(_request: NextRequest, { params }: Params) {
 // PATCH /api/rentals/[id] — เปลี่ยนสถานะ (approve -> awaiting_payment, reject -> rejected, cancel -> cancelled)
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
+
+  // ต้องล็อกอินก่อนเสมอ — เดิมไม่มีการเช็คเลย ใครก็เปลี่ยนสถานะ order ของคนอื่นได้
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return apiError("กรุณาเข้าสู่ระบบก่อนดำเนินการ", 401);
+  }
+
   const admin = createAdminClient();
 
   const body = await request.json().catch(() => ({}));
@@ -83,6 +96,32 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   if (fetchError || !current) {
     return apiError("ไม่พบรายการเช่านี้", 404);
+  }
+
+  // เช็คว่าคนที่ล็อกอินอยู่ เป็นคู่กรณีของ order นี้จริง
+  let lenderId: string | null = null;
+  if (current.item_id) {
+    const { data: item } = await admin
+      .from("item")
+      .select("user_id")
+      .eq("item_id", current.item_id)
+      .maybeSingle();
+    lenderId = item?.user_id ?? null;
+  }
+
+  const isRenter = user.id === current.user_id;
+  const isLender = user.id === lenderId;
+
+  if (!isRenter && !isLender) {
+    return apiError("คุณไม่มีสิทธิ์ดำเนินการกับออเดอร์นี้", 403);
+  }
+
+  // อนุมัติ/ปฏิเสธ ทำได้เฉพาะผู้ให้เช่าเท่านั้น (ยกเลิกทำได้ทั้งสองฝั่ง)
+  if (
+    (status === "awaiting_payment" || status === "rejected_by_lender") &&
+    !isLender
+  ) {
+    return apiError("เฉพาะผู้ให้เช่าเท่านั้นที่อนุมัติ/ปฏิเสธคำขอเช่าได้", 403);
   }
 
   const allowedFrom: Record<string, string[]> = {

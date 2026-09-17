@@ -1,14 +1,33 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: Request) {
   try {
+    // ต้องล็อกอินก่อนเสมอ — เดิมไม่มีการเช็คเลย ใครก็อัปโหลดสลิปแทนคนอื่นได้
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
+        { status: 401 },
+      );
+    }
+
     let orderId = "";
     let amount = 0;
     let transferDate = new Date().toISOString();
@@ -29,21 +48,24 @@ export async function POST(request: Request) {
       const slip = formData.get("slip") as File | null;
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
       const amountRaw = formData.get("amount") as string | null;
-      transferDate = (formData.get("transferDate") as string | null)?.trim() ?? new Date().toISOString();
-      transactionRef = (formData.get("transactionRef") as string | null)?.trim() || null;
+      transferDate =
+        (formData.get("transferDate") as string | null)?.trim() ??
+        new Date().toISOString();
+      transactionRef =
+        (formData.get("transactionRef") as string | null)?.trim() || null;
       amount = Number(amountRaw);
 
       if (slip) {
         if (!ALLOWED_TYPES.includes(slip.type)) {
           return NextResponse.json(
             { message: "ประเภทไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPG, PNG หรือ WebP" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         if (slip.size > MAX_FILE_SIZE) {
           return NextResponse.json(
             { message: "ขนาดไฟล์ต้องไม่เกิน 10 MB" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         const buffer = Buffer.from(await slip.arrayBuffer());
@@ -65,7 +87,10 @@ export async function POST(request: Request) {
           } = adminStorage.storage.from("slips").getPublicUrl(filePath);
           slipDataUri = publicUrl;
         } else {
-          console.warn("Storage upload failed for slip, fallback to base64:", uploadError.message);
+          console.warn(
+            "Storage upload failed for slip, fallback to base64:",
+            uploadError.message,
+          );
           slipDataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
         }
       }
@@ -74,7 +99,7 @@ export async function POST(request: Request) {
     if (!orderId) {
       return NextResponse.json(
         { message: "กรุณาระบุเลขออเดอร์" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -90,20 +115,30 @@ export async function POST(request: Request) {
     if (orderError || !order) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
+    if (user.id !== order.user_id) {
+      return NextResponse.json(
+        { message: "คุณไม่มีสิทธิ์อัปโหลดสลิปสำหรับออเดอร์นี้" },
+        { status: 403 },
+      );
+    }
     if (order.status !== "awaiting_payment" && order.status !== "requested") {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่อยู่ในสถานะรอชำระเงิน" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!amount || amount <= 0) {
-      amount = Number(order.total_paid) || (Number(order.rental_fee) + Number(order.deposit)) || 0;
+      amount =
+        Number(order.total_paid) ||
+        Number(order.rental_fee) + Number(order.deposit) ||
+        0;
     }
 
     // Default mock slip image if not provided
     if (!slipDataUri) {
-      slipDataUri = "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60";
+      slipDataUri =
+        "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60";
     }
 
     // 3) ลบหรืออัปเดตสลิปเดิมหากมี
@@ -122,7 +157,8 @@ export async function POST(request: Request) {
         amount,
         date: transferDate,
         slip_image_url: slipDataUri,
-        transaction_ref: transactionRef || `TXN-${Date.now().toString().slice(-8)}`,
+        transaction_ref:
+          transactionRef || `TXN-${Date.now().toString().slice(-8)}`,
         status: "pending",
       })
       .select("payment_id")
@@ -132,7 +168,7 @@ export async function POST(request: Request) {
       console.error("Insert payment error:", paymentError);
       return NextResponse.json(
         { message: "บันทึกการชำระเงินไม่สำเร็จ กรุณาลองใหม่" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -140,19 +176,25 @@ export async function POST(request: Request) {
     if (order.status !== "awaiting_payment") {
       await admin
         .from("rentalorder")
-        .update({ status: "awaiting_payment", updated_at: new Date().toISOString() })
+        .update({
+          status: "awaiting_payment",
+          updated_at: new Date().toISOString(),
+        })
         .eq("order_id", orderId);
     }
 
     return NextResponse.json(
-      { paymentId: payment.payment_id, message: "อัปโหลดสลิปเรียบร้อยแล้ว รอผู้ให้เช่าตรวจสอบ" },
-      { status: 201 }
+      {
+        paymentId: payment.payment_id,
+        message: "อัปโหลดสลิปเรียบร้อยแล้ว รอผู้ให้เช่าตรวจสอบ",
+      },
+      { status: 201 },
     );
   } catch (error) {
     console.error("POST /api/payments error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
