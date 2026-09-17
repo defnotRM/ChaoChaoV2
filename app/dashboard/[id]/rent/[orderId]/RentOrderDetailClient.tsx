@@ -371,6 +371,36 @@ export default function RentOrderDetailClient({
     }
   }
 
+  // ยกเลิกก่อนจ่ายเงิน (requested / awaiting_payment) — ไม่มีเงื่อนไข ไม่มีฟอร์ม
+  async function handleCancelBeforePayment() {
+    if (!window.confirm("ยืนยันยกเลิกรายการเช่านี้?")) return;
+    try {
+      setIsCancelling(true);
+      setErrorMsg(null);
+
+      const res = await fetch(`/api/rentals/${order.order_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ยกเลิกไม่สำเร็จ");
+        return;
+      }
+
+      setCurrentStatus("cancelled");
+      setSuccessMsg("ยกเลิกรายการเช่าเรียบร้อยแล้ว");
+      router.refresh();
+    } catch (err) {
+      console.error("Cancel before payment error:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-16 pt-6 sm:pb-20 sm:pt-8">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -763,28 +793,67 @@ export default function RentOrderDetailClient({
               {/* ปุ่มการทำงาน */}
               <div className="mt-4 space-y-2.5">
                 {currentStatus === "requested" ? (
-                  <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
-                    <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
-                      <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
-                      <span>ส่งคำขอเช่าแล้ว · รอผู้ให้เช่าอนุมัติ</span>
-                    </p>
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
+                      <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                        <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>ส่งคำขอเช่าแล้ว · รอผู้ให้เช่าอนุมัติ</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelBeforePayment}
+                      disabled={isCancelling}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>
+                        {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกรายการเช่า"}
+                      </span>
+                    </button>
                   </div>
                 ) : currentStatus === "awaiting_payment" ? (
                   canPay ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentModal(true)}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98]"
-                    >
-                      <Wallet className="h-4 w-4" />
-                      <span>ชำระเงิน / อัปโหลดสลิป</span>
-                    </button>
+                    <div className="space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentModal(true)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98]"
+                      >
+                        <Wallet className="h-4 w-4" />
+                        <span>ชำระเงิน / อัปโหลดสลิป</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelBeforePayment}
+                        disabled={isCancelling}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>
+                          {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกรายการเช่า"}
+                        </span>
+                      </button>
+                    </div>
                   ) : (
-                    <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200">
-                      <p className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
-                        <Clock3 className="h-4 w-4 text-sky-600 shrink-0" />
-                        <span>อัปโหลดสลิปแล้ว · รอผู้ให้เช่าตรวจสอบ</span>
-                      </p>
+                    <div className="space-y-2.5">
+                      <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200">
+                        <p className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
+                          <Clock3 className="h-4 w-4 text-sky-600 shrink-0" />
+                          <span>อัปโหลดสลิปแล้ว · รอผู้ให้เช่าตรวจสอบ</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelBeforePayment}
+                        disabled={isCancelling}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>
+                          {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกรายการเช่า"}
+                        </span>
+                      </button>
                     </div>
                   )
                 ) : currentStatus === "paid" ? (

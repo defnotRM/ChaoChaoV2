@@ -318,7 +318,7 @@ export default function LendOrderDetailClient({
   }
 
   async function handleUpdateStatus(
-    newStatus: "awaiting_payment" | "rejected",
+    newStatus: "awaiting_payment" | "rejected_by_lender",
   ) {
     try {
       setIsUpdating(true);
@@ -346,6 +346,36 @@ export default function LendOrderDetailClient({
       router.refresh();
     } catch (err) {
       console.error("Error updating order status:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  // ยกเลิกก่อนจ่ายเงิน (ผู้ให้เช่ายังไม่ได้รับเงิน ไม่มีเงื่อนไข ไม่มีฟอร์ม)
+  async function handleCancelBeforePayment() {
+    if (!window.confirm("ยืนยันยกเลิกรายการเช่านี้?")) return;
+    try {
+      setIsUpdating(true);
+      setErrorMsg(null);
+
+      const res = await fetch(`/api/rentals/${order.order_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ยกเลิกไม่สำเร็จ");
+        return;
+      }
+
+      setCurrentStatus("cancelled");
+      setSuccessMsg("ยกเลิกรายการเช่าเรียบร้อยแล้ว");
+      router.refresh();
+    } catch (err) {
+      console.error("Cancel before payment error:", err);
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsUpdating(false);
@@ -806,7 +836,7 @@ export default function LendOrderDetailClient({
 
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("rejected")}
+                    onClick={() => handleUpdateStatus("rejected_by_lender")}
                     disabled={isUpdating}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 transition duration-200 hover:bg-rose-50 active:scale-95 disabled:opacity-50"
                   >
@@ -862,15 +892,26 @@ export default function LendOrderDetailClient({
                     </button>
                   </div>
                 ) : (
-                  <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
-                    <div className="flex items-center gap-2 text-sky-800 font-bold text-sm">
-                      <Clock className="h-4 w-4 text-sky-600" />
-                      <span>อนุมัติแล้ว · รอผู้เช่าชำระเงิน</span>
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
+                      <div className="flex items-center gap-2 text-sky-800 font-bold text-sm">
+                        <Clock className="h-4 w-4 text-sky-600" />
+                        <span>อนุมัติแล้ว · รอผู้เช่าชำระเงิน</span>
+                      </div>
+                      <p className="text-xs text-sky-700">
+                        ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว
+                        เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
+                      </p>
                     </div>
-                    <p className="text-xs text-sky-700">
-                      ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว
-                      เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
-                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCancelBeforePayment}
+                      disabled={isUpdating}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>ยกเลิกรายการเช่า</span>
+                    </button>
                   </div>
                 )
               ) : currentStatus === "paid" ? (
