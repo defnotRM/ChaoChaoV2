@@ -1,7 +1,10 @@
+import { redirect } from "next/navigation";
+
 export default async function ReviewProductPage({
   params,
-}: PageProps<"/renter/myproductsList/[id]/review">) {
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-
-  return <h1>Product Review: {id}</h1>;
+  redirect(`/rental/${id}/review`);
 }
