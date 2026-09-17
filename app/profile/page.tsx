@@ -32,8 +32,7 @@ export default function ProfilePage() {
 
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [phone1, setPhone1] = useState("");
-  const [phone2, setPhone2] = useState("");
+  const [phone, setPhone] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [bannerUrl, setBannerUrl] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
@@ -74,8 +73,7 @@ export default function ProfilePage() {
           setStatus(data.user.status || "Active");
 
           if (Array.isArray(data.user.phones)) {
-            setPhone1(data.user.phones[0] || "");
-            setPhone2(data.user.phones[1] || "");
+            setPhone(data.user.phones[0] || "");
           }
         } else {
           setGeneralError(data.message || "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้");
@@ -93,7 +91,7 @@ export default function ProfilePage() {
 
   // Upload Avatar
   const handleAvatarFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -178,7 +176,7 @@ export default function ProfilePage() {
 
   // Upload Banner
   const handleBannerFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -276,24 +274,18 @@ export default function ProfilePage() {
       return;
     }
 
-    const p1 = phone1.trim().replace(/\D/g, "");
-    const p2 = phone2.trim().replace(/\D/g, "");
+    const p1 = phone.trim().replace(/\D/g, "");
 
-    if (phone1.trim()) {
+    if (phone.trim()) {
       if (p1.length !== 10) {
-        setGeneralError("เบอร์โทรศัพท์ 1 ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0812345678)");
+        setGeneralError(
+          "เบอร์โทรศัพท์ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0812345678)",
+        );
         return;
       }
     }
 
-    if (phone2.trim()) {
-      if (p2.length !== 10) {
-        setGeneralError("เบอร์โทรศัพท์ 2 ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0898765432)");
-        return;
-      }
-    }
-
-    const phones = [p1, p2].filter(Boolean);
+    const phones = [p1].filter(Boolean);
 
     setSavingGeneral(true);
 
@@ -349,7 +341,9 @@ export default function ProfilePage() {
       !/[a-z]/.test(newPassword) ||
       !/[0-9]/.test(newPassword)
     ) {
-      setPasswordError("รหัสผ่านต้องประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข");
+      setPasswordError(
+        "รหัสผ่านต้องประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข",
+      );
       return;
     }
 
@@ -445,7 +439,9 @@ export default function ProfilePage() {
                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-black/50 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95 shadow-sm"
               >
                 <ImageIcon className="h-3.5 w-3.5" />
-                <span>{uploadingBanner ? "กำลังอัปโหลด..." : "เปลี่ยนภาพแบนเนอร์"}</span>
+                <span>
+                  {uploadingBanner ? "กำลังอัปโหลด..." : "เปลี่ยนภาพแบนเนอร์"}
+                </span>
               </label>
 
               {bannerUrl && (
@@ -514,15 +510,17 @@ export default function ProfilePage() {
                     <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
                       {username || "ผู้ใช้งาน"}
                     </h1>
-                    
+
                     {/* Role Badges */}
                     {(() => {
                       const expandedRoles: string[] = [];
                       if (roles && roles.length > 0) {
                         roles.forEach((r) => {
                           if (r === "both" || r === "ผู้ให้เช่า / ผู้เช่า") {
-                            if (!expandedRoles.includes("lender")) expandedRoles.push("lender");
-                            if (!expandedRoles.includes("renter")) expandedRoles.push("renter");
+                            if (!expandedRoles.includes("lender"))
+                              expandedRoles.push("lender");
+                            if (!expandedRoles.includes("renter"))
+                              expandedRoles.push("renter");
                           } else if (!expandedRoles.includes(r)) {
                             expandedRoles.push(r);
                           }
@@ -540,10 +538,10 @@ export default function ProfilePage() {
                         const label = isAdmin
                           ? "ผู้ดูแลระบบ"
                           : isLender
-                          ? "ผู้ให้เช่า"
-                          : isRenter
-                          ? "ผู้เช่า"
-                          : r;
+                            ? "ผู้ให้เช่า"
+                            : isRenter
+                              ? "ผู้เช่า"
+                              : r;
 
                         return (
                           <span
@@ -579,7 +577,9 @@ export default function ProfilePage() {
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
                 >
                   <Upload className="h-3.5 w-3.5 text-[#3f6593]" />
-                  <span>{uploadingAvatar ? "กำลังอัปโหลด..." : "อัปโหลดรูปโปรไฟล์"}</span>
+                  <span>
+                    {uploadingAvatar ? "กำลังอัปโหลด..." : "อัปโหลดรูปโปรไฟล์"}
+                  </span>
                 </label>
 
                 {avatarUrl && (
@@ -627,7 +627,8 @@ export default function ProfilePage() {
                 ข้อมูลทั่วไป (ชื่อผู้ใช้, ประวัติย่อ และเบอร์โทรศัพท์)
               </h2>
               <p className="mt-0.5 text-xs text-[#5b86b6]">
-                แก้ไขชื่อผู้ใช้ ประวัติย่อ และเบอร์โทรติดต่อ โดยไม่ต้องเปลี่ยนรหัสผ่าน
+                แก้ไขชื่อผู้ใช้ ประวัติย่อ และเบอร์โทรติดต่อ
+                โดยไม่ต้องเปลี่ยนรหัสผ่าน
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
@@ -672,59 +673,31 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Phone Numbers (Max 2) */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="phone1"
-                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
-                >
-                  เบอร์โทรศัพท์ 1 (หลัก)
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
-                  <input
-                    id="phone1"
-                    type="tel"
-                    value={phone1}
-                    onChange={(e) =>
-                      setPhone1(e.target.value.replace(/\D/g, "").slice(0, 10))
-                    }
-                    placeholder="เช่น 0812345678"
-                    maxLength={10}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  เบอร์ติดต่อหลัก (ความยาว 10 หลัก)
-                </p>
+            {/* Phone Number */}
+            <div>
+              <label
+                htmlFor="phone"
+                className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+              >
+                เบอร์โทรศัพท์
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) =>
+                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                  }
+                  placeholder="เช่น 0812345678"
+                  maxLength={10}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                />
               </div>
-
-              <div>
-                <label
-                  htmlFor="phone2"
-                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
-                >
-                  เบอร์โทรศัพท์ 2 (สำรอง - ไม่บังคับ)
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
-                  <input
-                    id="phone2"
-                    type="tel"
-                    value={phone2}
-                    onChange={(e) =>
-                      setPhone2(e.target.value.replace(/\D/g, "").slice(0, 10))
-                    }
-                    placeholder="เช่น 0898765432 (ถ้ามี)"
-                    maxLength={10}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  เบอร์ติดต่อสำรอง (ความยาว 10 หลัก)
-                </p>
-              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                เบอร์ติดต่อ (ความยาว 10 หลัก)
+              </p>
             </div>
 
             {/* Bio */}

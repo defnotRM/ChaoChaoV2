@@ -1,14 +1,29 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { apiError, apiSuccess } from "@/lib/api-response";
-import { settleRentalOrderSchema } from "@/lib/validations/rental";
+import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
 
+const settleSchema = z.object({
+  outcome: z.enum([
+    "happy",
+    "damaged",
+    "lender_noshow",
+    "renter_noshow",
+    "renter_rejected_meetup",
+    "false_advertisement_approved",
+    "false_advertisement_rejected",
+    "item_not_returned",
+    "item_not_returned_rejected",
+  ]),
+  damageAmount: z.number().min(0).optional().default(0),
+});
+
 // POST /api/rentals/[id]/settle
-// ใช้ตอนเจ้าของสินค้ากด "ยืนยันคืนสินค้า" (หน้าของ Toey) พร้อมระบุค่าเสียหาย (ถ้ามี)
-// เรียกผ่าน RPC settle_rental_order ซึ่งจัดการ: ล็อกแถวกันกดซ้ำ, คำนวณเงินคืน/หัก
-// ค่าเสียหายจาก deposit, และปิดสถานะ order ทั้งหมดในทรานแซกชันเดียว
+// ใช้ตอนปิดยอด order แบบมีผลลัพธ์พิเศษ (เสียหาย/ไม่มา/ข้อพิพาท ฯลฯ) — ปกติ
+// "happy flow" ธรรมดาจะถูกเรียกอัตโนมัติจาก /api/return อยู่แล้ว endpoint นี้ไว้ใช้
+// เวลาต้องปิดยอดด้วยผลลัพธ์อื่นที่ไม่ใช่ happy (ส่วนใหญ่เรียกจากฝั่งแอดมินตอนตัดสิน report)
 export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
@@ -23,18 +38,18 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const parsed = settleRentalOrderSchema.safeParse(body);
+  const parsed = settleSchema.safeParse(body);
   if (!parsed.success) {
     return apiError("ข้อมูลไม่ถูกต้อง", 400, parsed.error.flatten());
   }
 
-  const { damageFee, lateFee } = parsed.data;
+  const { outcome, damageAmount } = parsed.data;
 
   const { data, error } = await supabase.rpc("settle_rental_order", {
     p_order_id: id,
-    p_lender_id: user.id,
-    p_damage_fee: damageFee,
-    p_late_fee: lateFee,
+    p_caller_id: user.id,
+    p_outcome: outcome,
+    p_damage_amount: damageAmount,
   });
 
   if (error) {
@@ -42,6 +57,5 @@ export async function POST(request: NextRequest, { params }: Params) {
     return apiError("ไม่สามารถปิดรายการเช่าได้", 500, error.message);
   }
 
-  // RPC คืนค่าเป็น TEXT อธิบายผลลัพธ์ (เช่น สถานะถัดไปคืออะไร)
   return apiSuccess({ message: "ปิดรายการเช่าสำเร็จ", result: data });
 }
