@@ -879,16 +879,25 @@ export default function RentOrderDetailClient({
                   </div>
                 ) : currentStatus === "item_sent" ||
                   currentStatus === "item_returned" ? (
-                  <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-1.5">
-                    <p className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                      <Package className="h-4 w-4 text-sky-600 shrink-0" />
-                      <span>กำลังเช่าใช้งานอุปกรณ์</span>
-                    </p>
-                    <p className="text-xs text-sky-700 leading-relaxed">
-                      กำหนดคืนอุปกรณ์ในวันที่ {formatDate(order.end_date)} ที่{" "}
-                      {order.return_location || "จุดนัดคืน"}{" "}
-                      (ผู้ให้เช่าจะทำการตรวจสอบและถ่ายรูปสภาพหลังการใช้งาน)
-                    </p>
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-1.5">
+                      <p className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                        <Package className="h-4 w-4 text-sky-600 shrink-0" />
+                        <span>กำลังเช่าใช้งานอุปกรณ์</span>
+                      </p>
+                      <p className="text-xs text-sky-700 leading-relaxed">
+                        กำหนดคืนอุปกรณ์ในวันที่ {formatDate(order.end_date)} ที่{" "}
+                        {order.return_location || "จุดนัดคืน"}{" "}
+                        (ผู้ให้เช่าจะทำการตรวจสอบและถ่ายรูปสภาพหลังการใช้งาน)
+                      </p>
+                    </div>
+                    <Link
+                      href={`/renter/myproductsList/${order.order_id}/return`}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 transition duration-200 hover:from-emerald-700 hover:to-teal-800 active:scale-95"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>ถ่ายรูปคืนอุปกรณ์</span>
+                    </Link>
                   </div>
                 ) : currentStatus === "completed" ? (
                   <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
