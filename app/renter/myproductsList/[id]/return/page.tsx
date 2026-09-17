@@ -2,26 +2,25 @@ import { notFound } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import HandoverClient, { type HandoverPageData } from "./HandoverClient";
+import ReturnClient, { type ReturnPageData } from "./ReturnClient";
 
 export const dynamic = "force-dynamic";
 
-// เข้าหน้ารับของได้เมื่อชำระเงินแล้วเป็นต้นไป
+// เข้าหน้าคืนของได้ตั้งแต่ของถูกส่งมอบแล้ว จนถึงรอตรวจสอบ
 const ALLOWED = [
-  "paid",
   "item_sent",
+  "item_received",
   "item_returned",
   "awaiting_additional_payment",
-  "completed",
 ];
 
-export default async function HandoverPage({
+export default async function ReturnPage({
   params,
-}: PageProps<"/renter/myproductsList/[id]/handover">) {
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
 
-  // ต้องล็อกอินและเป็นผู้เช่าของ order นี้จริง — เดิมเช็คด้วย UUID hardcode
-  // (ใช้ได้แค่ user ทดสอบคนเดียว) แก้ให้เช็คจาก session จริงแทน
   const supabase = await createClient();
   const {
     data: { user },
@@ -87,23 +86,18 @@ export default async function HandoverPage({
     "ผู้ปล่อยเช่า";
 
   const evidence = evidenceRes.data || [];
-  const renterRows = evidence.filter(
-    (e) => e.evidence_type === "renter_before",
-  );
-  const lenderRows = evidence.filter(
-    (e) => e.evidence_type === "lender_before",
-  );
+  const renterRows = evidence.filter((e) => e.evidence_type === "renter_after");
+  const lenderRows = evidence.filter((e) => e.evidence_type === "lender_after");
 
   const primaryImage =
     imageRes.data?.find((i) => i.is_primary)?.image_url ??
     imageRes.data?.[0]?.image_url ??
     null;
 
-  const data: HandoverPageData = {
+  const data: ReturnPageData = {
     orderId: order.order_id,
     itemName: itemRes.data?.item_name ?? "อุปกรณ์เช่า",
     imageUrl: primaryImage,
-    meetupLocation: order.meetup_location,
     returnLocation: order.return_location,
     startDate: order.start_date,
     endDate: order.end_date,
@@ -127,5 +121,5 @@ export default async function HandoverPage({
         : null,
   };
 
-  return <HandoverClient data={data} />;
+  return <ReturnClient data={data} />;
 }
