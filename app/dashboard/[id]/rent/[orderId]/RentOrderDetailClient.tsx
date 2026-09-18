@@ -401,6 +401,16 @@ export default function RentOrderDetailClient({
     }
   }
 
+  async function handleOpenChat() {
+    const res = await fetch("/api/chat/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.order_id }),
+    });
+    const data = await res.json();
+    if (data.roomId) router.push(`/chat?roomId=${data.roomId}`);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-16 pt-6 sm:pb-20 sm:pt-8">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -548,13 +558,14 @@ export default function RentOrderDetailClient({
                     ข้อมูลผู้ให้เช่า
                   </h2>
                 </div>
-                <Link
-                  href={owner.id ? `/chat?userId=${owner.id}` : "/chat"}
+                <button
+                  type="button"
+                  onClick={handleOpenChat}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#1b3554] transition hover:bg-sky-50"
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
                   <span>แชทคุยกับผู้ให้เช่า</span>
-                </Link>
+                </button>
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
