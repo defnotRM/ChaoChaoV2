@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
 
@@ -19,7 +20,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
         order_id, user_id, item_id, meetup_location, return_location,
         start_date, end_date, rental_fee, deposit, total_paid,
         fee, net_income, status, created_at, updated_at
-      `
+      `,
     )
     .eq("order_id", id)
     .maybeSingle();
@@ -32,15 +33,26 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return apiError("ไม่พบรายการเช่านี้", 404);
   }
 
-  const [{ data: item }, { data: itemImages }, { data: payments }] = await Promise.all([
-    order.item_id
-      ? admin.from("item").select("item_id, item_name, user_id, rental_fee_per_day, deposit").eq("item_id", order.item_id).maybeSingle()
-      : { data: null },
-    order.item_id
-      ? admin.from("itemimage").select("image_url, is_primary").eq("item_id", order.item_id)
-      : { data: [] },
-    admin.from("payment").select("payment_id, amount, status, slip_image_url, date").eq("order_id", id),
-  ]);
+  const [{ data: item }, { data: itemImages }, { data: payments }] =
+    await Promise.all([
+      order.item_id
+        ? admin
+            .from("item")
+            .select("item_id, item_name, user_id, rental_fee_per_day, deposit")
+            .eq("item_id", order.item_id)
+            .maybeSingle()
+        : { data: null },
+      order.item_id
+        ? admin
+            .from("itemimage")
+            .select("image_url, is_primary")
+            .eq("item_id", order.item_id)
+        : { data: [] },
+      admin
+        .from("payment")
+        .select("payment_id, amount, status, slip_image_url, date")
+        .eq("order_id", id),
+    ]);
 
   const fullData = {
     ...order,
@@ -54,6 +66,18 @@ export async function GET(_request: NextRequest, { params }: Params) {
 // PATCH /api/rentals/[id] — เปลี่ยนสถานะ (approve -> awaiting_payment, reject -> rejected, cancel -> cancelled)
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
+
+  // ต้องล็อกอินก่อนเสมอ — เดิมไม่มีการเช็คเลย ใครก็เปลี่ยนสถานะ order ของคนอื่นได้
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return apiError("กรุณาเข้าสู่ระบบก่อนดำเนินการ", 401);
+  }
+
   const admin = createAdminClient();
 
   const body = await request.json().catch(() => ({}));
@@ -74,16 +98,42 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return apiError("ไม่พบรายการเช่านี้", 404);
   }
 
+  // เช็คว่าคนที่ล็อกอินอยู่ เป็นคู่กรณีของ order นี้จริง
+  let lenderId: string | null = null;
+  if (current.item_id) {
+    const { data: item } = await admin
+      .from("item")
+      .select("user_id")
+      .eq("item_id", current.item_id)
+      .maybeSingle();
+    lenderId = item?.user_id ?? null;
+  }
+
+  const isRenter = user.id === current.user_id;
+  const isLender = user.id === lenderId;
+
+  if (!isRenter && !isLender) {
+    return apiError("คุณไม่มีสิทธิ์ดำเนินการกับออเดอร์นี้", 403);
+  }
+
+  // อนุมัติ/ปฏิเสธ ทำได้เฉพาะผู้ให้เช่าเท่านั้น (ยกเลิกทำได้ทั้งสองฝั่ง)
+  if (
+    (status === "awaiting_payment" || status === "rejected_by_lender") &&
+    !isLender
+  ) {
+    return apiError("เฉพาะผู้ให้เช่าเท่านั้นที่อนุมัติ/ปฏิเสธคำขอเช่าได้", 403);
+  }
+
   const allowedFrom: Record<string, string[]> = {
     awaiting_payment: ["requested"],
-    rejected: ["requested"],
+    rejected_by_lender: ["requested"],
     cancelled: ["requested", "awaiting_payment"],
   };
 
   if (!allowedFrom[status]?.includes(current.status)) {
     return apiError(
       `ไม่สามารถเปลี่ยนสถานะจาก "${current.status}" เป็น "${status}" ได้`,
-      409
+      409,
     );
   }
 
@@ -101,12 +151,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         .select("order_id")
         .eq("item_id", fullOrder.item_id)
         .neq("order_id", id)
-        .in("status", ["awaiting_payment", "paid", "item_sent", "item_received"])
+        .in("status", [
+          "awaiting_payment",
+          "paid",
+          "item_sent",
+          "item_received",
+        ])
         .lte("start_date", fullOrder.end_date)
         .gte("end_date", fullOrder.start_date);
 
       if (overlapping && overlapping.length > 0) {
-        return apiError("ไม่สามารถอนุมัติได้ เนื่องจากช่วงเวลานี้มีรายการเช่าอื่นที่ได้รับการอนุมัติไปแล้ว", 409);
+        return apiError(
+          "ไม่สามารถอนุมัติได้ เนื่องจากช่วงเวลานี้มีรายการเช่าอื่นที่ได้รับการอนุมัติไปแล้ว",
+          409,
+        );
       }
     }
   }
@@ -123,7 +181,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return apiError("ไม่สามารถเปลี่ยนสถานะได้", 500);
   }
   if (!data) {
-    return apiError("สถานะถูกเปลี่ยนไปแล้วโดยคำขออื่น กรุณารีเฟรชแล้วลองใหม่", 409);
+    return apiError(
+      "สถานะถูกเปลี่ยนไปแล้วโดยคำขออื่น กรุณารีเฟรชแล้วลองใหม่",
+      409,
+    );
   }
 
   return apiSuccess({ message: "เปลี่ยนสถานะสำเร็จ", order: data });

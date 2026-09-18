@@ -18,7 +18,7 @@ export type CreateRentalOrderInput = z.infer<typeof createRentalOrderSchema>;
 // การเปลี่ยนสถานะที่กระทบเงิน (paid, completed) ต้องผ่าน RPC/endpoint เฉพาะเท่านั้น
 export const simpleStatusTransitions = [
   "awaiting_payment", // เจ้าของสินค้า approve คำขอ
-  "rejected", // เจ้าของสินค้า reject คำขอ
+  "rejected_by_lender", // เจ้าของสินค้า reject คำขอ
   "cancelled", // ผู้เช่ายกเลิกก่อนจ่ายเงิน
 ] as const;
 
@@ -48,7 +48,7 @@ export const uploadEvidenceSchema = z.object({
       "item_returned",
       "awaiting_additional_payment",
       "completed",
-      "rejected",
+      "rejected_by_lender",
       "cancelled",
     ])
     .optional(),

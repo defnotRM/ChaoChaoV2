@@ -139,15 +139,42 @@ function statusStep(status: string, hasPending: boolean): number {
 }
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  requested: { label: "คำขอใหม่ รออนุมัติ", cls: "bg-amber-500/15 text-amber-800 border-amber-200" },
-  awaiting_payment: { label: "อนุมัติแล้ว รอผู้เช่าชำระเงิน", cls: "bg-sky-500/15 text-sky-800 border-sky-200" },
-  paid: { label: "ชำระเงินแล้ว รอนัดส่งมอบ", cls: "bg-emerald-500/15 text-emerald-800 border-emerald-200" },
-  item_sent: { label: "ผู้เช่ากำลังใช้งาน", cls: "bg-emerald-500/15 text-emerald-800 border-emerald-200" },
-  item_returned: { label: "ส่งคืนแล้ว รอตรวจสภาพ", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  awaiting_additional_payment: { label: "รอชำระเพิ่ม", cls: "bg-amber-500/15 text-amber-800 border-amber-200" },
-  completed: { label: "เสร็จสมบูรณ์", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-200" },
-  rejected: { label: "ปฏิเสธคำขอแล้ว", cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  cancelled: { label: "ผู้เช่ายกเลิกคำขอ", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  requested: {
+    label: "คำขอใหม่ รออนุมัติ",
+    cls: "bg-amber-500/15 text-amber-800 border-amber-200",
+  },
+  awaiting_payment: {
+    label: "อนุมัติแล้ว รอผู้เช่าชำระเงิน",
+    cls: "bg-sky-500/15 text-sky-800 border-sky-200",
+  },
+  paid: {
+    label: "ชำระเงินแล้ว รอนัดส่งมอบ",
+    cls: "bg-emerald-500/15 text-emerald-800 border-emerald-200",
+  },
+  item_sent: {
+    label: "ผู้เช่ากำลังใช้งาน",
+    cls: "bg-emerald-500/15 text-emerald-800 border-emerald-200",
+  },
+  item_returned: {
+    label: "ส่งคืนแล้ว รอตรวจสภาพ",
+    cls: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  awaiting_additional_payment: {
+    label: "รอชำระเพิ่ม",
+    cls: "bg-amber-500/15 text-amber-800 border-amber-200",
+  },
+  completed: {
+    label: "เสร็จสมบูรณ์",
+    cls: "bg-emerald-500/15 text-emerald-700 border-emerald-200",
+  },
+  rejected: {
+    label: "ปฏิเสธคำขอแล้ว",
+    cls: "bg-rose-50 text-rose-700 border-rose-200",
+  },
+  cancelled: {
+    label: "ผู้เช่ายกเลิกคำขอ",
+    cls: "bg-slate-100 text-slate-700 border-slate-200",
+  },
 };
 
 export default function LendOrderDetailClient({
@@ -171,6 +198,11 @@ export default function LendOrderDetailClient({
   const [showAfterModal, setShowAfterModal] = useState<boolean>(false);
   const [beforePreview, setBeforePreview] = useState<string | null>(null);
   const [afterPreview, setAfterPreview] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [cancelReason, setCancelReason] = useState<string>("");
+  const [cancelImagePreview, setCancelImagePreview] = useState<string | null>(
+    null,
+  );
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -212,7 +244,7 @@ export default function LendOrderDetailClient({
           if (payload.new && (payload.new as any).status) {
             setCurrentStatus((payload.new as any).status);
           }
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -224,7 +256,7 @@ export default function LendOrderDetailClient({
         },
         () => {
           fetchLatestOrder();
-        }
+        },
       )
       .subscribe();
 
@@ -249,7 +281,10 @@ export default function LendOrderDetailClient({
 
   const step = statusStep(currentStatus, hasPending);
   const isCancelled = step === -1;
-  const chip = STATUS_CHIP[currentStatus] ?? { label: currentStatus, cls: "bg-slate-100 text-slate-600" };
+  const chip = STATUS_CHIP[currentStatus] ?? {
+    label: currentStatus,
+    cls: "bg-slate-100 text-slate-600",
+  };
 
   async function handleApprovePayment() {
     try {
@@ -270,7 +305,9 @@ export default function LendOrderDetailClient({
       }
 
       setCurrentStatus("paid");
-      setSuccessMsg("ตรวจสอบและยืนยันการชำระเงินเรียบร้อยแล้ว เข้าสู่ขั้นตอนส่งมอบอุปกรณ์");
+      setSuccessMsg(
+        "ตรวจสอบและยืนยันการชำระเงินเรียบร้อยแล้ว เข้าสู่ขั้นตอนส่งมอบอุปกรณ์",
+      );
       router.refresh();
     } catch (err) {
       console.error("Error approving payment:", err);
@@ -280,7 +317,9 @@ export default function LendOrderDetailClient({
     }
   }
 
-  async function handleUpdateStatus(newStatus: "awaiting_payment" | "rejected") {
+  async function handleUpdateStatus(
+    newStatus: "awaiting_payment" | "rejected_by_lender",
+  ) {
     try {
       setIsUpdating(true);
       setErrorMsg(null);
@@ -302,11 +341,41 @@ export default function LendOrderDetailClient({
       setSuccessMsg(
         newStatus === "awaiting_payment"
           ? "อนุมัติคำขอเช่าเรียบร้อยแล้ว ระบบได้แจ้งเตือนให้ผู้เช่าชำระเงิน"
-          : "ปฏิเสธคำขอเช่าเรียบร้อยแล้ว"
+          : "ปฏิเสธคำขอเช่าเรียบร้อยแล้ว",
       );
       router.refresh();
     } catch (err) {
       console.error("Error updating order status:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  // ยกเลิกก่อนจ่ายเงิน (ผู้ให้เช่ายังไม่ได้รับเงิน ไม่มีเงื่อนไข ไม่มีฟอร์ม)
+  async function handleCancelBeforePayment() {
+    if (!window.confirm("ยืนยันยกเลิกรายการเช่านี้?")) return;
+    try {
+      setIsUpdating(true);
+      setErrorMsg(null);
+
+      const res = await fetch(`/api/rentals/${order.order_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ยกเลิกไม่สำเร็จ");
+        return;
+      }
+
+      setCurrentStatus("cancelled");
+      setSuccessMsg("ยกเลิกรายการเช่าเรียบร้อยแล้ว");
+      router.refresh();
+    } catch (err) {
+      console.error("Cancel before payment error:", err);
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsUpdating(false);
@@ -327,7 +396,9 @@ export default function LendOrderDetailClient({
           orderId: order.order_id,
           userId,
           evidenceType: "lender_before",
-          imageUrl: beforePreview || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
+          imageUrl:
+            beforePreview ||
+            "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
         }),
       });
 
@@ -339,10 +410,46 @@ export default function LendOrderDetailClient({
 
       setCurrentStatus("item_sent");
       setShowBeforeModal(false);
-      setSuccessMsg("บันทึกหลักฐานสภาพก่อนให้เช่าและส่งมอบอุปกรณ์เรียบร้อยแล้ว");
+      setSuccessMsg(
+        "บันทึกหลักฐานสภาพก่อนให้เช่าและส่งมอบอุปกรณ์เรียบร้อยแล้ว",
+      );
       router.refresh();
     } catch (err) {
       console.error("Handover submit error:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  // ยกเลิกรายการเช่าหลังชำระเงินแล้ว (ต้องแนบเหตุผล+รูปตาม FR-32)
+  async function handleSubmitCancel(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setIsUpdating(true);
+      setErrorMsg(null);
+
+      const res = await fetch(`/api/rentals/${order.order_id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: cancelReason,
+          imageUrl: cancelImagePreview,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ยกเลิกไม่สำเร็จ");
+        return;
+      }
+
+      setCurrentStatus(result.status);
+      setShowCancelModal(false);
+      setSuccessMsg(result.message || "ยกเลิกรายการเช่าเรียบร้อยแล้ว");
+      router.refresh();
+    } catch (err) {
+      console.error("Cancel submit error:", err);
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsUpdating(false);
@@ -363,7 +470,9 @@ export default function LendOrderDetailClient({
           orderId: order.order_id,
           userId,
           evidenceType: "lender_after",
-          imageUrl: afterPreview || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
+          imageUrl:
+            afterPreview ||
+            "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
         }),
       });
 
@@ -394,7 +503,10 @@ export default function LendOrderDetailClient({
             หน้าแรก
           </Link>
           <span aria-hidden="true">/</span>
-          <Link href={`/dashboard/${userId}`} className="transition hover:text-[#1b3554]">
+          <Link
+            href={`/dashboard/${userId}`}
+            className="transition hover:text-[#1b3554]"
+          >
             แดชบอร์ดผู้ให้เช่า
           </Link>
           <span aria-hidden="true">/</span>
@@ -416,7 +528,9 @@ export default function LendOrderDetailClient({
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
                 จัดการคำขอเช่าอุปกรณ์
               </h1>
-              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${chip.cls}`}>
+              <span
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${chip.cls}`}
+              >
                 {chip.label}
               </span>
             </div>
@@ -468,20 +582,30 @@ export default function LendOrderDetailClient({
                       const isDone = index < step;
                       const isCurrent = index === step;
 
-                      let circleCls = "bg-white text-slate-300 ring-1 ring-slate-200";
+                      let circleCls =
+                        "bg-white text-slate-300 ring-1 ring-slate-200";
                       if (isDone) {
-                        circleCls = "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30";
+                        circleCls =
+                          "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30";
                       } else if (isCurrent) {
-                        circleCls = "bg-[#1b3554] text-white ring-4 ring-[#c0e6fd]/50 shadow-sm shadow-[#1b3554]/20";
+                        circleCls =
+                          "bg-[#1b3554] text-white ring-4 ring-[#c0e6fd]/50 shadow-sm shadow-[#1b3554]/20";
                       }
 
                       return (
-                        <li key={label} className="flex flex-col items-center justify-start text-center">
+                        <li
+                          key={label}
+                          className="flex flex-col items-center justify-start text-center"
+                        >
                           <div className="flex w-full items-center justify-center">
                             <span
                               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition ${circleCls}`}
                             >
-                              {isDone ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                              {isDone ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                index + 1
+                              )}
                             </span>
                           </div>
                           <span
@@ -510,7 +634,9 @@ export default function LendOrderDetailClient({
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
                     <User className="h-5 w-5" />
                   </span>
-                  <h2 className="text-lg font-bold text-slate-900">ข้อมูลผู้เช่า</h2>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    ข้อมูลผู้เช่า
+                  </h2>
                 </div>
                 <Link
                   href="/chat"
@@ -524,22 +650,28 @@ export default function LendOrderDetailClient({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm">
                   {renter.avatarUrl ? (
-                    <img src={renter.avatarUrl} alt={renter.username} className="h-full w-full rounded-2xl object-cover" />
+                    <img
+                      src={renter.avatarUrl}
+                      alt={renter.username}
+                      className="h-full w-full rounded-2xl object-cover"
+                    />
                   ) : (
                     <span>{renter.username.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base text-slate-900">{renter.username || renter.fullName}</h3>
+                    <h3 className="font-bold text-base text-slate-900">
+                      {renter.username || renter.fullName}
+                    </h3>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 pt-1">
-                    {((renter.phones && renter.phones.length > 0)
+                    {(renter.phones && renter.phones.length > 0
                       ? renter.phones
                       : renter.phone
-                      ? [renter.phone]
-                      : []
+                        ? [renter.phone]
+                        : []
                     ).map((ph, idx) => (
                       <a
                         key={idx}
@@ -592,11 +724,16 @@ export default function LendOrderDetailClient({
                   </Link>
                   <p className="text-xs text-slate-500">
                     อัตราค่าเช่าที่ตั้งไว้:{" "}
-                    <strong className="text-slate-700">{thb.format(rentPerDay)}</strong> / วัน
+                    <strong className="text-slate-700">
+                      {thb.format(rentPerDay)}
+                    </strong>{" "}
+                    / วัน
                   </p>
                   <p className="text-xs text-slate-500">
                     เงินประกันอุปกรณ์:{" "}
-                    <strong className="text-slate-700">{thb.format(deposit)}</strong>
+                    <strong className="text-slate-700">
+                      {thb.format(deposit)}
+                    </strong>
                   </p>
                 </div>
               </div>
@@ -613,12 +750,17 @@ export default function LendOrderDetailClient({
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#c0e6fd]/30 text-[#1b3554]">
                       <CalendarDays className="h-4 w-4" />
                     </span>
-                    <span className="text-sm font-bold text-slate-900">ระยะเวลาการเช่า</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      ระยะเวลาการเช่า
+                    </span>
                   </div>
                   <p className="mt-2 text-sm font-semibold text-slate-800">
-                    {formatDate(order.start_date)} — {formatDate(order.end_date)}
+                    {formatDate(order.start_date)} —{" "}
+                    {formatDate(order.end_date)}
                   </p>
-                  <p className="text-xs text-slate-500">รวมทั้งหมด {days} วัน</p>
+                  <p className="text-xs text-slate-500">
+                    รวมทั้งหมด {days} วัน
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 p-4">
@@ -626,10 +768,16 @@ export default function LendOrderDetailClient({
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-700">
                       <MapPin className="h-4 w-4" />
                     </span>
-                    <span className="text-sm font-bold text-slate-900">จุดนัดรับอุปกรณ์</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      จุดนัดรับอุปกรณ์
+                    </span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-800">{order.meetup_location || "—"}</p>
-                  <p className="text-xs text-slate-500">{formatDate(order.start_date)}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
+                    {order.meetup_location || "—"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {formatDate(order.start_date)}
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
@@ -637,10 +785,16 @@ export default function LendOrderDetailClient({
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-700">
                       <MapPin className="h-4 w-4" />
                     </span>
-                    <span className="text-sm font-bold text-slate-900">จุดนัดคืนอุปกรณ์</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      จุดนัดคืนอุปกรณ์
+                    </span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-800">{order.return_location || "—"}</p>
-                  <p className="text-xs text-slate-500">{formatDate(order.end_date)}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
+                    {order.return_location || "—"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {formatDate(order.end_date)}
+                  </p>
                 </div>
               </div>
             </section>
@@ -661,7 +815,8 @@ export default function LendOrderDetailClient({
                       มีคำขอเช่าใหม่ส่งเข้ามา
                     </p>
                     <p className="text-[11px] text-amber-700 mt-1">
-                      กรุณาตรวจสอบวันและจุดนัดหมาย จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
+                      กรุณาตรวจสอบวันและจุดนัดหมาย
+                      จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
                     </p>
                   </div>
 
@@ -681,7 +836,7 @@ export default function LendOrderDetailClient({
 
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("rejected")}
+                    onClick={() => handleUpdateStatus("rejected_by_lender")}
                     disabled={isUpdating}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 transition duration-200 hover:bg-rose-50 active:scale-95 disabled:opacity-50"
                   >
@@ -695,15 +850,22 @@ export default function LendOrderDetailClient({
                     <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                       <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                         <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
-                        <span>ผู้เช่าอัปโหลดสลิปแล้ว (ยอด {thb.format(totalPaid)})</span>
+                        <span>
+                          ผู้เช่าอัปโหลดสลิปแล้ว (ยอด {thb.format(totalPaid)})
+                        </span>
                       </p>
                       <p className="text-[11px] text-amber-700 mt-1">
-                        กรุณาตรวจสอบยอดเงินในบัญชีธนาคาร จากนั้นกดปุ่มยืนยันการชำระเงิน
+                        กรุณาตรวจสอบยอดเงินในบัญชีธนาคาร
+                        จากนั้นกดปุ่มยืนยันการชำระเงิน
                       </p>
-                      {paymentsList.find((p) => p.status === "pending")?.slip_image_url && (
+                      {paymentsList.find((p) => p.status === "pending")
+                        ?.slip_image_url && (
                         <div className="mt-2">
                           <a
-                            href={paymentsList.find((p) => p.status === "pending")?.slip_image_url || "#"}
+                            href={
+                              paymentsList.find((p) => p.status === "pending")
+                                ?.slip_image_url || "#"
+                            }
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 underline"
@@ -730,14 +892,26 @@ export default function LendOrderDetailClient({
                     </button>
                   </div>
                 ) : (
-                  <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
-                    <div className="flex items-center gap-2 text-sky-800 font-bold text-sm">
-                      <Clock className="h-4 w-4 text-sky-600" />
-                      <span>อนุมัติแล้ว · รอผู้เช่าชำระเงิน</span>
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
+                      <div className="flex items-center gap-2 text-sky-800 font-bold text-sm">
+                        <Clock className="h-4 w-4 text-sky-600" />
+                        <span>อนุมัติแล้ว · รอผู้เช่าชำระเงิน</span>
+                      </div>
+                      <p className="text-xs text-sky-700">
+                        ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว
+                        เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
+                      </p>
                     </div>
-                    <p className="text-xs text-sky-700">
-                      ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
-                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCancelBeforePayment}
+                      disabled={isUpdating}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>ยกเลิกรายการเช่า</span>
+                    </button>
                   </div>
                 )
               ) : currentStatus === "paid" ? (
@@ -747,7 +921,8 @@ export default function LendOrderDetailClient({
                       ผู้เช่าชำระเงินเรียบร้อยแล้ว
                     </p>
                     <p className="text-[11px] text-emerald-700">
-                      กรุณาถ่ายรูปบันทึกสภาพอุปกรณ์ก่อนส่งมอบ จากนั้นส่งมอบอุปกรณ์ให้ผู้เช่า
+                      กรุณาถ่ายรูปบันทึกสภาพอุปกรณ์ก่อนส่งมอบ
+                      จากนั้นส่งมอบอุปกรณ์ให้ผู้เช่า
                     </p>
                   </div>
                   <button
@@ -758,15 +933,25 @@ export default function LendOrderDetailClient({
                     <Camera className="h-4 w-4" />
                     <span>ถ่ายรูปสภาพก่อนให้เช่า &amp; ส่งมอบ</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(true)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    <span>ยกเลิกรายการเช่า</span>
+                  </button>
                 </div>
-              ) : currentStatus === "item_sent" || currentStatus === "item_returned" ? (
+              ) : currentStatus === "item_sent" ||
+                currentStatus === "item_returned" ? (
                 <div className="space-y-3">
                   <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-1">
                     <p className="text-xs font-bold text-sky-900">
                       อุปกรณ์กำลังถูกเช่าใช้งาน
                     </p>
                     <p className="text-[11px] text-sky-700">
-                      นัดหมายรับคืนในวันที่ {formatDate(order.end_date)} เมื่อได้รับของคืนแล้ว ให้ถ่ายรูปบันทึกสภาพหลังการใช้งาน
+                      นัดหมายรับคืนในวันที่ {formatDate(order.end_date)}{" "}
+                      เมื่อได้รับของคืนแล้ว ให้ถ่ายรูปบันทึกสภาพหลังการใช้งาน
                     </p>
                   </div>
                   <button
@@ -784,7 +969,9 @@ export default function LendOrderDetailClient({
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
                   </p>
-                  <p className="text-xs text-emerald-700">ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว</p>
+                  <p className="text-xs text-emerald-700">
+                    ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
@@ -805,9 +992,15 @@ export default function LendOrderDetailClient({
                   label={`ค่าเช่า (${days} วัน × ${thb.format(rentPerDay)})`}
                   value={thb.format(rentalFee)}
                 />
-                <SummaryRow label="เงินประกัน (พักไว้กับระบบ)" value={thb.format(deposit)} muted />
+                <SummaryRow
+                  label="เงินประกัน (พักไว้กับระบบ)"
+                  value={thb.format(deposit)}
+                  muted
+                />
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                  <span className="text-sm font-bold text-slate-900">รายได้สุทธิของคุณ</span>
+                  <span className="text-sm font-bold text-slate-900">
+                    รายได้สุทธิของคุณ
+                  </span>
                   <span className="text-lg font-extrabold text-emerald-700">
                     +{thb.format(rentalFee)}
                   </span>
@@ -835,28 +1028,44 @@ export default function LendOrderDetailClient({
                 <Camera className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">ถ่ายรูปสภาพอุปกรณ์ก่อนให้เช่า</h3>
-                <p className="text-xs text-slate-500">บันทึกเป็นหลักฐานก่อนส่งมอบอุปกรณ์ให้ผู้เช่า</p>
+                <h3 className="text-lg font-bold text-slate-900">
+                  ถ่ายรูปสภาพอุปกรณ์ก่อนให้เช่า
+                </h3>
+                <p className="text-xs text-slate-500">
+                  บันทึกเป็นหลักฐานก่อนส่งมอบอุปกรณ์ให้ผู้เช่า
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleSubmitBeforeHandover} className="mt-4 space-y-4">
+            <form
+              onSubmit={handleSubmitBeforeHandover}
+              className="mt-4 space-y-4"
+            >
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  รูปถ่ายสภาพอุปกรณ์ (ทุกมุม/จุดสำคัญ) <span className="text-rose-500">*</span>
+                  รูปถ่ายสภาพอุปกรณ์ (ทุกมุม/จุดสำคัญ){" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
                   {beforePreview ? (
                     <div className="space-y-2">
-                      <img src={beforePreview} alt="สภาพก่อนให้เช่า" className="max-h-48 rounded-xl object-contain mx-auto shadow-sm" />
+                      <img
+                        src={beforePreview}
+                        alt="สภาพก่อนให้เช่า"
+                        className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                      />
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                         <Upload className="h-5 w-5" />
                       </div>
-                      <p className="text-xs font-semibold text-slate-700">คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง</p>
-                      <p className="text-[11px] text-slate-400">แนะนำให้ถ่ายรูปตัวเครื่อง หน้าเลนส์ ปุ่ม และอุปกรณ์เสริม</p>
+                      <p className="text-xs font-semibold text-slate-700">
+                        คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        แนะนำให้ถ่ายรูปตัวเครื่อง หน้าเลนส์ ปุ่ม และอุปกรณ์เสริม
+                      </p>
                     </div>
                   )}
                   <input
@@ -866,7 +1075,8 @@ export default function LendOrderDetailClient({
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onloadend = () => setBeforePreview(reader.result as string);
+                        reader.onloadend = () =>
+                          setBeforePreview(reader.result as string);
                         reader.readAsDataURL(file);
                       }
                     }}
@@ -888,7 +1098,11 @@ export default function LendOrderDetailClient({
                   disabled={isUpdating}
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
                 >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {isUpdating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
                   <span>ยืนยันส่งมอบอุปกรณ์</span>
                 </button>
               </div>
@@ -914,28 +1128,41 @@ export default function LendOrderDetailClient({
                 <Camera className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">ถ่ายรูปสภาพอุปกรณ์หลังการใช้งาน</h3>
-                <p className="text-xs text-slate-500">บันทึกเป็นหลักฐานหลังรับอุปกรณ์คืนและเสร็จสิ้นการเช่า</p>
+                <h3 className="text-lg font-bold text-slate-900">
+                  ถ่ายรูปสภาพอุปกรณ์หลังการใช้งาน
+                </h3>
+                <p className="text-xs text-slate-500">
+                  บันทึกเป็นหลักฐานหลังรับอุปกรณ์คืนและเสร็จสิ้นการเช่า
+                </p>
               </div>
             </div>
 
             <form onSubmit={handleSubmitAfterReturn} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  รูปถ่ายสภาพอุปกรณ์หลังใช้งาน <span className="text-rose-500">*</span>
+                  รูปถ่ายสภาพอุปกรณ์หลังใช้งาน{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
                   {afterPreview ? (
                     <div className="space-y-2">
-                      <img src={afterPreview} alt="สภาพหลังใช้งาน" className="max-h-48 rounded-xl object-contain mx-auto shadow-sm" />
+                      <img
+                        src={afterPreview}
+                        alt="สภาพหลังใช้งาน"
+                        className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                      />
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                         <Upload className="h-5 w-5" />
                       </div>
-                      <p className="text-xs font-semibold text-slate-700">คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง</p>
-                      <p className="text-[11px] text-slate-400">ตรวจสอบสภาพ ความสมบูรณ์ และการทำงานของอุปกรณ์</p>
+                      <p className="text-xs font-semibold text-slate-700">
+                        คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        ตรวจสอบสภาพ ความสมบูรณ์ และการทำงานของอุปกรณ์
+                      </p>
                     </div>
                   )}
                   <input
@@ -945,7 +1172,8 @@ export default function LendOrderDetailClient({
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onloadend = () => setAfterPreview(reader.result as string);
+                        reader.onloadend = () =>
+                          setAfterPreview(reader.result as string);
                         reader.readAsDataURL(file);
                       }
                     }}
@@ -967,8 +1195,97 @@ export default function LendOrderDetailClient({
                   disabled={isUpdating}
                   className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50"
                 >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {isUpdating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
                   <span>ยืนยันตรวจรับคืน &amp; เสร็จสิ้นการเช่า</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">
+              ยกเลิกรายการเช่า
+            </h3>
+            <p className="text-xs text-slate-500">
+              ต้องชี้แจงเหตุผลและแนบรูปหลักฐานให้ผู้เช่าเห็น
+              ระบบจะคืนเงินให้ผู้เช่าเต็มจำนวนเสมอ
+            </p>
+
+            <form onSubmit={handleSubmitCancel} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  เหตุผลที่ยกเลิก <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  required
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                  placeholder="เช่น อุปกรณ์ชำรุดกะทันหัน ไม่สามารถให้เช่าได้"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  รูปหลักฐานประกอบ <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
+                  {cancelImagePreview ? (
+                    <img
+                      src={cancelImagePreview}
+                      alt="หลักฐานยกเลิก"
+                      className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">
+                        คลิกเพื่อเลือกรูปภาพ
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () =>
+                          setCancelImagePreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="mt-3 block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  ปิด
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {isUpdating ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
                 </button>
               </div>
             </form>
@@ -992,7 +1309,9 @@ function SummaryRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt className={`text-sm ${muted ? "text-slate-400" : "text-slate-600"}`}>{label}</dt>
+      <dt className={`text-sm ${muted ? "text-slate-400" : "text-slate-600"}`}>
+        {label}
+      </dt>
       <dd
         className={`text-sm font-semibold ${accent ? "text-emerald-600" : muted ? "text-slate-400" : "text-slate-800"}`}
       >
