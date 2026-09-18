@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import CountdownBanner from "./CountdownBanner";
 import {
   AlertCircle,
   AlertTriangle,
@@ -866,12 +867,17 @@ export default function LendOrderDetailClient({
 
               {currentStatus === "requested" ? (
                 <div className="space-y-3">
+                  <CountdownBanner
+                    deadlineISO={new Date(
+                      new Date(order.created_at).getTime() + 8 * 3_600_000,
+                    ).toISOString()}
+                  />
                   <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                     <p className="text-xs font-semibold text-amber-900">
                       มีคำขอเช่าใหม่ส่งเข้ามา
                     </p>
                     <p className="text-[11px] text-amber-700 mt-1">
-                      กรุณาตรวจสอบวันและจุดนัดหมาย
+                      กรุณาตรวจสอบวันและจุดนัดหมาย ภายใน 8 ชั่วโมง
                       จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
                     </p>
                   </div>
@@ -903,6 +909,15 @@ export default function LendOrderDetailClient({
               ) : currentStatus === "awaiting_payment" ? (
                 hasPending ? (
                   <div className="space-y-3">
+                    <CountdownBanner
+                      deadlineISO={new Date(
+                        new Date(
+                          paymentsList.find((p) => p.status === "pending")
+                            ?.date || order.updated_at,
+                        ).getTime() +
+                          8 * 3_600_000,
+                      ).toISOString()}
+                    />
                     <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                       <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                         <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
@@ -917,18 +932,18 @@ export default function LendOrderDetailClient({
                       {paymentsList.find((p) => p.status === "pending")
                         ?.slip_image_url && (
                         <div className="mt-2">
-                          <a
-                            href={
-                              paymentsList.find((p) => p.status === "pending")
-                                ?.slip_image_url || "#"
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 underline"
-                          >
+                          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-sky-700">
                             <ImageIcon className="h-3.5 w-3.5" />
-                            <span>คลิกดูรูปสลิปหลักฐาน</span>
-                          </a>
+                            <span>รูปสลิปหลักฐาน</span>
+                          </p>
+                          <img
+                            src={
+                              paymentsList.find((p) => p.status === "pending")
+                                ?.slip_image_url || ""
+                            }
+                            alt="สลิปโอนเงิน"
+                            className="max-h-64 rounded-xl border border-amber-200 object-contain shadow-sm"
+                          />
                         </div>
                       )}
                     </div>
@@ -1353,10 +1368,19 @@ export default function LendOrderDetailClient({
                 </div>
               </div>
 
+              {errorMsg && (
+                <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">
+                  {errorMsg}
+                </p>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCancelModal(false)}
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setErrorMsg(null);
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   ปิด

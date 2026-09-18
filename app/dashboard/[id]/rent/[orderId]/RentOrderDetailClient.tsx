@@ -75,7 +75,7 @@ export interface RentOrderDetailData {
   }>;
 }
 
-const PAYMENT_WINDOW_HOURS = 24;
+const PAYMENT_WINDOW_HOURS = 8;
 
 const thb = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -297,6 +297,10 @@ export default function RentOrderDetailClient({
 
   async function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
+    if (!slipFile || !slipPreview) {
+      setErrorMsg("กรุณาแนบรูปสลิปก่อนยืนยัน");
+      return;
+    }
     try {
       setIsSubmittingSlip(true);
       setErrorMsg(null);
@@ -304,9 +308,7 @@ export default function RentOrderDetailClient({
       const payload = {
         orderId: order.order_id,
         amount: totalPaid,
-        slipImageUrl:
-          slipPreview ||
-          "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60",
+        slipImageUrl: slipPreview,
       };
 
       const res = await fetch("/api/payments", {
@@ -1079,10 +1081,19 @@ export default function RentOrderDetailClient({
                     : "หากยกเลิกตอนนี้ (เหลือ > 2 วัน) คุณจะได้คืนเงินประกัน + ค่าเช่าเต็มจำนวน 100%"}
                 </div>
 
+                {errorMsg && (
+                  <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">
+                    {errorMsg}
+                  </p>
+                )}
+
                 <div className="mt-5 flex items-center justify-end gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowCancelModal(false)}
+                    onClick={() => {
+                      setShowCancelModal(false);
+                      setErrorMsg(null);
+                    }}
                     className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     ปิด
