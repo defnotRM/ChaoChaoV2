@@ -1046,37 +1046,60 @@ export default function RentOrderDetailClient({
         </div>
       )}
 
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">
-              ยกเลิกรายการเช่า
-            </h3>
-            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-              ยอดเงินคืนจะขึ้นอยู่กับระยะเวลาที่ยกเลิก (ยกเลิกเร็วได้คืนมากกว่า)
-              ระบบจะแจ้งยอดที่ได้คืนให้ทราบทันทีหลังกดยืนยัน
-            </p>
+      {showCancelModal &&
+        (() => {
+          const target = new Date(`${order.start_date}T00:00:00Z`).getTime();
+          const now = new Date();
+          const todayUTC = Date.UTC(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
+          const daysLeft = Math.round((target - todayUTC) / 86400000);
+          const isNearCase = daysLeft <= 2;
 
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                ปิด
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelOrder}
-                disabled={isCancelling}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
-              >
-                {isCancelling ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
-              </button>
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900">
+                  ยืนยันยกเลิกรายการเช่า?
+                </h3>
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                  เหลืออีก {daysLeft} วันก่อนวันนัดรับ
+                </p>
+                <div
+                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${
+                    isNearCase
+                      ? "bg-rose-50 text-rose-700"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {isNearCase
+                    ? "หากยกเลิกตอนนี้ (เหลือ ≤ 2 วัน) คุณจะได้คืนแค่เงินประกัน 100% เท่านั้น ค่าเช่าจะไม่ได้คืนเลย"
+                    : "หากยกเลิกตอนนี้ (เหลือ > 2 วัน) คุณจะได้คืนเงินประกัน + ค่าเช่าเต็มจำนวน 100%"}
+                </div>
+
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(false)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    ปิด
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelOrder}
+                    disabled={isCancelling}
+                    className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {isCancelling ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }

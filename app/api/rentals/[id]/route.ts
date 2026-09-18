@@ -187,5 +187,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
+  // อนุมัติคำขอนี้สำเร็จแล้ว → ยกเลิกคำขออื่นที่ยังรออนุมัติ (requested) ของสินค้า
+  // เดียวกันที่ซ้อนวันกัน ทันทีโดยไม่ต้องรอครบ 8 ชม.
+  if (status === "awaiting_payment") {
+    await admin
+      .from("rentalorder")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("item_id", data.item_id)
+      .neq("order_id", id)
+      .eq("status", "requested")
+      .lte("start_date", data.end_date)
+      .gte("end_date", data.start_date);
+  }
+
   return apiSuccess({ message: "เปลี่ยนสถานะสำเร็จ", order: data });
 }
