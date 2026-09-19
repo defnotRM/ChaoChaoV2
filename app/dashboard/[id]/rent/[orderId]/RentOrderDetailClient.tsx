@@ -877,10 +877,18 @@ export default function RentOrderDetailClient({
                         <span>ชำระเงินเรียบร้อยแล้ว</span>
                       </p>
                       <p className="text-xs text-emerald-700 leading-relaxed">
-                        กรุณารอผู้ให้เช่าตรวจสอบสภาพอุปกรณ์และถ่ายรูปบันทึกหลักฐานก่อนส่งมอบ
-                        จากนั้นนัดรับอุปกรณ์ตามวันและจุดนัดหมาย
+                        ทั้งคุณและผู้ให้เช่าต้องถ่ายรูปบันทึกหลักฐานสภาพอุปกรณ์ก่อนรับของ
+                        (ฝ่ายละไม่เกิน 5 รูป)
+                        แล้วนัดรับอุปกรณ์ตามวันและจุดนัดหมาย
                       </p>
                     </div>
+                    <Link
+                      href={`/renter/myproductsList/${order.order_id}/handover`}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>ถ่ายรูปรับของ</span>
+                    </Link>
                     <button
                       type="button"
                       onClick={() => setShowCancelModal(true)}
