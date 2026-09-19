@@ -13,6 +13,7 @@ import {
   Globe,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import NotificationBell from "./NotificationBell";
 
 function Brand() {
   return (
@@ -84,7 +85,7 @@ export default function Navbarver2() {
         const data = await res.json();
         const totalUnread = (data.rooms || []).reduce(
           (sum: number, r: any) => sum + (r.unreadCount || 0),
-          0
+          0,
         );
         setUnreadCount(totalUnread);
       }
@@ -179,6 +180,7 @@ export default function Navbarver2() {
               </span>
             )}
           </Link>
+          <NotificationBell userId={user?.id ?? null} />
           <span aria-hidden="true" className="mx-1 h-7 w-px bg-slate-200" />
 
           {user ? (
@@ -284,6 +286,7 @@ export default function Navbarver2() {
                 </span>
               )}
             </Link>
+            <NotificationBell userId={user?.id ?? null} />
 
             {/* Circular Profile Button for Mobile Top Bar (เฉพาะเมื่อ Logged In) */}
             {user && (
