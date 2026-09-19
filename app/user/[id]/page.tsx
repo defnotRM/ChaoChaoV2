@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   MessageCircle,
+  Flag,
   Package,
   Calendar,
   ArrowLeft,
@@ -47,6 +48,37 @@ function UserProfileContent({ userId }: { userId: string }) {
   const [items, setItems] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportDescription, setReportDescription] = useState("");
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
+
+  async function handleSubmitReport() {
+    if (!user || !reportDescription.trim()) return;
+    setIsReporting(true);
+    setReportError(null);
+    try {
+      const res = await fetch(`/api/users/${user.id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: reportDescription.trim() }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReportError(payload?.message ?? "ส่งรายงานไม่สำเร็จ");
+        return;
+      }
+      setReportSuccess(payload.message);
+      setShowReportModal(false);
+      setReportDescription("");
+    } catch {
+      setReportError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setIsReporting(false);
+    }
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -176,15 +208,17 @@ function UserProfileContent({ userId }: { userId: string }) {
                 </div>
               </div>
 
-              {/* Chat Action Button */}
+              {/* Report Action Button — ปุ่มแชทเดิมพังไปแล้วตั้งแต่เปลี่ยนแชทเป็นผูกกับ order
+                  (ต้องเริ่มแชทจากหน้า order เท่านั้น ไม่มี "แชทกับใครก็ได้" อีกต่อไป) */}
               <div className="flex shrink-0 gap-3">
-                <Link
-                  href={`/chat?userId=${user.id}`}
-                  className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-6 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/20 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(true)}
+                  className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-6 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
                 >
-                  <MessageCircle className="h-4 w-4" />
-                  <span>ส่งข้อความ / เริ่มแชท</span>
-                </Link>
+                  <Flag className="h-4 w-4" />
+                  <span>รายงานบัญชีนี้</span>
+                </button>
               </div>
             </div>
 
@@ -249,7 +283,9 @@ function UserProfileContent({ userId }: { userId: string }) {
                           : "bg-slate-500 text-white"
                       }`}
                     >
-                      {item.status === "available" ? "พร้อมให้เช่า" : "ไม่พร้อมให้เช่า"}
+                      {item.status === "available"
+                        ? "พร้อมให้เช่า"
+                        : "ไม่พร้อมให้เช่า"}
                     </span>
                   </div>
 
@@ -269,7 +305,10 @@ function UserProfileContent({ userId }: { userId: string }) {
                         <span className="text-xs text-slate-400">ราคาเช่า</span>
                         <p className="text-base font-extrabold text-[#1b3554]">
                           ฿{Number(item.rentalFeePerDay).toLocaleString()}
-                          <span className="text-xs font-normal text-slate-500"> / วัน</span>
+                          <span className="text-xs font-normal text-slate-500">
+                            {" "}
+                            / วัน
+                          </span>
                         </p>
                       </div>
 
@@ -287,6 +326,55 @@ function UserProfileContent({ userId }: { userId: string }) {
           )}
         </div>
       </div>
+
+      {reportSuccess && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg">
+          {reportSuccess}
+        </div>
+      )}
+
+      {showReportModal && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">รายงานบัญชีนี้</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              แอดมินจะตรวจสอบบัญชีนี้ตามที่รายงาน กรุณาอธิบายเหตุผลให้ชัดเจน
+            </p>
+
+            <textarea
+              value={reportDescription}
+              onChange={(e) => setReportDescription(e.target.value)}
+              rows={3}
+              placeholder="เช่น มีพฤติกรรมหลอกลวง โปรไฟล์ปลอม ฯลฯ"
+              className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+            />
+
+            {reportError && (
+              <p className="mt-2 text-xs font-semibold text-rose-600">
+                {reportError}
+              </p>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReport}
+                disabled={isReporting || !reportDescription.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {isReporting ? "กำลังส่ง..." : "ส่งรายงาน"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
