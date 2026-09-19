@@ -40,13 +40,33 @@ const thb = new Intl.NumberFormat("th-TH", {
 });
 
 const THAI_MONTHS_SHORT = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
 ];
 
 const THAI_MONTHS_FULL = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+  "มกราคม",
+  "กุมภาพันธ์",
+  "มีนาคม",
+  "เมษายน",
+  "พฤษภาคม",
+  "มิถุนายน",
+  "กรกฎาคม",
+  "สิงหาคม",
+  "กันยายน",
+  "ตุลาคม",
+  "พฤศจิกายน",
+  "ธันวาคม",
 ];
 
 function formatKey(key: string | null | undefined): string {
@@ -205,10 +225,10 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   const [startKey, setStartKey] = useState<string | null>(null);
   const [endKey, setEndKey] = useState<string | null>(null);
   const [pickupId, setPickupId] = useState<string | null>(
-    locations.length === 1 ? locations[0].id : null
+    locations.length === 1 ? locations[0].id : null,
   );
   const [returnId, setReturnId] = useState<string | null>(
-    locations.length === 1 ? locations[0].id : null
+    locations.length === 1 ? locations[0].id : null,
   );
   const [draft, setDraft] = useState<BookingDraft | null>(null);
 
@@ -306,10 +326,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     loadUser();
   }, []);
 
-  const roles = currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
+  const roles =
+    currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
   const isLenderOnly =
     currentUser !== null &&
-    (roles.includes("lender") || roles.includes("ผู้ให้เช่า") || currentUser.role === "lender") &&
+    (roles.includes("lender") ||
+      roles.includes("ผู้ให้เช่า") ||
+      currentUser.role === "lender") &&
     !roles.includes("renter") &&
     !roles.includes("ผู้เช่า") &&
     !roles.includes("both") &&
@@ -317,7 +340,9 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     !roles.includes("admin") &&
     !roles.includes("ผู้ดูแลระบบ");
 
-  const canContinue = Boolean(startKey && endKey && pickupId && returnId && !isLenderOnly);
+  const canContinue = Boolean(
+    startKey && endKey && pickupId && returnId && !isLenderOnly,
+  );
 
   async function handleSubmitBooking() {
     if (!canContinue || !startKey || !endKey) return;
@@ -331,8 +356,12 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
         itemId: item.id,
         startDate: startKey,
         endDate: endKey,
-        meetupLocation: pickup?.description || pickup?.fullAddress || "จุดนัดรับที่ตกลงกัน",
-        returnLocation: returnLoc?.description || returnLoc?.fullAddress || "จุดนัดคืนที่ตกลงกัน",
+        meetupLocation:
+          pickup?.description || pickup?.fullAddress || "จุดนัดรับที่ตกลงกัน",
+        returnLocation:
+          returnLoc?.description ||
+          returnLoc?.fullAddress ||
+          "จุดนัดคืนที่ตกลงกัน",
         rentalFee,
         deposit: item.deposit,
         totalPaid: totalPayable,
@@ -346,12 +375,15 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
       const result = await res.json();
       if (!res.ok) {
-        setSubmitError(result.message || "ส่งคำขอเช่าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+        setSubmitError(
+          result.message || "ส่งคำขอเช่าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+        );
         return;
       }
 
       // ส่งคำขอเช่าสำเร็จ นำผู้เช่าไปจัดการสถานะต่อใน Dashboard
-      const targetUserId = result.userId || "8a88d60a-e2cf-43a6-b4ea-baa9347bfee1";
+      const targetUserId =
+        result.userId || "8a88d60a-e2cf-43a6-b4ea-baa9347bfee1";
       router.push(`/dashboard/${targetUserId}/rent/${result.orderId}`);
     } catch (err) {
       console.error("Submit booking error:", err);
@@ -376,10 +408,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
             หน้าแรก
           </Link>
           <span aria-hidden="true">/</span>
-          <Link
-            href="/products"
-            className="transition hover:text-[#1b3554]"
-          >
+          <Link href="/products" className="transition hover:text-[#1b3554]">
             สินค้าสำหรับเช่า
           </Link>
           <span aria-hidden="true">/</span>
@@ -435,7 +464,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                             >
                               <Clock3 className="h-3 w-3 text-sky-600" />
                               <span>
-                                ช่วงที่เปิดให้เช่า: {formatKey(r.start)} – {formatKey(r.end)}
+                                ช่วงที่เปิดให้เช่า: {formatKey(r.start)} –{" "}
+                                {formatKey(r.end)}
                               </span>
                             </span>
                           ))}
@@ -450,7 +480,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                               <span>
-                                มีคนจองแล้ว: {formatKey(b.start)} – {formatKey(b.end)}
+                                มีคนจองแล้ว: {formatKey(b.start)} –{" "}
+                                {formatKey(b.end)}
                               </span>
                             </span>
                           ))}
@@ -501,15 +532,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   const { key, day } = cell;
                   const booked = isBooked(key);
                   const open = isOpen(key);
-                  const selectable = open && !booked;
+                  const isPast = key < todayKey;
+                  const selectable = open && !booked && !isPast;
                   const isStart = key === startKey;
                   const isEnd = key === endKey;
                   const isEndpoint = isStart || isEnd;
                   const inRange =
-                    startKey &&
-                    endKey &&
-                    key > startKey &&
-                    key < endKey;
+                    startKey && endKey && key > startKey && key < endKey;
                   // ระหว่างเลือก: ไฮไลต์ start เดี่ยว ๆ ด้วย
                   const activeSingle = isStart && !endKey;
 
@@ -535,18 +564,14 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                       onClick={() => handleDayClick(key)}
                       aria-pressed={isEndpoint}
                       aria-label={`${formatKey(key)}${
-                        booked
-                          ? " ถูกจองแล้ว"
-                          : !open
-                          ? " นอกช่วงเปิดจอง"
-                          : ""
+                        booked ? " ถูกจองแล้ว" : !open ? " นอกช่วงเปิดจอง" : ""
                       }`}
                       title={
                         booked
                           ? `วันที่ ${formatKey(key)} ถูกจองแล้ว`
                           : !open
-                          ? `วันที่ ${formatKey(key)} อยู่นอกช่วงที่เปิดให้เช่า`
-                          : `วันที่ ${formatKey(key)} ว่าง (สามารถเลือกได้)`
+                            ? `วันที่ ${formatKey(key)} อยู่นอกช่วงที่เปิดให้เช่า`
+                            : `วันที่ ${formatKey(key)} ว่าง (สามารถเลือกได้)`
                       }
                       className={`flex aspect-square items-center justify-center rounded-lg text-sm transition ${cls} ${
                         selectable ? "cursor-pointer" : "cursor-not-allowed"
@@ -562,7 +587,10 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
                 <LegendDot className="bg-[#1b3554]" label="วันที่เลือก" />
                 <LegendDot className="bg-[#c0e6fd]/70" label="ในช่วงเช่า" />
-                <LegendDot className="bg-white ring-1 ring-slate-200" label="ว่าง" />
+                <LegendDot
+                  className="bg-white ring-1 ring-slate-200"
+                  label="ว่าง"
+                />
                 <LegendDot className="bg-rose-100" label="ถูกจองแล้ว" />
                 <LegendDot className="bg-slate-100" label="นอกช่วงเปิดจอง" />
               </div>
@@ -572,17 +600,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   <CalendarDays className="h-4 w-4 shrink-0" />
                   {endKey ? (
                     <span>
-                      เลือก{" "}
-                      <strong>{formatKey(startKey)}</strong>{" "}
-                      ถึง{" "}
-                      <strong>{formatKey(endKey)}</strong> (
-                      {days} วัน)
+                      เลือก <strong>{formatKey(startKey)}</strong> ถึง{" "}
+                      <strong>{formatKey(endKey)}</strong> ({days} วัน)
                     </span>
                   ) : (
                     <span>
-                      เริ่ม{" "}
-                      <strong>{formatKey(startKey)}</strong>{" "}
-                      — เลือกวันสิ้นสุดอีกครั้ง
+                      เริ่ม <strong>{formatKey(startKey)}</strong> —
+                      เลือกวันสิ้นสุดอีกครั้ง
                     </span>
                   )}
                 </div>
@@ -648,7 +672,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                 <div className="flex items-start gap-2.5">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <span>
-                    ถ่ายรูปหลักฐานสภาพอุปกรณ์ร่วมกันทั้งตอนรับและคืน เพื่อความปลอดภัยทั้งสองฝ่าย
+                    ถ่ายรูปหลักฐานสภาพอุปกรณ์ร่วมกันทั้งตอนรับและคืน
+                    เพื่อความปลอดภัยทั้งสองฝ่าย
                   </span>
                 </div>
               </div>
@@ -742,7 +767,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                         </dd>
                       </div>
                       <p className="mt-1 text-right text-[11px] text-slate-400">
-                        (ค่าเช่าสุทธิ {thb.format(rentalFee)} + เงินประกัน {thb.format(item.deposit)})
+                        (ค่าเช่าสุทธิ {thb.format(rentalFee)} + เงินประกัน{" "}
+                        {thb.format(item.deposit)})
                       </p>
                     </div>
                   </dl>
@@ -766,7 +792,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   </button>
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800">
                     <p className="font-medium">
-                      บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น หากต้องการเช่าอุปกรณ์ กรุณาเพิ่มบทบาทผู้เช่าหรือสลับบัญชี
+                      บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น หากต้องการเช่าอุปกรณ์
+                      กรุณาเพิ่มบทบาทผู้เช่าหรือสลับบัญชี
                     </p>
                   </div>
                 </div>
@@ -782,7 +809,9 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   ) : (
                     <Send className="h-5 w-5" />
                   )}
-                  <span>{isSubmitting ? "กำลังส่งคำขอเช่า..." : "ส่งคำขอเช่า"}</span>
+                  <span>
+                    {isSubmitting ? "กำลังส่งคำขอเช่า..." : "ส่งคำขอเช่า"}
+                  </span>
                 </button>
               )}
 

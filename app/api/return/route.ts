@@ -9,7 +9,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB/ใบ
 
 export async function POST(request: Request) {
   try {
-    // 1) ต้องล็อกอินก่อนเสมอ — ไม่เชื่อ userId ที่ client ส่งมาอีกต่อไป (เหมือน /api/handover)
     const supabase = await createClient();
     const {
       data: { user },
@@ -65,6 +64,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // เอา fallback รูปปลอมออก — บังคับต้องแนบรูปจริง
+    if (imageUrls.length === 0) {
+      return NextResponse.json(
+        { message: "กรุณาแนบรูปหลักฐานอย่างน้อย 1 รูป" },
+        { status: 400 },
+      );
+    }
+
     const admin = createAdminClient();
 
     const { data: order, error: orderError } = await admin
@@ -77,7 +84,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
 
-    // 2) เฉพาะเจ้าของสินค้า (ผู้ให้เช่า) ของ order นี้เท่านั้นที่ยืนยันรับคืนของได้
     let lenderUserId: string | null = null;
     if (order.item_id) {
       const { data: item } = await admin
@@ -95,15 +101,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (imageUrls.length === 0) {
-      imageUrls = [
-        "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
-      ];
-    }
-
     const rows = imageUrls.map((url) => ({
       order_id: orderId,
-      uploaded_by: user.id, // คอลัมน์จริงคือ uploaded_by ไม่ใช่ user_id
+      uploaded_by: user.id,
       evidence_type: "lender_after",
       image_url: url,
     }));
@@ -119,9 +119,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3) เรียก RPC ปิดยอดจริง แทนที่จะ set status "completed" ตรงๆ แบบเดิม
-    // สมมติฐาน: ไม่มีข้อพิพาทใดๆ (ของปกติ) — ถ้ามีรายงานสินค้าเสียหาย/ไม่คืนของ
-    // ทีหลัง แอดมินจะเป็นคนเรียก settle_rental_order ซ้ำด้วย outcome อื่นแทน
+    // เช็คว่าฝั่งผู้เช่าอัปโหลดหลักฐานคืนของ (renter_after) แล้วหรือยัง
+    // ปิดยอด (settle happy) ก็ต่อเมื่อ "ทั้งคู่" อัปโหลดครบแล้วเท่านั้น
+    const { data: renterEvidence } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_type")
+      .eq("order_id", orderId)
+      .eq("evidence_type", "renter_after")
+      .limit(1);
+
+    const renterUploaded = (renterEvidence?.length ?? 0) > 0;
+
+    if (!renterUploaded) {
+      return NextResponse.json(
+        {
+          ok: true,
+          count: rows.length,
+          status: order.status,
+          message:
+            "บันทึกหลักฐานของคุณเรียบร้อยแล้ว กำลังรอผู้เช่าอัปโหลดหลักฐานคืนของด้วย",
+        },
+        { status: 201 },
+      );
+    }
+
+    // ทั้งคู่อัปโหลดครบแล้ว — เรียก RPC ปิดยอดจริง
     const { data: outcome, error: settleError } = await supabase.rpc(
       "settle_rental_order",
       {
@@ -145,7 +167,7 @@ export async function POST(request: Request) {
         count: rows.length,
         status: outcome,
         message:
-          "บันทึกหลักฐานสภาพหลังการใช้งานและเสร็จสิ้นการเช่าเรียบร้อยแล้ว",
+          "บันทึกหลักฐานครบทั้งสองฝ่ายแล้ว เสร็จสิ้นการเช่าเรียบร้อยแล้ว",
       },
       { status: 201 },
     );
