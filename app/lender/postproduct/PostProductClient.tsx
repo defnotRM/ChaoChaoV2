@@ -105,27 +105,35 @@ export default function PostProductClient({
   // Location — รองรับหลายที่ต่อประเภท (นัดรับ/นัดคืน)
   type LocationEntry = {
     description: string;
+    no: string;
+    alley: string;
+    road: string;
     province: string;
     district: string;
     subdistrict: string;
   };
 
+  const emptyLocation = (): LocationEntry => ({
+    description: "",
+    no: "",
+    alley: "",
+    road: "",
+    province: "กรุงเทพมหานคร",
+    district: "",
+    subdistrict: "",
+  });
+
   const [sameLocation, setSameLocation] = useState(true);
   const [meetupLocations, setMeetupLocations] = useState<LocationEntry[]>([
     {
+      ...emptyLocation(),
       description: "BTS สยาม / พญาไท (นัดรับที่สถานี)",
-      province: "กรุงเทพมหานคร",
       district: "ปทุมวัน",
       subdistrict: "ปทุมวัน",
     },
   ]);
   const [returnLocations, setReturnLocations] = useState<LocationEntry[]>([
-    {
-      description: "",
-      province: "กรุงเทพมหานคร",
-      district: "",
-      subdistrict: "",
-    },
+    emptyLocation(),
   ]);
 
   function updateLocation(
@@ -144,15 +152,7 @@ export default function PostProductClient({
     list: LocationEntry[],
     setList: (v: LocationEntry[]) => void,
   ) {
-    setList([
-      ...list,
-      {
-        description: "",
-        province: "กรุงเทพมหานคร",
-        district: "",
-        subdistrict: "",
-      },
-    ]);
+    setList([...list, emptyLocation()]);
   }
 
   function removeLocation(
@@ -243,9 +243,9 @@ export default function PostProductClient({
         locations: [
           ...meetupLocations.map((l) => ({
             description: l.description.trim() || "จุดนัดรับที่ตกลงกัน",
-            no: "-",
-            alley: null,
-            road: null,
+            no: l.no.trim() || "-",
+            alley: l.alley.trim() || null,
+            road: l.road.trim() || null,
             subdistrict: l.subdistrict.trim(),
             district: l.district.trim(),
             province: l.province.trim(),
@@ -255,9 +255,9 @@ export default function PostProductClient({
             ? []
             : returnLocations.map((l) => ({
                 description: l.description.trim() || "จุดนัดคืนที่ตกลงกัน",
-                no: "-",
-                alley: null,
-                road: null,
+                no: l.no.trim() || "-",
+                alley: l.alley.trim() || null,
+                road: l.road.trim() || null,
                 subdistrict: l.subdistrict.trim(),
                 district: l.district.trim(),
                 province: l.province.trim(),
@@ -588,6 +588,53 @@ export default function PostProductClient({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <input
                       type="text"
+                      placeholder="บ้านเลขที่"
+                      value={loc.no}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "no",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="ซอย"
+                      value={loc.alley}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "alley",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="ถนน"
+                      value={loc.road}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "road",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
                       placeholder="จังหวัด"
                       value={loc.province}
                       onChange={(e) =>
@@ -687,6 +734,53 @@ export default function PostProductClient({
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        type="text"
+                        placeholder="บ้านเลขที่"
+                        value={loc.no}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "no",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ซอย"
+                        value={loc.alley}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "alley",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ถนน"
+                        value={loc.road}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "road",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <input

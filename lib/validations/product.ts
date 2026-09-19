@@ -71,6 +71,7 @@ export const updateProductSchema = z.object({
         subdistrict: z.string().nullish(),
         district: z.string().nullish(),
         province: z.string().nullish(),
+        location_type: z.enum(["meetup", "return", "both"]).nullish(),
       }),
     )
     .nullish(),

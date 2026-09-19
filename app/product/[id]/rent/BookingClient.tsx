@@ -224,11 +224,18 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
   const [startKey, setStartKey] = useState<string | null>(null);
   const [endKey, setEndKey] = useState<string | null>(null);
+  const meetupOptions = locations.filter(
+    (l) => l.locationType === "meetup" || l.locationType === "both",
+  );
+  const returnOptions = locations.filter(
+    (l) => l.locationType === "return" || l.locationType === "both",
+  );
+
   const [pickupId, setPickupId] = useState<string | null>(
-    locations.length === 1 ? locations[0].id : null,
+    meetupOptions.length === 1 ? meetupOptions[0].id : null,
   );
   const [returnId, setReturnId] = useState<string | null>(
-    locations.length === 1 ? locations[0].id : null,
+    returnOptions.length === 1 ? returnOptions[0].id : null,
   );
   const [draft, setDraft] = useState<BookingDraft | null>(null);
 
@@ -627,7 +634,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               <div className="grid gap-6 sm:grid-cols-2">
                 <LocationPicker
                   title="จุดรับของ"
-                  locations={locations}
+                  locations={meetupOptions}
                   selectedId={pickupId}
                   onSelect={(id) => {
                     setPickupId(id);
@@ -636,7 +643,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                 />
                 <LocationPicker
                   title="จุดคืนของ"
-                  locations={locations}
+                  locations={returnOptions}
                   selectedId={returnId}
                   onSelect={(id) => {
                     setReturnId(id);

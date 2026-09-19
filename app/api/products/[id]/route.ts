@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
         `
           item_id, user_id, category_id, item_name, description,
           original_price, rental_fee_per_day, deposit, status, created_at, updated_at
-        `
+        `,
       )
       .eq("item_id", id)
       .maybeSingle();
@@ -33,13 +33,36 @@ export async function GET(_request: NextRequest, { params }: Params) {
       return apiError("ไม่พบสินค้านี้", 404);
     }
 
-    const [imagesRes, locationsRes, conditionsRes, availRes, catRes] = await Promise.all([
-      admin.from("itemimage").select("image_id, image_url, is_primary, sequence").eq("item_id", id).order("sequence", { ascending: true }),
-      admin.from("itemlocation").select("location_id, description, no, alley, road, subdistrict, district, province").eq("item_id", id),
-      admin.from("itemcondition").select("seq, condition").eq("item_id", id).order("seq", { ascending: true }),
-      admin.from("availability").select("availability_id, start_date, end_date").eq("item_id", id),
-      item.category_id ? admin.from("itemcategory").select("category_id, category_name").eq("category_id", item.category_id).maybeSingle() : { data: null },
-    ]);
+    const [imagesRes, locationsRes, conditionsRes, availRes, catRes] =
+      await Promise.all([
+        admin
+          .from("itemimage")
+          .select("image_id, image_url, is_primary, sequence")
+          .eq("item_id", id)
+          .order("sequence", { ascending: true }),
+        admin
+          .from("itemlocation")
+          .select(
+            "location_id, description, no, alley, road, subdistrict, district, province, location_type",
+          )
+          .eq("item_id", id),
+        admin
+          .from("itemcondition")
+          .select("seq, condition")
+          .eq("item_id", id)
+          .order("seq", { ascending: true }),
+        admin
+          .from("availability")
+          .select("availability_id, start_date, end_date")
+          .eq("item_id", id),
+        item.category_id
+          ? admin
+              .from("itemcategory")
+              .select("category_id, category_name")
+              .eq("category_id", item.category_id)
+              .maybeSingle()
+          : { data: null },
+      ]);
 
     const data = {
       ...item,
@@ -89,7 +112,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       .select("role ( role_type )")
       .eq("user_id", user.id);
 
-    const roles = (userRoles || []).map((r: any) => r.role?.role_type).filter(Boolean);
+    const roles = (userRoles || [])
+      .map((r: any) => r.role?.role_type)
+      .filter(Boolean);
     const isAdmin = roles.includes("admin");
 
     if (existingItem.user_id !== user.id && !isAdmin) {
@@ -107,11 +132,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (input.categoryId !== undefined) updatePayload.category_id = input.categoryId;
+    if (input.categoryId !== undefined)
+      updatePayload.category_id = input.categoryId;
     if (input.itemName !== undefined) updatePayload.item_name = input.itemName;
-    if (input.description !== undefined) updatePayload.description = input.description;
-    if (input.originalPrice !== undefined) updatePayload.original_price = input.originalPrice;
-    if (input.rentalFeePerDay !== undefined) updatePayload.rental_fee_per_day = input.rentalFeePerDay;
+    if (input.description !== undefined)
+      updatePayload.description = input.description;
+    if (input.originalPrice !== undefined)
+      updatePayload.original_price = input.originalPrice;
+    if (input.rentalFeePerDay !== undefined)
+      updatePayload.rental_fee_per_day = input.rentalFeePerDay;
     if (input.deposit !== undefined) updatePayload.deposit = input.deposit;
     if (input.status !== undefined) updatePayload.status = input.status;
 
@@ -143,6 +172,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         subdistrict: loc.subdistrict || "",
         district: loc.district || "",
         province: loc.province || "กรุงเทพมหานคร",
+        location_type: loc.location_type || "both",
       }));
       await admin.from("itemlocation").insert(locationRows);
     }
@@ -221,7 +251,9 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
       .select("role ( role_type )")
       .eq("user_id", user.id);
 
-    const roles = (userRoles || []).map((r: any) => r.role?.role_type).filter(Boolean);
+    const roles = (userRoles || [])
+      .map((r: any) => r.role?.role_type)
+      .filter(Boolean);
     const isAdmin = roles.includes("admin");
 
     if (existingItem.user_id !== user.id && !isAdmin) {
