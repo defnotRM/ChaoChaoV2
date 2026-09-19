@@ -59,7 +59,9 @@ const DEFAULT_CONDITIONS = [
   "ส่งคืนอุปกรณ์ในสภาพสมบูรณ์และตรงตามวันเวลาที่นัดหมาย",
 ];
 
-export default function PostProductClient({ categories }: PostProductClientProps) {
+export default function PostProductClient({
+  categories,
+}: PostProductClientProps) {
   const router = useRouter();
 
   // Current logged in user
@@ -87,7 +89,7 @@ export default function PostProductClient({ categories }: PostProductClientProps
   // Form states
   const [itemName, setItemName] = useState("");
   const [categoryId, setCategoryId] = useState(
-    categories[0]?.category_id || "c1111111-1111-1111-1111-111111111111"
+    categories[0]?.category_id || "c1111111-1111-1111-1111-111111111111",
   );
   const [description, setDescription] = useState("");
   const [originalPrice, setOriginalPrice] = useState<string>("");
@@ -100,11 +102,67 @@ export default function PostProductClient({ categories }: PostProductClientProps
   ]);
   const [newImageUrl, setNewImageUrl] = useState("");
 
-  // Location
-  const [locationDesc, setLocationDesc] = useState("BTS สยาม / พญาไท (นัดรับที่สถานี)");
-  const [province, setProvince] = useState("กรุงเทพมหานคร");
-  const [district, setDistrict] = useState("ปทุมวัน");
-  const [subdistrict, setSubdistrict] = useState("ปทุมวัน");
+  // Location — รองรับหลายที่ต่อประเภท (นัดรับ/นัดคืน)
+  type LocationEntry = {
+    description: string;
+    province: string;
+    district: string;
+    subdistrict: string;
+  };
+
+  const [sameLocation, setSameLocation] = useState(true);
+  const [meetupLocations, setMeetupLocations] = useState<LocationEntry[]>([
+    {
+      description: "BTS สยาม / พญาไท (นัดรับที่สถานี)",
+      province: "กรุงเทพมหานคร",
+      district: "ปทุมวัน",
+      subdistrict: "ปทุมวัน",
+    },
+  ]);
+  const [returnLocations, setReturnLocations] = useState<LocationEntry[]>([
+    {
+      description: "",
+      province: "กรุงเทพมหานคร",
+      district: "",
+      subdistrict: "",
+    },
+  ]);
+
+  function updateLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+    index: number,
+    field: keyof LocationEntry,
+    value: string,
+  ) {
+    const next = [...list];
+    next[index] = { ...next[index], [field]: value };
+    setList(next);
+  }
+
+  function addLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+  ) {
+    setList([
+      ...list,
+      {
+        description: "",
+        province: "กรุงเทพมหานคร",
+        district: "",
+        subdistrict: "",
+      },
+    ]);
+  }
+
+  function removeLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+    index: number,
+  ) {
+    if (list.length <= 1) return;
+    setList(list.filter((_, i) => i !== index));
+  }
 
   // Dates
   const todayStr = new Date().toISOString().split("T")[0];
@@ -183,15 +241,28 @@ export default function PostProductClient({ categories }: PostProductClientProps
         deposit: dep,
         images: [],
         locations: [
-          {
-            description: locationDesc.trim() || "จุดนัดรับที่ตกลงกัน",
+          ...meetupLocations.map((l) => ({
+            description: l.description.trim() || "จุดนัดรับที่ตกลงกัน",
             no: "-",
             alley: null,
             road: null,
-            subdistrict: subdistrict.trim(),
-            district: district.trim(),
-            province: province.trim(),
-          },
+            subdistrict: l.subdistrict.trim(),
+            district: l.district.trim(),
+            province: l.province.trim(),
+            location_type: sameLocation ? "both" : "meetup",
+          })),
+          ...(sameLocation
+            ? []
+            : returnLocations.map((l) => ({
+                description: l.description.trim() || "จุดนัดคืนที่ตกลงกัน",
+                no: "-",
+                alley: null,
+                road: null,
+                subdistrict: l.subdistrict.trim(),
+                district: l.district.trim(),
+                province: l.province.trim(),
+                location_type: "return",
+              }))),
         ],
         availabilityStart,
         availabilityEnd,
@@ -206,7 +277,9 @@ export default function PostProductClient({ categories }: PostProductClientProps
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || data.error || "เกิดข้อผิดพลาดในการลงประกาศสินค้า");
+        throw new Error(
+          data.message || data.error || "เกิดข้อผิดพลาดในการลงประกาศสินค้า",
+        );
       }
 
       setSuccessMessage("ลงประกาศสินค้าสำเร็จเรียบร้อยแล้ว!");
@@ -230,7 +303,10 @@ export default function PostProductClient({ categories }: PostProductClientProps
   return (
     <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
       {/* Breadcrumb */}
-      <nav aria-label="เส้นทางนำทาง" className="mb-4 flex items-center gap-2 text-xs text-slate-500">
+      <nav
+        aria-label="เส้นทางนำทาง"
+        className="mb-4 flex items-center gap-2 text-xs text-slate-500"
+      >
         <Link href="/" className="transition hover:text-[#1b3554]">
           หน้าแรก
         </Link>
@@ -254,7 +330,8 @@ export default function PostProductClient({ categories }: PostProductClientProps
             </h1>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            กรอกรายละเอียดอุปกรณ์ กำหนดราคา และสถานที่นัดรับเพื่อเปิดให้เช่าบน CHAOCHAO
+            กรอกรายละเอียดอุปกรณ์ กำหนดราคา และสถานที่นัดรับเพื่อเปิดให้เช่าบน
+            CHAOCHAO
           </p>
         </div>
         <Link
@@ -272,7 +349,9 @@ export default function PostProductClient({ categories }: PostProductClientProps
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <Tag className="h-5 w-5 text-sky-600" />
-            <h2 className="text-lg font-bold text-slate-900">1. ข้อมูลพื้นฐานอุปกรณ์</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              1. ข้อมูลพื้นฐานอุปกรณ์
+            </h2>
           </div>
 
           <div className="space-y-4">
@@ -310,7 +389,10 @@ export default function PostProductClient({ categories }: PostProductClientProps
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ราคาประเมินอุปกรณ์ (บาท) <span className="text-slate-400 font-normal">(ไม่บังคับ)</span>
+                  ราคาประเมินอุปกรณ์ (บาท){" "}
+                  <span className="text-slate-400 font-normal">
+                    (ไม่บังคับ)
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -342,13 +424,16 @@ export default function PostProductClient({ categories }: PostProductClientProps
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <DollarSign className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-slate-900">2. อัตราค่าเช่าและเงินประกัน</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              2. อัตราค่าเช่าและเงินประกัน
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                ค่าเช่าต่อวัน (บาท / วัน) <span className="text-rose-500">*</span>
+                ค่าเช่าต่อวัน (บาท / วัน){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -368,7 +453,8 @@ export default function PostProductClient({ categories }: PostProductClientProps
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                เงินประกัน / มัดจำ (บาท) <span className="text-rose-500">*</span>
+                เงินประกัน / มัดจำ (บาท){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -390,7 +476,8 @@ export default function PostProductClient({ categories }: PostProductClientProps
           <div className="mt-4 flex items-start gap-2.5 rounded-2xl bg-emerald-50/70 p-3.5 text-xs text-emerald-800 border border-emerald-100">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <p>
-              เงินประกันจะถูกพักไว้ในระบบอย่างปลอดภัย และจะถูกโอนคืนให้ผู้เช่าเมื่อส่งคืนอุปกรณ์เสร็จสมบูรณ์
+              เงินประกันจะถูกพักไว้ในระบบอย่างปลอดภัย
+              และจะถูกโอนคืนให้ผู้เช่าเมื่อส่งคืนอุปกรณ์เสร็จสมบูรณ์
             </p>
           </div>
         </section>
@@ -400,7 +487,9 @@ export default function PostProductClient({ categories }: PostProductClientProps
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
             <div className="flex items-center gap-2.5">
               <Camera className="h-5 w-5 text-sky-600" />
-              <h2 className="text-lg font-bold text-slate-900">3. รูปภาพอุปกรณ์</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                3. รูปภาพอุปกรณ์
+              </h2>
             </div>
             <span className="text-xs text-slate-400">ภาพตัวอย่างสินค้า</span>
           </div>
@@ -438,58 +527,234 @@ export default function PostProductClient({ categories }: PostProductClientProps
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <MapPin className="h-5 w-5 text-sky-600" />
-            <h2 className="text-lg font-bold text-slate-900">4. สถานที่นัดรับและช่วงเวลาให้เช่า</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              4. สถานที่นัดรับและช่วงเวลาให้เช่า
+            </h2>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                จุดนัดรับ–คืนอุปกรณ์ <span className="text-rose-500">*</span>
-              </label>
+            <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 cursor-pointer">
               <input
-                type="text"
-                required
-                value={locationDesc}
-                onChange={(e) => setLocationDesc(e.target.value)}
-                placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                type="checkbox"
+                checked={sameLocation}
+                onChange={(e) => setSameLocation(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
               />
+              <span className="text-sm font-semibold text-slate-700">
+                สถานที่นัดรับและนัดคืนเป็นที่เดียวกัน
+              </span>
+            </label>
+
+            {/* จุดนัดรับ */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-slate-700">
+                {sameLocation ? "จุดนัดรับ–คืนอุปกรณ์" : "จุดนัดรับอุปกรณ์"}{" "}
+                <span className="text-rose-500">*</span>
+              </p>
+              {meetupLocations.map((loc, i) => (
+                <div
+                  key={i}
+                  className="space-y-3 rounded-2xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={loc.description}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "description",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                    />
+                    {meetupLocations.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeLocation(meetupLocations, setMeetupLocations, i)
+                        }
+                        className="mt-1 shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="จังหวัด"
+                      value={loc.province}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "province",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="เขต / อำเภอ"
+                      value={loc.district}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "district",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="แขวง / ตำบล"
+                      value={loc.subdistrict}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "subdistrict",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => addLocation(meetupLocations, setMeetupLocations)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-[#1b3554] hover:text-[#1b3554]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                เพิ่มสถานที่นัดรับ
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">จังหวัด</label>
-                <input
-                  type="text"
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
+            {/* จุดนัดคืน (แยกก็ต่อเมื่อไม่ติ๊ก "ที่เดียวกัน") */}
+            {!sameLocation && (
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700">
+                  จุดนัดคืนอุปกรณ์ <span className="text-rose-500">*</span>
+                </p>
+                {returnLocations.map((loc, i) => (
+                  <div
+                    key={i}
+                    className="space-y-3 rounded-2xl border border-slate-200 p-4"
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={loc.description}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "description",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                      />
+                      {returnLocations.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeLocation(
+                              returnLocations,
+                              setReturnLocations,
+                              i,
+                            )
+                          }
+                          className="mt-1 shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        type="text"
+                        placeholder="จังหวัด"
+                        value={loc.province}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "province",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="เขต / อำเภอ"
+                        value={loc.district}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "district",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="แขวง / ตำบล"
+                        value={loc.subdistrict}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "subdistrict",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    addLocation(returnLocations, setReturnLocations)
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-[#1b3554] hover:text-[#1b3554]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  เพิ่มสถานที่นัดคืน
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">เขต / อำเภอ</label>
-                <input
-                  type="text"
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">แขวง / ตำบล</label>
-                <input
-                  type="text"
-                  value={subdistrict}
-                  onChange={(e) => setSubdistrict(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  วันที่เริ่มต้นเปิดให้เช่า <span className="text-rose-500">*</span>
+                  วันที่เริ่มต้นเปิดให้เช่า{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -501,7 +766,8 @@ export default function PostProductClient({ categories }: PostProductClientProps
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  วันที่สิ้นสุดเปิดให้เช่า <span className="text-rose-500">*</span>
+                  วันที่สิ้นสุดเปิดให้เช่า{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -520,7 +786,9 @@ export default function PostProductClient({ categories }: PostProductClientProps
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
             <div className="flex items-center gap-2.5">
               <FileText className="h-5 w-5 text-sky-600" />
-              <h2 className="text-lg font-bold text-slate-900">5. เงื่อนไขและข้อตกลงการเช่า</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                5. เงื่อนไขและข้อตกลงการเช่า
+              </h2>
             </div>
           </div>
 

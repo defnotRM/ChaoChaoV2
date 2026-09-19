@@ -41,8 +41,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const { q, categoryId, minPrice, maxPrice, province, status, sort, page, pageSize } =
-      parsed.data;
+    const {
+      q,
+      categoryId,
+      minPrice,
+      maxPrice,
+      province,
+      status,
+      sort,
+      page,
+      pageSize,
+    } = parsed.data;
 
     let filtered = allProducts;
 
@@ -54,11 +63,13 @@ export async function GET(request: NextRequest) {
       filtered = filtered.filter(
         (p) =>
           p.title.toLowerCase().includes(queryLower) ||
-          p.description.toLowerCase().includes(queryLower)
+          p.description.toLowerCase().includes(queryLower),
       );
     }
     if (categoryId) {
-      filtered = filtered.filter((p) => String(p.categoryId) === String(categoryId));
+      filtered = filtered.filter(
+        (p) => String(p.categoryId) === String(categoryId),
+      );
     }
     if (minPrice !== undefined) {
       filtered = filtered.filter((p) => p.pricePerDay >= minPrice);
@@ -68,7 +79,7 @@ export async function GET(request: NextRequest) {
     }
     if (province) {
       filtered = filtered.filter((p) =>
-        p.locations.some((l) => l.province.includes(province))
+        p.locations.some((l) => l.province.includes(province)),
       );
     }
 
@@ -80,7 +91,7 @@ export async function GET(request: NextRequest) {
       filtered.sort(
         (a, b) =>
           new Date(b.createdAt || 0).getTime() -
-          new Date(a.createdAt || 0).getTime()
+          new Date(a.createdAt || 0).getTime(),
       );
     }
 
@@ -138,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (!isLender) {
       return apiError(
         "เฉพาะบัญชีผู้ให้เช่า (Lender) เท่านั้นที่สามารถลงประกาศสินค้าได้",
-        403
+        403,
       );
     }
 
@@ -146,8 +157,7 @@ export async function POST(request: NextRequest) {
     const parsed = createProductSchema.safeParse(body);
 
     if (!parsed.success) {
-      const firstError =
-        parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง";
+      const firstError = parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง";
       return apiError(firstError, 400, parsed.error.flatten());
     }
 
@@ -164,7 +174,7 @@ export async function POST(request: NextRequest) {
       p_deposit: input.deposit,
       p_images: (input.images || []).map((img, idx) => ({
         image_url: img.imageUrl,
-        is_primary: img.isPrimary ?? (idx === 0),
+        is_primary: img.isPrimary ?? idx === 0,
         sequence: img.sequence ?? idx,
       })),
       p_locations: (input.locations || []).map((loc) => ({
@@ -175,6 +185,7 @@ export async function POST(request: NextRequest) {
         subdistrict: loc.subdistrict || "",
         district: loc.district || "",
         province: loc.province || "กรุงเทพมหานคร",
+        location_type: loc.location_type || "both",
       })),
       p_availability_start: input.availabilityStart,
       p_availability_end: input.availabilityEnd,
@@ -188,7 +199,7 @@ export async function POST(request: NextRequest) {
 
     return apiSuccess(
       { message: "สร้างประกาศสินค้าสำเร็จ", itemId: String(itemId) },
-      201
+      201,
     );
   } catch (error) {
     console.error("Error in POST /api/products:", error);
