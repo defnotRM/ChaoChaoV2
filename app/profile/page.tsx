@@ -18,6 +18,9 @@ import {
   KeyRound,
   ImageIcon,
   Phone,
+  UserPlus,
+  Power,
+  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,6 +42,23 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [status, setStatus] = useState("Active");
+
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [addRoleTarget, setAddRoleTarget] = useState<
+    "renter" | "lender" | null
+  >(null);
+  const [needsKyc, setNeedsKyc] = useState(false);
+  const [kycIdCard, setKycIdCard] = useState<string | null>(null);
+  const [kycSelfie, setKycSelfie] = useState<string | null>(null);
+  const [kycBankName, setKycBankName] = useState("");
+  const [kycAccountNumber, setKycAccountNumber] = useState("");
+  const [kycAccountName, setKycAccountName] = useState("");
+  const [addRoleSubmitting, setAddRoleSubmitting] = useState(false);
+  const [addRoleError, setAddRoleError] = useState<string | null>(null);
+  const [addRoleSuccess, setAddRoleSuccess] = useState<string | null>(null);
+
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
 
   // Notifications
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -139,6 +159,62 @@ export default function ProfilePage() {
     }
   };
 
+  const hasRole = (name: "renter" | "lender") =>
+    roles.some(
+      (r) =>
+        r === name ||
+        r === "both" ||
+        (name === "lender" ? r === "ผู้ให้เช่า" : r === "ผู้เช่า"),
+    );
+
+  async function submitAddRole() {
+    if (!addRoleTarget) return;
+    setAddRoleSubmitting(true);
+    setAddRoleError(null);
+    try {
+      const res = await fetch("/api/profile/add-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetRole: addRoleTarget,
+          idCardUrl: kycIdCard,
+          idCardSelfieUrl: kycSelfie,
+          bankName: kycBankName,
+          accountNumber: kycAccountNumber,
+          accountName: kycAccountName,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (payload.needsKyc) setNeedsKyc(true);
+        setAddRoleError(payload?.message ?? "ดำเนินการไม่สำเร็จ");
+        return;
+      }
+      setAddRoleSuccess(payload.message);
+      setShowAddRoleModal(false);
+      router.refresh();
+    } catch {
+      setAddRoleError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setAddRoleSubmitting(false);
+    }
+  }
+
+  async function handleDeactivate() {
+    setDeactivating(true);
+    try {
+      await fetch("/api/profile/deactivate", { method: "POST" });
+      router.push("/login");
+    } catch {
+      setDeactivating(false);
+    }
+  }
+
+  function readFileAsDataUrl(file: File, cb: (url: string) => void) {
+    const reader = new FileReader();
+    reader.onloadend = () => cb(reader.result as string);
+    reader.readAsDataURL(file);
+  }
   // Remove Avatar
   const handleRemoveAvatar = async () => {
     setAvatarNotice(null);
@@ -860,6 +936,189 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+      {/* Settings: สมัคร role เพิ่ม / ปิดบัญชี */}
+      <div className="mx-auto mt-6 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-base font-bold text-slate-900">การตั้งค่าบัญชี</h2>
+
+        {addRoleSuccess && (
+          <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700">
+            {addRoleSuccess}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          {!hasRole("lender") && (
+            <button
+              type="button"
+              onClick={() => {
+                setAddRoleTarget("lender");
+                setNeedsKyc(false);
+                setAddRoleError(null);
+                setShowAddRoleModal(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-sky-50"
+            >
+              <UserPlus className="h-4 w-4" />
+              สมัครเป็นผู้ให้เช่าเพิ่ม
+            </button>
+          )}
+          {!hasRole("renter") && (
+            <button
+              type="button"
+              onClick={() => {
+                setAddRoleTarget("renter");
+                setNeedsKyc(false);
+                setAddRoleError(null);
+                setShowAddRoleModal(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-sky-50"
+            >
+              <UserPlus className="h-4 w-4" />
+              สมัครเป็นผู้เช่าเพิ่ม
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowDeactivateModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-100"
+          >
+            <Power className="h-4 w-4" />
+            ปิดการใช้งานบัญชี
+          </button>
+        </div>
+      </div>
+
+      {/* Modal: สมัคร role เพิ่ม */}
+      {showAddRoleModal && addRoleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">
+              สมัครเป็น{addRoleTarget === "lender" ? "ผู้ให้เช่า" : "ผู้เช่า"}
+              เพิ่ม
+            </h3>
+
+            {needsKyc && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-slate-500">
+                  ยังไม่มีข้อมูลยืนยันตัวตนในระบบ กรุณากรอกให้ครบก่อน
+                </p>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    รูปบัตรประชาชน
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) readFileAsDataUrl(f, setKycIdCard);
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    รูปถ่ายคู่บัตรประชาชน
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) readFileAsDataUrl(f, setKycSelfie);
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  />
+                </div>
+                <input
+                  type="text"
+                  placeholder="ธนาคาร"
+                  value={kycBankName}
+                  onChange={(e) => setKycBankName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                />
+                <input
+                  type="text"
+                  placeholder="เลขบัญชี"
+                  value={kycAccountNumber}
+                  onChange={(e) => setKycAccountNumber(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                />
+                <input
+                  type="text"
+                  placeholder="ชื่อบัญชี"
+                  value={kycAccountName}
+                  onChange={(e) => setKycAccountName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                />
+              </div>
+            )}
+
+            {!needsKyc && (
+              <p className="mt-3 text-xs text-slate-500">
+                กดยืนยันเพื่อสมัครบทบาทนี้เพิ่ม
+                (ระบบจะเช็คข้อมูลยืนยันตัวตนที่มีอยู่ให้อัตโนมัติ)
+              </p>
+            )}
+
+            {addRoleError && (
+              <p className="mt-3 text-xs font-semibold text-rose-600">
+                {addRoleError}
+              </p>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAddRoleModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={submitAddRole}
+                disabled={addRoleSubmitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#1b3554] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#000f22] disabled:opacity-50"
+              >
+                {addRoleSubmitting ? "กำลังดำเนินการ..." : "ยืนยัน"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: ปิดบัญชี */}
+      {showDeactivateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">
+              ยืนยันปิดการใช้งานบัญชี?
+            </h3>
+            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+              คุณจะไม่สามารถเข้าสู่ระบบได้อีก
+              จนกว่าจะติดต่อแอดมินให้เปิดบัญชีคืน
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeactivateModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleDeactivate}
+                disabled={deactivating}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {deactivating ? "กำลังปิดบัญชี..." : "ยืนยันปิดบัญชี"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

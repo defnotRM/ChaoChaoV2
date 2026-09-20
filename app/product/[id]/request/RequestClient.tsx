@@ -64,12 +64,12 @@ function formatDate(key: string) {
   return longDateFmt.format(toDate(key));
 }
 
-/* เกณฑ์หักเงินประกัน 4 ระดับ */
-const DAMAGE_TIERS: Array<{ label: string; from: number; to: number; note?: string }> = [
-  { label: "รอยขีดข่วนเล็กน้อย", from: 0.1, to: 0.2 },
-  { label: "ชำรุดใช้งานได้บางส่วน", from: 0.3, to: 0.5 },
-  { label: "เสียหายหนักต้องซ่อมใหญ่", from: 0.6, to: 0.9 },
-  { label: "สูญหาย / ซ่อมไม่ได้", from: 1, to: 1, note: "หักเต็มจำนวน + ชดเชยเพิ่มตามจริง" },
+const DAMAGE_TIERS: Array<{ label: string; note?: string }> = [
+  { label: "ร่องรอยการใช้งานปกติ", note: "คืนเงินประกันเต็ม 100%" },
+  {
+    label: "เสียหายจริง (ทุกระดับ)",
+    note: "หักตามใบแจ้งซ่อมจริง — เกินวงเงินประกันต้องจ่ายส่วนต่างเพิ่มภายใน 48 ชม.",
+  },
 ];
 
 export default function RequestClient({ data }: { data: RequestPageData }) {
@@ -77,7 +77,9 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
   const router = useRouter();
 
   // draft จาก Step 1 (undefined = กำลังโหลด, null = ไม่มี)
-  const [draft, setDraft] = useState<BookingDraft | null | undefined>(undefined);
+  const [draft, setDraft] = useState<BookingDraft | null | undefined>(
+    undefined,
+  );
 
   const [firstName, setFirstName] = useState(renter.firstName);
   const [lastName, setLastName] = useState(renter.lastName);
@@ -93,7 +95,10 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [result, setResult] = useState<{ orderId: string; warnings: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    orderId: string;
+    warnings: string[];
+  } | null>(null);
 
   useEffect(() => {
     try {
@@ -227,7 +232,10 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
             <div className="min-w-0 space-y-6">
               {/* ข้อมูลผู้เช่า */}
               <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-                <CardHeading icon={<UserRound className="h-5 w-5" />} title="ข้อมูลผู้เช่า" />
+                <CardHeading
+                  icon={<UserRound className="h-5 w-5" />}
+                  title="ข้อมูลผู้เช่า"
+                />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="ชื่อ" required>
                     <input
@@ -248,7 +256,9 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                   <Field label="เบอร์โทรศัพท์" required>
                     <input
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+                      onChange={(e) =>
+                        setPhone(e.target.value.replace(/[^\d]/g, ""))
+                      }
                       inputMode="numeric"
                       placeholder="08XXXXXXXX"
                       className={inputCls}
@@ -268,7 +278,9 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                       <input
                         value={nationalId}
                         onChange={(e) =>
-                          setNationalId(e.target.value.replace(/[^\d]/g, "").slice(0, 13))
+                          setNationalId(
+                            e.target.value.replace(/[^\d]/g, "").slice(0, 13),
+                          )
                         }
                         onBlur={() => setNationalTouched(true)}
                         inputMode="numeric"
@@ -297,22 +309,29 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                   title="ข้อตกลงการหักเงินประกันกรณีชำรุด"
                 />
                 <p className="text-xs text-slate-500">
-                  เงินประกัน <strong className="text-slate-800">{thb.format(deposit)}</strong>{" "}
+                  เงินประกัน{" "}
+                  <strong className="text-slate-800">
+                    {thb.format(deposit)}
+                  </strong>{" "}
                   จะถูกหักตามระดับความเสียหายจริงหลังการตรวจสอบสภาพ
                 </p>
 
                 <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-slate-50/50 text-xs">
                   {DAMAGE_TIERS.map((tier) => (
-                    <div key={tier.label} className="flex items-center justify-between p-3">
+                    <div
+                      key={tier.label}
+                      className="flex items-center justify-between p-3"
+                    >
                       <div>
-                        <p className="font-semibold text-slate-800">{tier.label}</p>
-                        {tier.note && <p className="text-[11px] text-amber-600">{tier.note}</p>}
+                        <p className="font-semibold text-slate-800">
+                          {tier.label}
+                        </p>
+                        {tier.note && (
+                          <p className="text-[11px] text-amber-600">
+                            {tier.note}
+                          </p>
+                        )}
                       </div>
-                      <span className="font-bold text-slate-700">
-                        {Math.round(tier.from * 100)}% – {Math.round(tier.to * 100)}% (
-                        {thb.format(Math.round(deposit * tier.from))} –{" "}
-                        {thb.format(Math.round(deposit * tier.to))})
-                      </span>
                     </div>
                   ))}
                 </div>
@@ -321,7 +340,7 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                   <Checkbox
                     checked={acceptTiers}
                     onChange={setAcceptTiers}
-                    label={`ฉันยอมรับเกณฑ์การหักเงินประกันตาม 4 ระดับข้างต้น`}
+                    label={`ฉันยอมรับเกณฑ์การประเมินความเสียหายตามข้างต้น`}
                   />
                   <Checkbox
                     checked={acceptExceed}
@@ -361,8 +380,12 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                     <Package className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-slate-900">{item.name}</p>
-                    <p className="text-xs text-slate-500">ผู้ให้เช่า: {ownerName}</p>
+                    <p className="truncate text-sm font-bold text-slate-900">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      ผู้ให้เช่า: {ownerName}
+                    </p>
                   </div>
                 </div>
 
@@ -371,8 +394,9 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                   <div className="flex items-start gap-2">
                     <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600" />
                     <span>
-                      ช่วงเวลา: <strong>{formatDate(draft.start_date)}</strong> –{" "}
-                      <strong>{formatDate(draft.end_date)}</strong> ({days} วัน)
+                      ช่วงเวลา: <strong>{formatDate(draft.start_date)}</strong>{" "}
+                      – <strong>{formatDate(draft.end_date)}</strong> ({days}{" "}
+                      วัน)
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
@@ -393,14 +417,20 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                 <div className="my-4 border-t border-slate-100 pt-4 text-sm">
                   <div className="flex justify-between text-slate-600">
                     <span>ค่าเช่าสุทธิ</span>
-                    <span className="font-semibold text-slate-800">{thb.format(rentalFee)}</span>
+                    <span className="font-semibold text-slate-800">
+                      {thb.format(rentalFee)}
+                    </span>
                   </div>
                   <div className="mt-1.5 flex justify-between text-slate-600">
                     <span>เงินประกัน (คืนเมื่อจบ)</span>
-                    <span className="font-semibold text-slate-800">{thb.format(deposit)}</span>
+                    <span className="font-semibold text-slate-800">
+                      {thb.format(deposit)}
+                    </span>
                   </div>
                   <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-3">
-                    <span className="font-bold text-slate-900">ยอดรวมทั้งสิ้น</span>
+                    <span className="font-bold text-slate-900">
+                      ยอดรวมทั้งสิ้น
+                    </span>
                     <span className="text-xl font-extrabold text-[#1b3554]">
                       {thb.format(totalPaid)}
                     </span>
@@ -423,7 +453,9 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Send className="h-4 w-4" />
-                    <span>{submitting ? "กำลังส่งคำขอ…" : "ยืนยันและส่งคำขอเช่า"}</span>
+                    <span>
+                      {submitting ? "กำลังส่งคำขอ…" : "ยืนยันและส่งคำขอเช่า"}
+                    </span>
                   </button>
                 )}
 
@@ -450,7 +482,13 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
 const inputCls =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#3f6593] focus:ring-4 focus:ring-sky-100";
 
-function CardHeading({ icon, title }: { icon: React.ReactNode; title: string }) {
+function CardHeading({
+  icon,
+  title,
+}: {
+  icon: React.ReactNode;
+  title: string;
+}) {
   return (
     <div className="mb-4 flex items-center gap-2.5 border-b border-slate-100 pb-3">
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
@@ -513,7 +551,10 @@ function Stepper() {
           const isDone = index < active;
           const isLast = index === steps.length - 1;
           return (
-            <li key={label} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
+            <li
+              key={label}
+              className={`flex items-center ${isLast ? "" : "flex-1"}`}
+            >
               <div className="flex shrink-0 items-center gap-2.5">
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition ${
@@ -528,14 +569,19 @@ function Stepper() {
                 </span>
                 <span
                   className={`whitespace-nowrap text-sm ${
-                    isActive ? "font-bold text-slate-900" : "font-medium text-slate-400"
+                    isActive
+                      ? "font-bold text-slate-900"
+                      : "font-medium text-slate-400"
                   }`}
                 >
                   {label}
                 </span>
               </div>
               {!isLast && (
-                <span aria-hidden="true" className="mx-2 h-px flex-1 bg-slate-200 sm:mx-3" />
+                <span
+                  aria-hidden="true"
+                  className="mx-2 h-px flex-1 bg-slate-200 sm:mx-3"
+                />
               )}
             </li>
           );
@@ -551,9 +597,12 @@ function MissingDraft({ itemId }: { itemId: string }) {
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
         <AlertTriangle className="h-6 w-6" />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-slate-900">ยังไม่มีข้อมูลการเลือกวันเช่า</h2>
+      <h2 className="mt-4 text-lg font-bold text-slate-900">
+        ยังไม่มีข้อมูลการเลือกวันเช่า
+      </h2>
       <p className="mt-1.5 text-sm text-slate-500">
-        กรุณาเลือกช่วงวันและจุดนัดรับ–คืนก่อน แล้วกด “ดำเนินการต่อ” เพื่อมาที่หน้านี้
+        กรุณาเลือกช่วงวันและจุดนัดรับ–คืนก่อน แล้วกด “ดำเนินการต่อ”
+        เพื่อมาที่หน้านี้
       </p>
       <Link
         href={`/product/${itemId}/rent`}
@@ -580,19 +629,43 @@ function SuccessPanel({
         <h2 className="text-lg font-bold text-slate-900">ส่งคำขอเช่าสำเร็จ</h2>
       </div>
       <p className="mt-2 text-sm text-slate-600">
-        คำขอเช่า <span className="font-semibold text-slate-800">{itemName}</span>{" "}
+        คำขอเช่า{" "}
+        <span className="font-semibold text-slate-800">{itemName}</span>{" "}
         ถูกส่งเข้าคิวรออนุมัติจากผู้ให้เช่าแล้ว
       </p>
       {result.warnings.length > 0 && (
         <ul className="mt-3 space-y-1">
           {result.warnings.map((w) => (
-            <li key={w} className="flex items-start gap-2 text-xs text-amber-700">
+            <li
+              key={w}
+              className="flex items-start gap-2 text-xs text-amber-700"
+            >
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {w}
             </li>
           ))}
         </ul>
       )}
+
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+        <p className="font-bold text-slate-800">
+          เงื่อนไขการยกเลิกหลังชำระเงิน (โปรดทราบไว้ล่วงหน้า)
+        </p>
+        <ul className="mt-2 space-y-1.5">
+          <li>
+            <span className="font-semibold text-rose-600">
+              ยกเลิกเมื่อเหลือ ≤ 2 วันก่อนวันนัดรับ
+            </span>{" "}
+            — ได้คืนแค่เงินประกัน 100% ค่าเช่าจะไม่ได้คืนเลย
+          </li>
+          <li>
+            <span className="font-semibold text-emerald-600">
+              ยกเลิกเมื่อเหลือ &gt; 2 วันก่อนวันนัดรับ
+            </span>{" "}
+            — ได้คืนเต็มทั้งเงินประกันและค่าเช่า 100%
+          </li>
+        </ul>
+      </div>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link
           href={`/renter/myproductsList/${result.orderId}`}

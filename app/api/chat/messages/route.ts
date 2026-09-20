@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     if (!roomId) {
       return NextResponse.json(
         { message: "กรุณาระบุรหัสห้องสนทนา (roomId)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -23,34 +23,32 @@ export async function GET(request: Request) {
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const admin = createAdminClient();
 
-    // 1. Verify user is in this room
     const { data: room, error: roomError } = await admin
       .from("chatroom")
-      .select("chat_room_id, renter_id, lender_id")
+      .select("chat_room_id, user_a, user_b")
       .eq("chat_room_id", roomId)
       .maybeSingle();
 
     if (roomError || !room) {
       return NextResponse.json(
         { message: "ไม่พบห้องสนทนานี้" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    if (room.renter_id !== user.id && room.lender_id !== user.id) {
+    if (room.user_a !== user.id && room.user_b !== user.id) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์เข้าถึงห้องสนทนานี้" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    // 2. Mark unread messages sent by the other user as read
     await admin
       .from("message")
       .update({ is_read: true })
@@ -58,10 +56,11 @@ export async function GET(request: Request) {
       .neq("sender_id", user.id)
       .eq("is_read", false);
 
-    // 3. Fetch all messages in this room
     const { data: messages, error: messagesError } = await admin
       .from("message")
-      .select("message_id, chat_room_id, sender_id, type, content, is_read, created_at")
+      .select(
+        "message_id, chat_room_id, sender_id, type, content, is_read, created_at",
+      )
       .eq("chat_room_id", roomId)
       .order("created_at", { ascending: true });
 
@@ -69,7 +68,7 @@ export async function GET(request: Request) {
       console.error("Error fetching messages:", messagesError);
       return NextResponse.json(
         { message: "เกิดข้อผิดพลาดในการโหลดข้อความ" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -89,7 +88,7 @@ export async function GET(request: Request) {
     console.error("Chat messages GET error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -105,7 +104,7 @@ export async function POST(request: Request) {
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -115,36 +114,51 @@ export async function POST(request: Request) {
     if (!roomId || !content || !content.trim()) {
       return NextResponse.json(
         { message: "กรุณาระบุข้อความที่ต้องการส่ง" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const admin = createAdminClient();
 
-    // 1. Verify user is in this room
     const { data: room, error: roomError } = await admin
       .from("chatroom")
-      .select("chat_room_id, renter_id, lender_id")
+      .select("chat_room_id, user_a, user_b, order_id, rentalorder(status)")
       .eq("chat_room_id", roomId)
       .maybeSingle();
 
     if (roomError || !room) {
       return NextResponse.json(
         { message: "ไม่พบห้องสนทนานี้" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    if (room.renter_id !== user.id && room.lender_id !== user.id) {
+    if (room.user_a !== user.id && room.user_b !== user.id) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์ส่งข้อความในห้องนี้" },
-        { status: 403 }
+        { status: 403 },
+      );
+    }
+
+    // ปิดไมค์แล้ว (order คืนของอัปรูปเสร็จเป็นต้นไป) — เช็คซ้ำที่ชั้น API ให้ error อ่านง่าย
+    // (RLS ก็บล็อกไว้อีกชั้นอยู่แล้ว)
+    const CLOSED_STATUSES = [
+      "item_returned",
+      "completed",
+      "awaiting_additional_payment",
+      "refunded_dispute",
+      "item_not_returned",
+    ];
+    const orderStatus = (room as any).rentalorder?.status as string | undefined;
+    if (orderStatus && CLOSED_STATUSES.includes(orderStatus)) {
+      return NextResponse.json(
+        { message: "ออเดอร์นี้เสร็จสิ้นแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
+        { status: 403 },
       );
     }
 
     const cleanContent = content.trim();
 
-    // 2. Insert message
     const { data: newMsg, error: insertError } = await admin
       .from("message")
       .insert({
@@ -154,25 +168,21 @@ export async function POST(request: Request) {
         content: cleanContent,
         is_read: false,
       })
-      .select("message_id, chat_room_id, sender_id, type, content, is_read, created_at")
+      .select(
+        "message_id, chat_room_id, sender_id, type, content, is_read, created_at",
+      )
       .single();
 
     if (insertError || !newMsg) {
       console.error("Error sending message:", insertError);
       return NextResponse.json(
         { message: "ไม่สามารถส่งข้อความได้" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // 3. Update last_message and updated_at on chatroom
-    await admin
-      .from("chatroom")
-      .update({
-        last_message: cleanContent,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("chat_room_id", roomId);
+    // ไม่ต้องอัปเดต chatroom.last_message/updated_at อีกต่อไป (คอลัมน์นี้ไม่มีอยู่จริง
+    // อยู่แล้ว — หน้า /chat คำนวณ "ข้อความล่าสุด" จากตาราง message โดยตรงตอนนี้)
 
     return NextResponse.json(
       {
@@ -187,13 +197,13 @@ export async function POST(request: Request) {
           createdAt: newMsg.created_at,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Chat messages POST error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

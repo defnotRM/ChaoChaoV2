@@ -75,7 +75,7 @@ export interface RentOrderDetailData {
   }>;
 }
 
-const PAYMENT_WINDOW_HOURS = 24;
+const PAYMENT_WINDOW_HOURS = 8;
 
 const thb = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -297,6 +297,10 @@ export default function RentOrderDetailClient({
 
   async function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
+    if (!slipFile || !slipPreview) {
+      setErrorMsg("กรุณาแนบรูปสลิปก่อนยืนยัน");
+      return;
+    }
     try {
       setIsSubmittingSlip(true);
       setErrorMsg(null);
@@ -304,9 +308,7 @@ export default function RentOrderDetailClient({
       const payload = {
         orderId: order.order_id,
         amount: totalPaid,
-        slipImageUrl:
-          slipPreview ||
-          "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60",
+        slipImageUrl: slipPreview,
       };
 
       const res = await fetch("/api/payments", {
@@ -399,6 +401,16 @@ export default function RentOrderDetailClient({
     } finally {
       setIsCancelling(false);
     }
+  }
+
+  async function handleOpenChat() {
+    const res = await fetch("/api/chat/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.order_id }),
+    });
+    const data = await res.json();
+    if (data.roomId) router.push(`/chat?roomId=${data.roomId}`);
   }
 
   return (
@@ -548,13 +560,14 @@ export default function RentOrderDetailClient({
                     ข้อมูลผู้ให้เช่า
                   </h2>
                 </div>
-                <Link
-                  href={owner.id ? `/chat?userId=${owner.id}` : "/chat"}
+                <button
+                  type="button"
+                  onClick={handleOpenChat}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#1b3554] transition hover:bg-sky-50"
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
                   <span>แชทคุยกับผู้ให้เช่า</span>
-                </Link>
+                </button>
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -864,10 +877,18 @@ export default function RentOrderDetailClient({
                         <span>ชำระเงินเรียบร้อยแล้ว</span>
                       </p>
                       <p className="text-xs text-emerald-700 leading-relaxed">
-                        กรุณารอผู้ให้เช่าตรวจสอบสภาพอุปกรณ์และถ่ายรูปบันทึกหลักฐานก่อนส่งมอบ
-                        จากนั้นนัดรับอุปกรณ์ตามวันและจุดนัดหมาย
+                        ทั้งคุณและผู้ให้เช่าต้องถ่ายรูปบันทึกหลักฐานสภาพอุปกรณ์ก่อนรับของ
+                        (ฝ่ายละไม่เกิน 5 รูป)
+                        แล้วนัดรับอุปกรณ์ตามวันและจุดนัดหมาย
                       </p>
                     </div>
+                    <Link
+                      href={`/renter/myproductsList/${order.order_id}/handover`}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>ถ่ายรูปรับของ</span>
+                    </Link>
                     <button
                       type="button"
                       onClick={() => setShowCancelModal(true)}
@@ -1035,37 +1056,69 @@ export default function RentOrderDetailClient({
         </div>
       )}
 
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">
-              ยกเลิกรายการเช่า
-            </h3>
-            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-              ยอดเงินคืนจะขึ้นอยู่กับระยะเวลาที่ยกเลิก (ยกเลิกเร็วได้คืนมากกว่า)
-              ระบบจะแจ้งยอดที่ได้คืนให้ทราบทันทีหลังกดยืนยัน
-            </p>
+      {showCancelModal &&
+        (() => {
+          const target = new Date(`${order.start_date}T00:00:00Z`).getTime();
+          const now = new Date();
+          const todayUTC = Date.UTC(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
+          const daysLeft = Math.round((target - todayUTC) / 86400000);
+          const isNearCase = daysLeft <= 2;
 
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                ปิด
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelOrder}
-                disabled={isCancelling}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
-              >
-                {isCancelling ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
-              </button>
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-slate-900">
+                  ยืนยันยกเลิกรายการเช่า?
+                </h3>
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                  เหลืออีก {daysLeft} วันก่อนวันนัดรับ
+                </p>
+                <div
+                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${
+                    isNearCase
+                      ? "bg-rose-50 text-rose-700"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {isNearCase
+                    ? "หากยกเลิกตอนนี้ (เหลือ ≤ 2 วัน) คุณจะได้คืนแค่เงินประกัน 100% เท่านั้น ค่าเช่าจะไม่ได้คืนเลย"
+                    : "หากยกเลิกตอนนี้ (เหลือ > 2 วัน) คุณจะได้คืนเงินประกัน + ค่าเช่าเต็มจำนวน 100%"}
+                </div>
+
+                {errorMsg && (
+                  <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">
+                    {errorMsg}
+                  </p>
+                )}
+
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCancelModal(false);
+                      setErrorMsg(null);
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    ปิด
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelOrder}
+                    disabled={isCancelling}
+                    className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {isCancelling ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }

@@ -1,12 +1,13 @@
 export type DateRange = {
   start: string; // YYYY-MM-DD
-  end: string;   // YYYY-MM-DD
+  end: string; // YYYY-MM-DD
 };
 
 export type BookingLocation = {
   id: string;
   description: string;
   fullAddress: string;
+  locationType: "meetup" | "return" | "both";
 };
 
 export type BookingPageData = {

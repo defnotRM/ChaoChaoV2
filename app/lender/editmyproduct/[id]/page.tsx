@@ -12,19 +12,20 @@ export default async function EditProductPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [{ data: item, error: itemError }, { data: categories }] = await Promise.all([
-    admin
-      .from("item")
-      .select(
-        "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at, updated_at"
-      )
-      .eq("item_id", id)
-      .maybeSingle(),
-    admin
-      .from("itemcategory")
-      .select("category_id, category_name")
-      .order("category_name", { ascending: true }),
-  ]);
+  const [{ data: item, error: itemError }, { data: categories }] =
+    await Promise.all([
+      admin
+        .from("item")
+        .select(
+          "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at, updated_at",
+        )
+        .eq("item_id", id)
+        .maybeSingle(),
+      admin
+        .from("itemcategory")
+        .select("category_id, category_name")
+        .order("category_name", { ascending: true }),
+    ]);
 
   if (itemError || !item) {
     notFound();
@@ -38,7 +39,9 @@ export default async function EditProductPage({
       .order("sequence", { ascending: true }),
     admin
       .from("itemlocation")
-      .select("location_id, description, no, alley, road, subdistrict, district, province")
+      .select(
+        "location_id, description, no, alley, road, subdistrict, district, province, location_type",
+      )
       .eq("item_id", id),
     admin
       .from("itemcondition")

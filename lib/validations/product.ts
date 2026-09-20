@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 // ตรงกับ constraint ใน Item table: original_price/rental_fee_per_day/deposit >= 0
-const nonNegativeNumber = z
-  .number()
-  .min(0, "ต้องเป็นจำนวนที่ไม่ติดลบ");
+const nonNegativeNumber = z.number().min(0, "ต้องเป็นจำนวนที่ไม่ติดลบ");
 
 export const createProductSchema = z.object({
   categoryId: z.string().nullish(),
@@ -21,7 +19,7 @@ export const createProductSchema = z.object({
         imageUrl: z.string().min(1, "URL รูปไม่ถูกต้อง"),
         isPrimary: z.boolean().nullish().default(false),
         sequence: z.number().int().nullish(),
-      })
+      }),
     )
     .nullish()
     .default([]),
@@ -35,7 +33,8 @@ export const createProductSchema = z.object({
         subdistrict: z.string().nullish(),
         district: z.string().nullish(),
         province: z.string().nullish(),
-      })
+        location_type: z.enum(["meetup", "return", "both"]).nullish(),
+      }),
     )
     .min(1, "ต้องระบุตำแหน่งสินค้าอย่างน้อย 1 ที่"),
   availabilityStart: z.string().min(1, "รูปแบบวันที่ไม่ถูกต้อง"),
@@ -52,16 +51,14 @@ export const updateProductSchema = z.object({
   originalPrice: nonNegativeNumber.nullish(),
   rentalFeePerDay: nonNegativeNumber.nullish(),
   deposit: nonNegativeNumber.nullish(),
-  status: z
-    .enum(["available", "rented", "maintenance", "inactive"])
-    .optional(),
+  status: z.enum(["available", "rented", "maintenance", "inactive"]).optional(),
   images: z
     .array(
       z.object({
         imageUrl: z.string().min(1),
         isPrimary: z.boolean().nullish().default(false),
         sequence: z.number().int().nullish(),
-      })
+      }),
     )
     .nullish(),
   locations: z
@@ -74,7 +71,8 @@ export const updateProductSchema = z.object({
         subdistrict: z.string().nullish(),
         district: z.string().nullish(),
         province: z.string().nullish(),
-      })
+        location_type: z.enum(["meetup", "return", "both"]).nullish(),
+      }),
     )
     .nullish(),
   availabilityStart: z.string().nullish(),

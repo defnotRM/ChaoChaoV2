@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import CountdownBanner from "./CountdownBanner";
 import {
   AlertCircle,
   AlertTriangle,
@@ -203,6 +204,19 @@ export default function LendOrderDetailClient({
   const [cancelImagePreview, setCancelImagePreview] = useState<string | null>(
     null,
   );
+  const [reportModalType, setReportModalType] = useState<
+    "damaged_item" | "stolen_item" | null
+  >(null);
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportImagePreview, setReportImagePreview] = useState<string | null>(
+    null,
+  );
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
+
+  const isOverdue =
+    new Date(`${order.end_date}T00:00:00Z`).getTime() < Date.now();
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -382,6 +396,16 @@ export default function LendOrderDetailClient({
     }
   }
 
+  async function handleOpenChat() {
+    const res = await fetch("/api/chat/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.order_id }),
+    });
+    const data = await res.json();
+    if (data.roomId) router.push(`/chat?roomId=${data.roomId}`);
+  }
+
   // ส่งมอบอุปกรณ์ & บันทึกสภาพก่อนให้เช่า
   async function handleSubmitBeforeHandover(e: React.FormEvent) {
     e.preventDefault();
@@ -453,6 +477,38 @@ export default function LendOrderDetailClient({
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  async function handleSubmitReport() {
+    if (!reportModalType) return;
+    setIsReporting(true);
+    setReportError(null);
+    try {
+      const res = await fetch(`/api/rentals/${order.order_id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportType: reportModalType,
+          description: reportDescription,
+          imageUrls: reportImagePreview ? [reportImagePreview] : [],
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setReportError(result.message || "ส่งรายงานไม่สำเร็จ");
+        return;
+      }
+      setReportSuccess(result.message);
+      setReportModalType(null);
+      setReportDescription("");
+      setReportImagePreview(null);
+      router.refresh();
+    } catch (err) {
+      console.error("Report submit error:", err);
+      setReportError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsReporting(false);
     }
   }
 
@@ -638,13 +694,14 @@ export default function LendOrderDetailClient({
                     ข้อมูลผู้เช่า
                   </h2>
                 </div>
-                <Link
-                  href="/chat"
+                <button
+                  type="button"
+                  onClick={handleOpenChat}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#1b3554] transition hover:bg-sky-50"
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
                   <span>แชทคุยกับผู้เช่า</span>
-                </Link>
+                </button>
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -810,12 +867,17 @@ export default function LendOrderDetailClient({
 
               {currentStatus === "requested" ? (
                 <div className="space-y-3">
+                  <CountdownBanner
+                    deadlineISO={new Date(
+                      new Date(order.created_at).getTime() + 8 * 3_600_000,
+                    ).toISOString()}
+                  />
                   <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                     <p className="text-xs font-semibold text-amber-900">
                       มีคำขอเช่าใหม่ส่งเข้ามา
                     </p>
                     <p className="text-[11px] text-amber-700 mt-1">
-                      กรุณาตรวจสอบวันและจุดนัดหมาย
+                      กรุณาตรวจสอบวันและจุดนัดหมาย ภายใน 8 ชั่วโมง
                       จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
                     </p>
                   </div>
@@ -847,6 +909,15 @@ export default function LendOrderDetailClient({
               ) : currentStatus === "awaiting_payment" ? (
                 hasPending ? (
                   <div className="space-y-3">
+                    <CountdownBanner
+                      deadlineISO={new Date(
+                        new Date(
+                          paymentsList.find((p) => p.status === "pending")
+                            ?.date || order.updated_at,
+                        ).getTime() +
+                          8 * 3_600_000,
+                      ).toISOString()}
+                    />
                     <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                       <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                         <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
@@ -861,18 +932,18 @@ export default function LendOrderDetailClient({
                       {paymentsList.find((p) => p.status === "pending")
                         ?.slip_image_url && (
                         <div className="mt-2">
-                          <a
-                            href={
-                              paymentsList.find((p) => p.status === "pending")
-                                ?.slip_image_url || "#"
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 underline"
-                          >
+                          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-sky-700">
                             <ImageIcon className="h-3.5 w-3.5" />
-                            <span>คลิกดูรูปสลิปหลักฐาน</span>
-                          </a>
+                            <span>รูปสลิปหลักฐาน</span>
+                          </p>
+                          <img
+                            src={
+                              paymentsList.find((p) => p.status === "pending")
+                                ?.slip_image_url || ""
+                            }
+                            alt="สลิปโอนเงิน"
+                            className="max-h-64 rounded-xl border border-amber-200 object-contain shadow-sm"
+                          />
                         </div>
                       )}
                     </div>
@@ -962,16 +1033,41 @@ export default function LendOrderDetailClient({
                     <Camera className="h-4 w-4" />
                     <span>ถ่ายรูปสภาพหลังใช้งาน &amp; เสร็จสิ้นการเช่า</span>
                   </button>
+                  {isOverdue && (
+                    <button
+                      type="button"
+                      onClick={() => setReportModalType("stolen_item")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>รายงานผู้เช่าไม่คืนสินค้า</span>
+                    </button>
+                  )}
                 </div>
               ) : currentStatus === "completed" ? (
-                <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
-                  <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
-                  </p>
-                  <p className="text-xs text-emerald-700">
-                    ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว
-                  </p>
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
+                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
+                    </p>
+                    <p className="text-xs text-emerald-700">
+                      ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว
+                    </p>
+                  </div>
+                  {reportSuccess ? (
+                    <p className="text-xs font-semibold text-sky-700">
+                      {reportSuccess}
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setReportModalType("damaged_item")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                    >
+                      รายงานสินค้าเสียหาย
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
@@ -1272,10 +1368,19 @@ export default function LendOrderDetailClient({
                 </div>
               </div>
 
+              {errorMsg && (
+                <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">
+                  {errorMsg}
+                </p>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCancelModal(false)}
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setErrorMsg(null);
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   ปิด
@@ -1289,6 +1394,87 @@ export default function LendOrderDetailClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {reportModalType && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">
+              {reportModalType === "damaged_item"
+                ? "รายงานสินค้าเสียหาย"
+                : "รายงานผู้เช่าไม่คืนสินค้า"}
+            </h3>
+            <p className="text-xs text-slate-500">
+              แอดมินจะตรวจสอบและตัดสินภายหลัง กรุณาอธิบายรายละเอียดให้ชัดเจน
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <textarea
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                required
+                rows={3}
+                placeholder={
+                  reportModalType === "damaged_item"
+                    ? "อธิบายลักษณะความเสียหาย เช่น รอยแตก ใช้งานไม่ได้ ฯลฯ"
+                    : "อธิบายสถานการณ์ เช่น ติดต่อผู้เช่าไม่ได้ เลยกำหนดคืนกี่วันแล้ว"
+                }
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+              />
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  รูปหลักฐานประกอบ (ถ้ามี)
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () =>
+                        setReportImagePreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
+                />
+                {reportImagePreview && (
+                  <img
+                    src={reportImagePreview}
+                    alt="หลักฐาน"
+                    className="mt-2 max-h-40 rounded-xl object-contain"
+                  />
+                )}
+              </div>
+            </div>
+
+            {reportError && (
+              <p className="mt-3 text-xs font-semibold text-rose-600">
+                {reportError}
+              </p>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setReportModalType(null)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReport}
+                disabled={isReporting || !reportDescription.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {isReporting ? "กำลังส่ง..." : "ส่งรายงาน"}
+              </button>
+            </div>
           </div>
         </div>
       )}

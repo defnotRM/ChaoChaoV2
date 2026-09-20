@@ -1,15 +1,11 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { uploadEvidenceSchema } from "@/lib/validations/rental";
 
 type Params = { params: Promise<{ id: string }> };
 
-// POST /api/rentals/[id]/evidence
-// ใช้สำหรับ "หน้าอัปโหลดสลิป" (evidence รูปสภาพสินค้า ไม่ใช่สลิปโอนเงิน — สลิปโอนเงิน
-// อยู่ที่ POST /api/payments) และหน้ายืนยันรับ/คืนสินค้าของ Toey (renter_before/after,
-// lender_before/after) โยนตรงเข้า RPC upload_rental_evidence ที่เช็คสิทธิ์ auth.uid()
-// ในตัวอยู่แล้วว่าห้ามอัปโหลดแทนคนอื่น
 export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
@@ -43,6 +39,29 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (error) {
     console.error("Error uploading rental evidence:", error);
     return apiError("ไม่สามารถอัปโหลดหลักฐานได้", 500, error.message);
+  }
+
+  // กรณีผู้เช่าเพิ่งอัปโหลดหลักฐานคืนของ (renter_after) และผู้ให้เช่าอัปโหลด
+  // lender_after ไว้ก่อนแล้วรอผู้เช่าอยู่ — ต้องปิดยอดตรงนี้เลย ไม่งั้นจะค้าง
+  if (evidenceType === "renter_after") {
+    const admin = createAdminClient();
+    const { data: lenderEvidence } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_type")
+      .eq("order_id", id)
+      .eq("evidence_type", "lender_after")
+      .limit(1);
+
+    if ((lenderEvidence?.length ?? 0) > 0) {
+      const { error: settleError } = await supabase.rpc("settle_rental_order", {
+        p_order_id: id,
+        p_caller_id: user.id,
+        p_outcome: "happy",
+      });
+      if (settleError) {
+        console.error("settle_rental_order error:", settleError);
+      }
+    }
   }
 
   return apiSuccess({ message: "อัปโหลดหลักฐานสำเร็จ" }, 201);

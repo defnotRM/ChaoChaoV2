@@ -32,10 +32,26 @@ export interface HandoverPageData {
   lenderEvidence: { count: number; uploadedAt: string } | null;
 }
 
-const thb = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 });
+const thb = new Intl.NumberFormat("th-TH", {
+  style: "currency",
+  currency: "THB",
+  maximumFractionDigits: 0,
+});
 // pin timezone ให้ SSR กับ client ตรงกัน (กัน hydration mismatch)
-const dateFmt = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short", year: "numeric" });
-const dateTimeFmt = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const dateFmt = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const ALLOWED = ["image/jpeg", "image/png"];
 
 function formatDate(key: string) {
@@ -53,12 +69,22 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
   const activeSlotRef = useRef<number>(-1);
 
   const [slots, setSlots] = useState<Slot[]>(
-    DEFAULT_LABELS.map((label) => ({ label, file: null, url: null }))
+    DEFAULT_LABELS.map((label) => ({ label, file: null, url: null })),
   );
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const alreadyUploaded = data.renterEvidence !== null;
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState<
+    "changed_mind" | "not_as_advertised"
+  >("changed_mind");
+  const [rejectDescription, setRejectDescription] = useState("");
+  const [rejectImagePreview, setRejectImagePreview] = useState<string | null>(
+    null,
+  );
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState<string | null>(null);
   const attachedCount = slots.filter((s) => s.file).length;
 
   function pick(index: number) {
@@ -128,15 +154,47 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
     }
   }
 
+  async function handleSubmitReject() {
+    setIsRejecting(true);
+    setRejectError(null);
+    try {
+      const res = await fetch(`/api/rentals/${data.orderId}/reject-pickup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: rejectReason,
+          description: rejectDescription,
+          imageUrls: rejectImagePreview ? [rejectImagePreview] : [],
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRejectError(payload?.message ?? "ดำเนินการไม่สำเร็จ");
+        return;
+      }
+      router.push(`/renter/myproductsList/${data.orderId}`);
+    } catch {
+      setRejectError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setIsRejecting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-16 pt-6 sm:pb-20 sm:pt-8">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-          <Link href="/renter/mydashboard" className="transition hover:text-[#1b3554]">
+          <Link
+            href="/renter/mydashboard"
+            className="transition hover:text-[#1b3554]"
+          >
             รายการเช่าของฉัน
           </Link>
           <span aria-hidden="true">/</span>
-          <Link href={`/renter/myproductsList/${data.orderId}`} className="transition hover:text-[#1b3554]">
+          <Link
+            href={`/renter/myproductsList/${data.orderId}`}
+            className="transition hover:text-[#1b3554]"
+          >
             รายละเอียดการเช่า
           </Link>
           <span aria-hidden="true">/</span>
@@ -144,9 +202,12 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
         </nav>
 
         <header className="mb-6">
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">รับของ</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+            รับของ
+          </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            อัปโหลดหลักฐานสภาพสินค้า <strong className="text-slate-700">ก่อนเริ่มเช่า</strong>{" "}
+            อัปโหลดหลักฐานสภาพสินค้า{" "}
+            <strong className="text-slate-700">ก่อนเริ่มเช่า</strong>{" "}
             ทั้งคุณและผู้ปล่อยเช่าต้องอัปโหลด · ใช้เทียบกันหากมีข้อพิพาทตอนคืน
           </p>
         </header>
@@ -160,15 +221,21 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
             <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-4 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-bold text-slate-900">นัดหมายรับของ</h2>
-                <span className="text-xs text-slate-400">ตกลงกับผู้ปล่อยเช่าแล้ว</span>
+                <h2 className="text-lg font-bold text-slate-900">
+                  นัดหมายรับของ
+                </h2>
+                <span className="text-xs text-slate-400">
+                  ตกลงกับผู้ปล่อยเช่าแล้ว
+                </span>
               </div>
               <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
                 <p className="text-xs font-semibold text-[#3f6593]">→ รับของ</p>
                 <p className="mt-1 text-base font-bold text-slate-900">
                   {data.meetupLocation || "จุดนัดรับ"}
                 </p>
-                <p className="mt-0.5 text-sm text-slate-500">{formatDate(data.startDate)}</p>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {formatDate(data.startDate)}
+                </p>
               </div>
             </section>
 
@@ -179,14 +246,20 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
                     <Camera className="h-5 w-5" />
                   </span>
-                  <h2 className="text-lg font-bold text-slate-900">หลักฐานตอนรับของ</h2>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    หลักฐานตอนรับของ
+                  </h2>
                 </div>
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                    alreadyUploaded ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-800"
+                    alreadyUploaded
+                      ? "bg-emerald-500/15 text-emerald-700"
+                      : "bg-amber-500/15 text-amber-800"
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${alreadyUploaded ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${alreadyUploaded ? "bg-emerald-500" : "bg-amber-500"}`}
+                  />
                   {alreadyUploaded ? "ครบแล้ว" : "ยังไม่ครบ"}
                 </span>
               </div>
@@ -194,8 +267,11 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
               <div className="flex items-start gap-2 rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3">
                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <p className="text-xs leading-relaxed text-slate-600">
-                  <strong className="text-slate-800">ถ่ายให้ครบก่อนรับของออกจากจุดนัดเสมอ</strong> — อย่างน้อย 4 มุม +
-                  จุดที่มีตำหนิเดิมตามที่ระบุในโพสต์ ถ้าไม่มีรูปตอนนี้ จะไม่สามารถอ้างสิทธิ์ได้หากมีข้อพิพาทภายหลัง
+                  <strong className="text-slate-800">
+                    ถ่ายให้ครบก่อนรับของออกจากจุดนัดเสมอ
+                  </strong>{" "}
+                  — อย่างน้อย 4 มุม + จุดที่มีตำหนิเดิมตามที่ระบุในโพสต์
+                  ถ้าไม่มีรูปตอนนี้ จะไม่สามารถอ้างสิทธิ์ได้หากมีข้อพิพาทภายหลัง
                 </p>
               </div>
 
@@ -208,7 +284,9 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                         className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl bg-sky-50/60 text-slate-400 ring-1 ring-sky-100"
                       >
                         <Camera className="h-6 w-6" />
-                        <span className="text-[11px] text-slate-500">{label}</span>
+                        <span className="text-[11px] text-slate-500">
+                          {label}
+                        </span>
                       </div>
                     ))
                   : slots.map((slot, index) => (
@@ -265,7 +343,11 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                 className="hidden"
                 onChange={onFileChosen}
               />
-              {errorMsg && <p className="mt-2 text-xs font-medium text-rose-600">{errorMsg}</p>}
+              {errorMsg && (
+                <p className="mt-2 text-xs font-medium text-rose-600">
+                  {errorMsg}
+                </p>
+              )}
 
               {/* แถวสถานะผู้เช่า */}
               <UploaderRow
@@ -302,7 +384,19 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
                 >
                   <Camera className="h-4 w-4" />
-                  {submitting ? "กำลังอัปโหลด…" : `ยืนยันรับของ / อัปโหลดหลักฐาน (${attachedCount})`}
+                  {submitting
+                    ? "กำลังอัปโหลด…"
+                    : `ยืนยันรับของ / อัปโหลดหลักฐาน (${attachedCount})`}
+                </button>
+              )}
+              {/* ปุ่มปฏิเสธหน้างาน (เฉพาะอัปโหลดแล้ว + สถานะยัง item_sent อยู่) */}
+              {alreadyUploaded && data.status === "item_sent" && (
+                <button
+                  type="button"
+                  onClick={() => setShowRejectModal(true)}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                >
+                  ของไม่โอเค / ไม่รับสินค้า
                 </button>
               )}
 
@@ -323,7 +417,9 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
             <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
                 <Clock3 className="h-5 w-5 text-[#1b3554]" />
-                <h2 className="text-base font-bold text-slate-900">สถานะการเช่า</h2>
+                <h2 className="text-base font-bold text-slate-900">
+                  สถานะการเช่า
+                </h2>
               </div>
 
               <StatusTimeline data={data} />
@@ -337,7 +433,9 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">เงินประกัน</span>
-                <span className="text-sm font-bold text-slate-900">{thb.format(data.deposit)}</span>
+                <span className="text-sm font-bold text-slate-900">
+                  {thb.format(data.deposit)}
+                </span>
               </div>
 
               <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
@@ -346,9 +444,13 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   เก็บรูปหลักฐานไว้เป็นสิทธิ์ของคุณ
                 </p>
                 <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
-                  หากผู้ปล่อยเช่าแจ้งความเสียหายที่ไม่ตรงกับรูปตอนรับของ ใช้รูปนี้โต้แย้งได้ที่หน้าประเมินความเสียหาย
+                  หากผู้ปล่อยเช่าแจ้งความเสียหายที่ไม่ตรงกับรูปตอนรับของ
+                  ใช้รูปนี้โต้แย้งได้ที่หน้าประเมินความเสียหาย
                 </p>
-                <span className="mt-3 inline-flex cursor-not-allowed items-center gap-1 text-xs font-semibold text-slate-400" title="ยังไม่เปิดใช้งาน">
+                <span
+                  className="mt-3 inline-flex cursor-not-allowed items-center gap-1 text-xs font-semibold text-slate-400"
+                  title="ยังไม่เปิดใช้งาน"
+                >
                   คืนของ &amp; ประเมินความเสียหาย →
                 </span>
               </div>
@@ -356,6 +458,106 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
           </aside>
         </div>
       </div>
+
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">ไม่รับสินค้า</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              เลือกเหตุผลที่ตรงกับสถานการณ์ของคุณ
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer has-[:checked]:border-[#3f6593] has-[:checked]:bg-sky-50">
+                <input
+                  type="radio"
+                  name="rejectReason"
+                  checked={rejectReason === "changed_mind"}
+                  onChange={() => setRejectReason("changed_mind")}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    เปลี่ยนใจ ไม่เอาแล้ว
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    สินค้าปกติดี แค่ไม่อยากเช่าต่อแล้ว (คืนประกัน 100% + ค่าเช่า
+                    20%)
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 p-3 cursor-pointer has-[:checked]:border-[#3f6593] has-[:checked]:bg-sky-50">
+                <input
+                  type="radio"
+                  name="rejectReason"
+                  checked={rejectReason === "not_as_advertised"}
+                  onChange={() => setRejectReason("not_as_advertised")}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    สินค้าไม่ตรงปก
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    ของจริงไม่ตรงกับที่ลงประกาศไว้ (ส่งให้แอดมินตรวจสอบ)
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {rejectReason === "not_as_advertised" && (
+              <div className="mt-4 space-y-3">
+                <textarea
+                  value={rejectDescription}
+                  onChange={(e) => setRejectDescription(e.target.value)}
+                  rows={3}
+                  placeholder="อธิบายว่าไม่ตรงปกอย่างไร..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                />
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () =>
+                        setRejectImagePreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
+                />
+              </div>
+            )}
+
+            {rejectError && (
+              <p className="mt-3 text-xs font-semibold text-rose-600">
+                {rejectError}
+              </p>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowRejectModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReject}
+                disabled={isRejecting}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {isRejecting ? "กำลังส่ง..." : "ยืนยัน"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -373,7 +575,10 @@ function Stepper() {
           const isDone = index < active;
           const isLast = index === steps.length - 1;
           return (
-            <li key={label} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
+            <li
+              key={label}
+              className={`flex items-center ${isLast ? "" : "flex-1"}`}
+            >
               <div className="flex shrink-0 items-center gap-2.5">
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
@@ -386,11 +591,18 @@ function Stepper() {
                 >
                   {isDone ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
                 </span>
-                <span className={`whitespace-nowrap text-sm ${isActive ? "font-bold text-slate-900" : "font-medium text-slate-400"}`}>
+                <span
+                  className={`whitespace-nowrap text-sm ${isActive ? "font-bold text-slate-900" : "font-medium text-slate-400"}`}
+                >
                   {label}
                 </span>
               </div>
-              {!isLast && <span aria-hidden="true" className="mx-2 h-px flex-1 bg-slate-200 sm:mx-3" />}
+              {!isLast && (
+                <span
+                  aria-hidden="true"
+                  className="mx-2 h-px flex-1 bg-slate-200 sm:mx-3"
+                />
+              )}
             </li>
           );
         })}
@@ -421,10 +633,14 @@ function UploaderRow({
       </div>
       <span
         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-          done ? "bg-emerald-500/15 text-emerald-700" : "bg-slate-100 text-slate-500"
+          done
+            ? "bg-emerald-500/15 text-emerald-700"
+            : "bg-slate-100 text-slate-500"
         }`}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-slate-400"}`} />
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-slate-400"}`}
+        />
         {done ? "เสร็จแล้ว" : "รอดำเนินการ"}
       </span>
     </div>
@@ -478,10 +694,17 @@ function StatusTimeline({ data }: { data: HandoverPageData }) {
               >
                 {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
               </span>
-              {!isLast && <span className={`my-0.5 w-0.5 flex-1 ${done ? "bg-emerald-500" : "bg-slate-200"}`} style={{ minHeight: "1.25rem" }} />}
+              {!isLast && (
+                <span
+                  className={`my-0.5 w-0.5 flex-1 ${done ? "bg-emerald-500" : "bg-slate-200"}`}
+                  style={{ minHeight: "1.25rem" }}
+                />
+              )}
             </div>
             <div className={isLast ? "" : "pb-3"}>
-              <p className={`text-sm ${active ? "font-bold text-slate-900" : done ? "font-semibold text-slate-700" : "font-medium text-slate-400"}`}>
+              <p
+                className={`text-sm ${active ? "font-bold text-slate-900" : done ? "font-semibold text-slate-700" : "font-medium text-slate-400"}`}
+              >
                 {label}
               </p>
               <p className="mt-0.5 text-xs text-slate-400">{hints[index]}</p>

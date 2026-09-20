@@ -14,7 +14,6 @@ function extractPhase(value: string | null | undefined): "before" | "after" {
 
 export async function POST(request: Request) {
   try {
-    // 1) ต้องล็อกอินก่อนเสมอ — ไม่เชื่อ userId ที่ client ส่งมาอีกต่อไป
     const supabase = await createClient();
     const {
       data: { user },
@@ -39,7 +38,6 @@ export async function POST(request: Request) {
       orderId = json.orderId || "";
       requestedPhase = extractPhase(json.evidenceType || json.phase);
       imageUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
-      // หมายเหตุ: ไม่อ่าน json.userId แล้ว — ใช้ user.id จาก session เท่านั้น
     } else {
       const formData = await request.formData();
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
@@ -77,6 +75,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // เอา fallback รูปปลอมออก — บังคับต้องแนบรูปจริง
+    if (imageUrls.length === 0) {
+      return NextResponse.json(
+        { message: "กรุณาแนบรูปหลักฐานอย่างน้อย 1 รูป" },
+        { status: 400 },
+      );
+    }
+
     const admin = createAdminClient();
 
     const { data: order, error: orderError } = await admin
@@ -89,7 +95,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
 
-    // 2) เช็คว่าคนที่ล็อกอินอยู่ คือ "ผู้เช่า" หรือ "ผู้ให้เช่า" ของออเดอร์นี้จริง
     let lenderUserId: string | null = null;
     if (order.item_id) {
       const { data: item } = await admin
@@ -114,18 +119,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3) role มาจาก session เท่านั้น, phase (before/after) มาจาก client ได้ (แค่บอกขั้นตอน ไม่ใช่ตัวตน)
     const evidenceType = `${actualRole}_${requestedPhase}`;
-
-    if (imageUrls.length === 0) {
-      imageUrls = [
-        "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
-      ];
-    }
 
     const rows = imageUrls.map((url) => ({
       order_id: orderId,
-      uploaded_by: user.id, // คอลัมน์จริงคือ uploaded_by ไม่ใช่ user_id
+      uploaded_by: user.id,
       evidence_type: evidenceType,
       image_url: url,
     }));
@@ -141,17 +139,36 @@ export async function POST(request: Request) {
       );
     }
 
-    await admin
-      .from("rentalorder")
-      .update({ status: "item_sent", updated_at: new Date().toISOString() })
-      .eq("order_id", orderId);
+    // เช็คว่าอีกฝ่ายอัปโหลดหลักฐานแล้วหรือยัง — สถานะจะขยับเป็น item_sent
+    // ก็ต่อเมื่อ "ทั้งคู่" อัปโหลดครบแล้วเท่านั้น ไม่ใช่ฝ่ายใดฝ่ายหนึ่งอัปแล้วเดินหน้าเลย
+    const { data: existingEvidence } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_type")
+      .eq("order_id", orderId)
+      .in("evidence_type", ["renter_before", "lender_before"]);
+
+    const types = new Set((existingEvidence || []).map((e) => e.evidence_type));
+    const bothUploaded =
+      types.has("renter_before") && types.has("lender_before");
+
+    let newStatus = order.status;
+    if (bothUploaded) {
+      newStatus = "item_sent";
+      await admin
+        .from("rentalorder")
+        .update({ status: "item_sent", updated_at: new Date().toISOString() })
+        .eq("order_id", orderId);
+    }
 
     return NextResponse.json(
       {
         ok: true,
         count: rows.length,
-        status: "item_sent",
-        message: "บันทึกหลักฐานสภาพก่อนให้เช่าและส่งมอบอุปกรณ์เรียบร้อยแล้ว",
+        status: newStatus,
+        bothUploaded,
+        message: bothUploaded
+          ? "บันทึกหลักฐานครบทั้งสองฝ่ายแล้ว เริ่มเช่าได้เลย"
+          : "บันทึกหลักฐานของคุณเรียบร้อยแล้ว กำลังรออีกฝ่ายอัปโหลด",
       },
       { status: 201 },
     );
