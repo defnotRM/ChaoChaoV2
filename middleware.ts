@@ -42,8 +42,25 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const activeRole = request.cookies.get("chaochao_active_role")?.value;
 
-  // Protect / and /users (and sub-paths of /users)
+  // 1. ถ้าเป็น Admin: ล็อคให้อยู่เฉพาะใน /admin/* เท่านั้น
+  if (activeRole === "admin" && user) {
+    if (pathname === "/admin/login") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    if (!pathname.startsWith("/admin")) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    return response;
+  }
+
+  // 2. ถ้าไม่ใช่ Admin พยายามเข้า /admin/* (ยกเว้น /admin/login) ให้ redirect ไป /admin/login
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    return NextResponse.redirect(new URL("/admin/login", request.url));
+  }
+
+  // 3. ป้องกันหน้า / และ /users สำหรับผู้ใช้ทั่วไปที่ยังไม่ได้ล็อกอิน
   const isProtected =
     pathname === "/" ||
     pathname === "/users" ||
@@ -57,7 +74,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // If already logged in and visiting /login or /register, redirect to /
+  // 4. ถ้าล็อกอินแล้วและเข้ามาหน้า /login หรือ /register ให้ส่งไปหน้าแรก
   if ((pathname === "/login" || pathname === "/register") && user) {
     return NextResponse.redirect(new URL("/", request.url));
   }

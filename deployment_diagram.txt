@@ -1,0 +1,46 @@
+flowchart LR
+    %% =========================================================================
+    %% Deployment Diagram: ChaoChao Web Application (Slide 9 Exact Layout)
+    %% =========================================================================
+
+    subgraph WSRV ["«device» wsrv-01: Ubuntu Linux Application Server"]
+        subgraph NodeServer ["«web server» :Node.js 20 LTS"]
+            subgraph NextEnv ["«executionEnvironment» :Next.js Application Container"]
+                direction TB
+                
+                %% Left Column: Configuration & Core Package
+                DeploySpec["«deployment spec»<br/>.env.local<br/>(DB & Supabase Keys)"]
+                MainApp["«artifact»<br/>chaochao_web.build<br/>(Next.js Web Package)"]
+                PaymentSvc["«artifact»<br/>payment_service.ts<br/>(Slip Verification Module)"]
+                
+                %% Right Column: Core Business Logic & Client Lib
+                RentalOrders["«component»<br/>RentalManagement<br/>(Order & Rental Logic)"]
+                SupabaseLib["«artifact»<br/>supabase_client.js<br/>(BaaS Connection Library)"]
+
+                %% Associations inside Container
+                DeploySpec -->|"deployment specification"| MainApp
+                MainApp -.->|"«manifest»"| RentalOrders
+                MainApp -->|"«use»"| PaymentSvc
+                RentalOrders -->|"«use»"| SupabaseLib
+                PaymentSvc -->|"«use»"| SupabaseLib
+            end
+        end
+    end
+
+    subgraph DBSRV ["«device» dbsrv-14: Supabase Database Server"]
+        subgraph PostgresDB ["«database system» :PostgreSQL 15"]
+            direction TB
+            SchemaUsers[("«schema»<br/>Users<br/>(useraccount, role)")]
+            SchemaOrders[("«schema»<br/>RentalOrders<br/>(rentalorder, timeline)")]
+            SchemaItems[("«schema»<br/>Items<br/>(item, category)")]
+            SchemaPayments[("«schema»<br/>Payments<br/>(payment, slips)")]
+
+            %% Stacking Order
+            SchemaUsers ~~~ SchemaOrders
+            SchemaOrders ~~~ SchemaItems
+            SchemaItems ~~~ SchemaPayments
+        end
+    end
+
+    %% Communication Path between Servers
+    RentalOrders ---|"«protocol» TCP/IP (Port 5432)"| SchemaOrders

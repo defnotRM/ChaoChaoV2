@@ -17,7 +17,9 @@ const ALLOWED = [
 
 export default async function HandoverPage({
   params,
-}: PageProps<"/renter/myproductsList/[id]/handover">) {
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
 
   // ต้องล็อกอินและเป็นผู้เช่าของ order นี้จริง — เดิมเช็คด้วย UUID hardcode

@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Heart,
   MessageCircle,
+  ShieldAlert,
   ShieldCheck,
   Star,
   User,
@@ -67,6 +68,11 @@ export default function BookingWidget({
 
   const roles = currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
   const isOwner = Boolean(currentUser?.id && currentUser.id === ownerId);
+  const isAdmin =
+    currentUser !== null &&
+    (roles.includes("admin") ||
+      roles.includes("ผู้ดูแลระบบ") ||
+      currentUser.role === "admin");
   const isLenderOnly =
     currentUser !== null &&
     (roles.includes("lender") || roles.includes("ผู้ให้เช่า") || currentUser.role === "lender") &&
@@ -101,7 +107,23 @@ export default function BookingWidget({
       </p>
 
       {/* ปุ่มหลัก → หน้าเลือกวันเช่า */}
-      {isOwner ? (
+      {isAdmin ? (
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            disabled
+            className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-5 py-3.5 text-sm font-semibold text-slate-400 opacity-80 shadow-none"
+          >
+            <ShieldAlert className="h-5 w-5 text-rose-500" />
+            <span>ไม่สามารถเช่าได้ (บัญชีแอดมิน)</span>
+          </button>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-center text-xs text-rose-800">
+            <p className="font-medium">
+              คุณเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ (Admin) ซึ่งไม่สามารถทำรายการเช่าอุปกรณ์ได้
+            </p>
+          </div>
+        </div>
+      ) : isOwner ? (
         <div className="mt-4 space-y-2">
           <button
             type="button"

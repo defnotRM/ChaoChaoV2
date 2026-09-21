@@ -1,0 +1,73 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="ChaoChao Deployment Diagram" id="chaochao-deploy">
+    <mxGraphModel dx="1100" dy="689" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="frame" parent="1" style="shape=folder;fontStyle=1;tabWidth=280;tabHeight=30;tabPosition=left;html=1;boundedLbl=1;fillColor=#f8f9fa;strokeColor=#495057;align=left;spacingLeft=10;verticalAlign=top;" value="deployment ChaoChao Web Application" vertex="1">
+          <mxGeometry height="600" width="1080" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="wsrv" parent="frame" style="verticalAlign=top;align=center;spacingTop=10;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.5;html=1;" value="&lt;b&gt;«device»&lt;br&gt;wsrv-01: Ubuntu Linux Application Server&lt;/b&gt;" vertex="1">
+          <mxGeometry height="510" width="570" x="30" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="webserver" parent="wsrv" style="verticalAlign=top;align=center;spacingTop=8;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;html=1;" value="&lt;b&gt;«web server»&lt;br&gt;:Node.js 20 LTS&lt;/b&gt;" vertex="1">
+          <mxGeometry height="425" width="520" x="25" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="execenv" parent="webserver" style="verticalAlign=top;align=center;spacingTop=8;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;html=1;" value="&lt;b&gt;«executionEnvironment»&lt;br&gt;:Next.js Application Container&lt;/b&gt;" vertex="1">
+          <mxGeometry height="340" width="470" x="25" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="deploy_spec" parent="execenv" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«deployment spec»&lt;br&gt;&lt;b&gt;.env.local&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(DB &amp;amp; Supabase Keys)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="160" x="30" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="main_artifact" parent="execenv" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«artifact»&lt;br&gt;&lt;b&gt;chaochao_web.build&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(Next.js Web Package)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="30" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="svc_artifact" parent="execenv" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«artifact»&lt;br&gt;&lt;b&gt;payment_service.ts&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(Slip Verification Module)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="30" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="comp_orders" parent="execenv" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.5;" value="«component»&lt;br&gt;&lt;b&gt;RentalManagement&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(Order &amp;amp; Rental Logic)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="180" x="260" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="lib_artifact" parent="execenv" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«artifact»&lt;br&gt;&lt;b&gt;supabase_client.js&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(BaaS Connection Library)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="180" x="260" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_spec" edge="1" parent="execenv" source="deploy_spec" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;dashed=1;" target="main_artifact" value="deployment specification">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_manifest" edge="1" parent="execenv" source="main_artifact" style="endArrow=open;dashed=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=11;" target="comp_orders" value="«manifest»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_assoc_payment" edge="1" parent="execenv" source="main_artifact" style="endArrow=open;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" target="svc_artifact" value="«use»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_assoc_supabase" edge="1" parent="execenv" source="comp_orders" style="endArrow=open;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" target="lib_artifact" value="«use»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_assoc_svc_lib" edge="1" parent="execenv" source="svc_artifact" style="endArrow=open;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=10;" target="lib_artifact" value="«use»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dbsrv" parent="frame" style="verticalAlign=top;align=center;spacingTop=10;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.5;html=1;" value="&lt;b&gt;«device»&lt;br&gt;dbsrv-14: Supabase Database Server&lt;/b&gt;" vertex="1">
+          <mxGeometry height="510" width="290" x="750" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dbsystem" parent="dbsrv" style="verticalAlign=top;align=center;spacingTop=8;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;html=1;" value="&lt;b&gt;«database system»&lt;br&gt;:PostgreSQL 15&lt;/b&gt;" vertex="1">
+          <mxGeometry height="425" width="240" x="25" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="schema_users" parent="dbsystem" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«schema»&lt;br&gt;&lt;b&gt;Users&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(useraccount, role)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="170" x="35" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="schema_orders" parent="dbsystem" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«schema»&lt;br&gt;&lt;b&gt;RentalOrders&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(rentalorder, timeline)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="170" x="35" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="schema_items" parent="dbsystem" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«schema»&lt;br&gt;&lt;b&gt;Items&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(item, category)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="170" x="35" y="235" as="geometry" />
+        </mxCell>
+        <mxCell id="schema_payments" parent="dbsystem" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;verticalAlign=middle;align=center;fillColor=#ffffff;strokeColor=#000000;" value="«schema»&lt;br&gt;&lt;b&gt;Payments&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(payment, slips)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="170" x="35" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_protocol" edge="1" parent="frame" source="wsrv" style="endArrow=none;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=1.5;fontSize=12;verticalAlign=bottom;align=center;" target="dbsrv" value="«protocol»&lt;br&gt;&lt;b&gt;TCP/IP&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 10px;&quot;&gt;(Port 5432)&lt;/font&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

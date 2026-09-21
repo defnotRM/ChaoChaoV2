@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadImageToStorage } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,19 @@ export async function POST(request: Request) {
       amount = Number(json.amount) || 0;
       transferDate = json.transferDate || new Date().toISOString();
       transactionRef = json.transactionRef || null;
-      slipDataUri = json.slipImageUrl || null;
+      
+      if (json.slipImageUrl) {
+        try {
+          slipDataUri = await uploadImageToStorage(json.slipImageUrl, {
+            bucket: "slips",
+            folder: orderId || "general",
+            filenamePrefix: "slip",
+          });
+        } catch (uploadErr) {
+          console.warn("Storage upload failed for JSON slip, fallback to raw input:", uploadErr);
+          slipDataUri = json.slipImageUrl;
+        }
+      }
     } else {
       const formData = await request.formData();
       const slip = formData.get("slip") as File | null;
@@ -68,29 +81,16 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        const buffer = Buffer.from(await slip.arrayBuffer());
-        const mimeType = slip.type || "image/png";
-        const fileExt = slip.name.split(".").pop()?.toLowerCase() || "png";
-        const filePath = `${orderId || "misc"}/slip_${Date.now()}.${fileExt}`;
-
-        const adminStorage = createAdminClient();
-        const { error: uploadError } = await adminStorage.storage
-          .from("slips")
-          .upload(filePath, buffer, {
-            contentType: mimeType,
-            upsert: true,
+        try {
+          slipDataUri = await uploadImageToStorage(slip, {
+            bucket: "slips",
+            folder: orderId || "general",
+            filenamePrefix: "slip",
           });
-
-        if (!uploadError) {
-          const {
-            data: { publicUrl },
-          } = adminStorage.storage.from("slips").getPublicUrl(filePath);
-          slipDataUri = publicUrl;
-        } else {
-          console.warn(
-            "Storage upload failed for slip, fallback to base64:",
-            uploadError.message,
-          );
+        } catch (uploadErr) {
+          console.warn("Storage upload failed for form slip, fallback to base64:", uploadErr);
+          const buffer = Buffer.from(await slip.arrayBuffer());
+          const mimeType = slip.type || "image/png";
           slipDataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
         }
       }

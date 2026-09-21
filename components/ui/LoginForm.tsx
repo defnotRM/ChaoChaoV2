@@ -52,10 +52,19 @@ export default function LoginForm() {
         body: JSON.stringify(data),
       });
 
-      const result = await res.json();
+      let result: any = null;
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        result = await res.json().catch(() => null);
+      }
 
       if (!res.ok) {
-        setServerError(result.message ?? "เข้าสู่ระบบไม่สำเร็จ");
+        setServerError(
+          result?.message ??
+            (res.status === 404
+              ? "ไม่พบเส้นทาง API (กรุณารีสตาร์ทเซิร์ฟเวอร์)"
+              : `เข้าสู่ระบบไม่สำเร็จ (${res.status})`)
+        );
         return;
       }
 

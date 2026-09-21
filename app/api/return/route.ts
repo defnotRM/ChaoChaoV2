@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,17 @@ export async function POST(request: Request) {
     if (contentType.includes("application/json")) {
       const json = await request.json();
       orderId = json.orderId || "";
-      imageUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      const rawUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      try {
+        imageUrls = await uploadMultipleImagesToStorage(rawUrls, {
+          bucket: "rental-evidence",
+          folder: orderId,
+          filenamePrefix: "lender_return",
+        });
+      } catch (uploadErr) {
+        console.warn("Storage upload failed for return evidence (JSON), fallback:", uploadErr);
+        imageUrls = rawUrls;
+      }
     } else {
       const formData = await request.formData();
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
@@ -51,9 +62,21 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        const buffer = Buffer.from(await f.arrayBuffer());
-        const mime = f.type || "image/png";
-        imageUrls.push(`data:${mime};base64,${buffer.toString("base64")}`);
+      }
+
+      try {
+        imageUrls = await uploadMultipleImagesToStorage(files, {
+          bucket: "rental-evidence",
+          folder: orderId,
+          filenamePrefix: "lender_return",
+        });
+      } catch (uploadErr) {
+        console.warn("Storage upload failed for return evidence (files), fallback to base64:", uploadErr);
+        for (const f of files) {
+          const buffer = Buffer.from(await f.arrayBuffer());
+          const mime = f.type || "image/png";
+          imageUrls.push(`data:${mime};base64,${buffer.toString("base64")}`);
+        }
       }
     }
 

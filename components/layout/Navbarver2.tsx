@@ -146,9 +146,18 @@ export default function Navbarver2() {
     }
   };
 
-  const dashboardLink = user?.id ? `/dashboard/${user.id}` : "/dashboard";
+  const dashboardLink =
+    user?.role === "admin"
+      ? "/admin"
+      : user?.id
+      ? `/dashboard/${user.id}`
+      : "/dashboard";
 
   const userInitial = user?.username ? user.username[0].toUpperCase() : "U";
+
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
