@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,18 @@ export async function POST(request: Request) {
       const json = await request.json();
       orderId = json.orderId || "";
       requestedPhase = extractPhase(json.evidenceType || json.phase);
-      imageUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      const rawUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      try {
+        imageUrls = await uploadMultipleImagesToStorage(rawUrls, {
+          bucket: "rental-evidence",
+          folder: orderId,
+          filenamePrefix: `handover_${requestedPhase}`,
+        });
+      } catch (uploadErr) {
+        console.warn("Storage upload failed for handover (JSON), fallback:", uploadErr);
+        imageUrls = rawUrls;
+      }
+      // หมายเหตุ: ไม่อ่าน json.userId แล้ว — ใช้ user.id จาก session เท่านั้น
     } else {
       const formData = await request.formData();
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
@@ -62,9 +74,21 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        const buffer = Buffer.from(await f.arrayBuffer());
-        const mime = f.type || "image/png";
-        imageUrls.push(`data:${mime};base64,${buffer.toString("base64")}`);
+      }
+
+      try {
+        imageUrls = await uploadMultipleImagesToStorage(files, {
+          bucket: "rental-evidence",
+          folder: orderId,
+          filenamePrefix: `handover_${requestedPhase}`,
+        });
+      } catch (uploadErr) {
+        console.warn("Storage upload failed for handover (files), fallback to base64:", uploadErr);
+        for (const f of files) {
+          const buffer = Buffer.from(await f.arrayBuffer());
+          const mime = f.type || "image/png";
+          imageUrls.push(`data:${mime};base64,${buffer.toString("base64")}`);
+        }
       }
     }
 

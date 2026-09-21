@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { uploadEvidenceSchema } from "@/lib/validations/rental";
+import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,13 +27,25 @@ export async function POST(request: NextRequest, { params }: Params) {
     return apiError(firstError, 400, parsed.error.flatten());
   }
 
-  const { evidenceType, imageUrls, newStatus } = parsed.data;
+  const { evidenceType, imageUrls: rawImageUrls, newStatus } = parsed.data;
+
+  let finalImageUrls = rawImageUrls;
+  try {
+    finalImageUrls = await uploadMultipleImagesToStorage(rawImageUrls, {
+      bucket: "rental-evidence",
+      folder: id,
+      filenamePrefix: evidenceType,
+    });
+  } catch (storageErr) {
+    console.warn("Storage upload failed for evidence, fallback to raw input:", storageErr);
+    finalImageUrls = rawImageUrls;
+  }
 
   const { error } = await supabase.rpc("upload_rental_evidence", {
     p_order_id: id,
     p_user_id: user.id,
     p_evidence_type: evidenceType,
-    p_image_urls: imageUrls,
+    p_image_urls: finalImageUrls,
     p_new_status: newStatus ?? null,
   });
 
