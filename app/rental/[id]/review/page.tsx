@@ -43,10 +43,34 @@ export default async function ReviewPage({
     .eq("item_id", order.item_id)
     .maybeSingle();
 
+  const { data: existingReview } = await admin
+    .from("review")
+    .select("review_id, rating, comment")
+    .eq("order_id", order.order_id)
+    .maybeSingle();
+
+  let existingImages: string[] = [];
+  if (existingReview) {
+    const { data: images } = await admin
+      .from("reviewimage")
+      .select("image_url")
+      .eq("review_id", existingReview.review_id);
+    existingImages = (images || []).map((img) => img.image_url);
+  }
+
   return (
     <ReviewClient
       orderId={order.order_id}
       itemName={item?.item_name ?? "อุปกรณ์เช่า"}
+      existingReview={
+        existingReview
+          ? {
+              rating: existingReview.rating,
+              comment: existingReview.comment || "",
+              images: existingImages,
+            }
+          : null
+      }
     />
   );
 }

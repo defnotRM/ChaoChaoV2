@@ -4,18 +4,34 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Trash2 } from "lucide-react";
 
+interface ExistingReview {
+  rating: number;
+  comment: string;
+  images: string[];
+}
+
 export default function ReviewClient({
   orderId,
   itemName,
+  existingReview,
 }: {
   orderId: string;
   itemName: string;
+  existingReview: ExistingReview | null;
 }) {
   const router = useRouter();
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isEditing, setIsEditing] = useState(!existingReview);
+  const [wasDeleted, setWasDeleted] = useState(false);
+
+  const [rating, setRating] = useState(existingReview?.rating ?? 5);
+  const [comment, setComment] = useState(existingReview?.comment ?? "");
+  const [imagePreviews, setImagePreviews] = useState<string[]>(
+    existingReview?.images ?? [],
+  );
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
 
   const MAX_PHOTOS = 5;
 
@@ -36,15 +52,13 @@ export default function ReviewClient({
   function removeImage(index: number) {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   }
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
 
   async function handleSubmit() {
     setSubmitting(true);
     setErrorMsg(null);
     try {
       const res = await fetch(`/api/rentals/${orderId}/review`, {
-        method: "POST",
+        method: existingReview ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, comment, imageUrls: imagePreviews }),
       });
@@ -53,7 +67,8 @@ export default function ReviewClient({
         setErrorMsg(result.message || "บันทึกรีวิวไม่สำเร็จ");
         return;
       }
-      setDone(true);
+      setIsEditing(false);
+      setJustSaved(true);
       router.refresh();
     } catch {
       setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
@@ -62,20 +77,110 @@ export default function ReviewClient({
     }
   }
 
-  if (done) {
+  async function handleDelete() {
+    if (!window.confirm("ยืนยันลบรีวิวนี้? การลบไม่สามารถย้อนกลับได้")) return;
+    setDeleting(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/rentals/${orderId}/review`, {
+        method: "DELETE",
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ลบรีวิวไม่สำเร็จ");
+        return;
+      }
+      setWasDeleted(true);
+      router.refresh();
+    } catch {
+      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (wasDeleted) {
     return (
       <div className="p-6 max-w-xl mx-auto bg-white border rounded-xl">
-        <p className="text-sm font-semibold text-emerald-700">
-          บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณสำหรับความคิดเห็น!
+        <p className="text-sm font-semibold text-slate-600">
+          ลบรีวิวเรียบร้อยแล้ว
         </p>
       </div>
     );
   }
 
+  // โหมดดูอย่างเดียว (มีรีวิวอยู่แล้ว และไม่ได้กด "แก้ไข")
+  if (existingReview && !isEditing) {
+    return (
+      <div className="p-6 max-w-xl mx-auto bg-white border rounded-xl space-y-4">
+        <h1 className="text-xl font-bold text-gray-800">
+          รีวิวของคุณ: {itemName}
+        </h1>
+
+        {justSaved && (
+          <p className="text-xs font-semibold text-emerald-700">
+            บันทึกการเปลี่ยนแปลงเรียบร้อยแล้ว
+          </p>
+        )}
+
+        <div className="flex gap-1 text-2xl">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <span
+              key={star}
+              className={star <= rating ? "text-yellow-400" : "text-gray-300"}
+            >
+              ★
+            </span>
+          ))}
+        </div>
+
+        {comment && (
+          <p className="text-sm leading-relaxed text-slate-700">{comment}</p>
+        )}
+
+        {imagePreviews.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {imagePreviews.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`รูปที่ ${i + 1}`}
+                className="aspect-square rounded-lg border object-cover"
+              />
+            ))}
+          </div>
+        )}
+
+        {errorMsg && (
+          <p className="text-xs font-semibold text-rose-600">{errorMsg}</p>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="flex-1 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            แก้ไขรีวิว
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex-1 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+          >
+            {deleting ? "กำลังลบ..." : "ลบรีวิว"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // โหมดฟอร์ม (สร้างใหม่ หรือกำลังแก้ไข)
   return (
     <div className="p-6 max-w-xl mx-auto bg-white border rounded-xl space-y-6">
       <h1 className="text-xl font-bold text-gray-800">
-        เขียนรีวิว: {itemName}
+        {existingReview ? "แก้ไขรีวิว" : "เขียนรีวิว"}: {itemName}
       </h1>
 
       <div>
@@ -153,14 +258,35 @@ export default function ReviewClient({
         <p className="text-xs font-semibold text-rose-600">{errorMsg}</p>
       )}
 
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={submitting}
-        className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
-      >
-        {submitting ? "กำลังบันทึก..." : "โพสต์รีวิว"}
-      </button>
+      <div className="flex gap-3">
+        {existingReview && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditing(false);
+              setRating(existingReview.rating);
+              setComment(existingReview.comment);
+              setImagePreviews(existingReview.images);
+              setErrorMsg(null);
+            }}
+            className="flex-1 py-3 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ยกเลิก
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+        >
+          {submitting
+            ? "กำลังบันทึก..."
+            : existingReview
+              ? "บันทึกการแก้ไข"
+              : "โพสต์รีวิว"}
+        </button>
+      </div>
     </div>
   );
 }

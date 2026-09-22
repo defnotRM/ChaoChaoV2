@@ -30,10 +30,33 @@ const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
 export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
   const [replyText, setReplyText] = useState(data.review?.lenderReply || "");
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedReply, setSavedReply] = useState(
     data.review?.lenderReply || null,
   );
+
+  async function handleDeleteReply() {
+    if (!data.review || !window.confirm("ยืนยันลบคำตอบนี้?")) return;
+    setDeleting(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/reviews/${data.review.reviewId}/reply`, {
+        method: "DELETE",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(payload?.message ?? "ลบคำตอบไม่สำเร็จ");
+        return;
+      }
+      setSavedReply(null);
+      setReplyText("");
+    } catch {
+      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!data.review || !replyText.trim()) return;
@@ -131,18 +154,30 @@ export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
                 </p>
               )}
 
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting || !replyText.trim()}
-                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
-              >
-                {submitting
-                  ? "กำลังบันทึก..."
-                  : savedReply
-                    ? "แก้ไขคำตอบ"
-                    : "ส่งคำตอบ"}
-              </button>
+              <div className="mt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || !replyText.trim()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
+                >
+                  {submitting
+                    ? "กำลังบันทึก..."
+                    : savedReply
+                      ? "แก้ไขคำตอบ"
+                      : "ส่งคำตอบ"}
+                </button>
+                {savedReply && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteReply}
+                    disabled={deleting}
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    {deleting ? "กำลังลบ..." : "ลบคำตอบ"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
