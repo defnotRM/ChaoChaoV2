@@ -16,6 +16,8 @@ import {
   Sparkles,
   Zap,
   CheckCircle2,
+  Phone,
+  Mail,
 } from "lucide-react";
 import {
   registerSchema,
@@ -31,10 +33,22 @@ export default function RegisterForm() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
+
+  const selectedRole = watch("role");
+  const [idCardPreview, setIdCardPreview] = useState<string | null>(null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+
+  function readFileAsDataUrl(file: File, cb: (url: string) => void) {
+    const reader = new FileReader();
+    reader.onloadend = () => cb(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
@@ -125,6 +139,127 @@ export default function RegisterForm() {
             className="space-y-5"
             noValidate
           >
+            {/* ชื่อ-นามสกุล */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="firstname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  ชื่อ
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="firstname"
+                    type="text"
+                    placeholder="ชื่อจริง"
+                    {...register("firstname")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.firstname
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.firstname && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {errors.firstname.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="lastname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  นามสกุล
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="lastname"
+                    type="text"
+                    placeholder="นามสกุล"
+                    {...register("lastname")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.lastname
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.lastname && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {errors.lastname.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* เบอร์โทรศัพท์ */}
+            <div>
+              <label
+                htmlFor="phone"
+                className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+              >
+                เบอร์โทรศัพท์
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                <input
+                  id="phone"
+                  type="tel"
+                  placeholder="0812345678"
+                  {...register("phone")}
+                  className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                    errors.phone
+                      ? "border-red-500 focus:ring-red-100"
+                      : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                  }`}
+                />
+              </div>
+              {errors.phone && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {errors.phone.message}
+                </p>
+              )}
+            </div>
+
+            {/* อีเมล */}
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+              >
+                อีเมล
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  {...register("email")}
+                  className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                    errors.email
+                      ? "border-red-500 focus:ring-red-100"
+                      : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                  }`}
+                />
+              </div>
+              {errors.email && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
             {/* Username */}
             <div>
               <label
@@ -264,6 +399,128 @@ export default function RegisterForm() {
                 </p>
               )}
             </div>
+
+            {/* FR-05: ผู้ให้เช่าต้องกรอกบัตร+selfie+บัญชีธนาคารตั้งแต่ตอนสมัคร */}
+            {selectedRole === "lender" && (
+              <div className="space-y-4 rounded-xl border-2 border-dashed border-[#c0e6fd] p-4">
+                <p className="text-sm font-semibold text-[#1b3554]">
+                  ข้อมูลยืนยันตัวตน (จำเป็นสำหรับผู้ให้เช่า)
+                </p>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#1b3554]">
+                    รูปบัตรประชาชน
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f)
+                        readFileAsDataUrl(f, (url) => {
+                          setIdCardPreview(url);
+                          setValue("idCardUrl", url);
+                        });
+                    }}
+                    className="block w-full text-xs text-[#5b86b6] file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  />
+                  {idCardPreview && (
+                    <img
+                      src={idCardPreview}
+                      alt="บัตรประชาชน"
+                      className="mt-2 max-h-28 rounded-lg object-contain"
+                    />
+                  )}
+                  {errors.idCardUrl && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      {errors.idCardUrl.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#1b3554]">
+                    รูปถ่ายคู่บัตรประชาชน
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f)
+                        readFileAsDataUrl(f, (url) => {
+                          setSelfiePreview(url);
+                          setValue("idCardSelfieUrl", url);
+                        });
+                    }}
+                    className="block w-full text-xs text-[#5b86b6] file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  />
+                  {selfiePreview && (
+                    <img
+                      src={selfiePreview}
+                      alt="รูปคู่บัตร"
+                      className="mt-2 max-h-28 rounded-lg object-contain"
+                    />
+                  )}
+                  {errors.idCardSelfieUrl && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      {errors.idCardSelfieUrl.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#1b3554]">
+                    ธนาคาร
+                  </label>
+                  <input
+                    type="text"
+                    {...register("bankName")}
+                    placeholder="เช่น ธนาคารกสิกรไทย"
+                    className="w-full rounded-xl border-2 border-[#c0e6fd] bg-[#c0e6fd]/10 py-2.5 px-3 text-sm text-[#000f22] outline-none focus:border-[#3f6593]"
+                  />
+                  {errors.bankName && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      {errors.bankName.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#1b3554]">
+                    เลขบัญชี
+                  </label>
+                  <input
+                    type="text"
+                    {...register("accountNumber")}
+                    placeholder="เลขที่บัญชีธนาคาร"
+                    className="w-full rounded-xl border-2 border-[#c0e6fd] bg-[#c0e6fd]/10 py-2.5 px-3 text-sm text-[#000f22] outline-none focus:border-[#3f6593]"
+                  />
+                  {errors.accountNumber && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      {errors.accountNumber.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#1b3554]">
+                    ชื่อบัญชี
+                  </label>
+                  <input
+                    type="text"
+                    {...register("accountName")}
+                    placeholder="ชื่อ-นามสกุล เจ้าของบัญชี"
+                    className="w-full rounded-xl border-2 border-[#c0e6fd] bg-[#c0e6fd]/10 py-2.5 px-3 text-sm text-[#000f22] outline-none focus:border-[#3f6593]"
+                  />
+                  {errors.accountName && (
+                    <p className="mt-1 text-xs font-medium text-red-600">
+                      {errors.accountName.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Submit */}
             <button

@@ -14,14 +14,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: firstError }, { status: 400 });
     }
 
-    const { username, password, nationalId, role } = validation.data;
+    const {
+      firstname,
+      lastname,
+      phone,
+      email,
+      username,
+      password,
+      nationalId,
+      role,
+      idCardUrl,
+      idCardSelfieUrl,
+      bankName,
+      accountNumber,
+      accountName,
+    } = validation.data;
     const admin = createAdminClient();
 
-    // 2. Check if username or national_id already exists in useraccount
+    // 2. Check if username, national_id, or email already exists in useraccount
     const { data: existingUser, error: checkError } = await admin
       .from("useraccount")
-      .select("username, national_id")
-      .or(`username.eq.${username},national_id.eq.${nationalId}`)
+      .select("username, national_id, email")
+      .or(
+        `username.eq.${username},national_id.eq.${nationalId},email.eq.${email}`,
+      )
       .maybeSingle();
 
     if (checkError) {
@@ -45,10 +61,13 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      if (existingUser.email === email) {
+        return NextResponse.json(
+          { message: "อีเมลนี้ถูกใช้งานแล้ว" },
+          { status: 409 },
+        );
+      }
     }
-
-    // 3. Derive deterministic email identifier for Supabase Auth
-    const email = `${username.toLowerCase().trim()}@chaochao.local`;
 
     // 4. Create user in Supabase Auth
     const { data: authData, error: authError } =
@@ -75,16 +94,38 @@ export async function POST(request: Request) {
     const userId = authData.user.id;
 
     // 5. Ensure profile exists and is active in public.useraccount
+    // FR-05: ผู้ให้เช่าต้องมีรูปบัตร+selfie ตั้งแต่ตอนสมัคร (validation บังคับไว้แล้ว)
     await admin.from("useraccount").upsert(
       {
         user_id: userId,
         username: username.trim(),
         email,
         national_id: nationalId,
+        firstname: firstname.trim(),
+        lastname: lastname.trim(),
+        phone: phone.trim(),
         status: "Active",
+        ...(role === "lender"
+          ? {
+              id_card_url: idCardUrl,
+              id_card_selfie_url: idCardSelfieUrl,
+              identity_verification_status: "pending",
+            }
+          : {}),
       },
       { onConflict: "user_id" },
     );
+
+    // 5b. FR-05: บันทึกบัญชีธนาคาร (เฉพาะผู้ให้เช่า)
+    if (role === "lender" && bankName && accountNumber && accountName) {
+      await admin.from("bankaccount").insert({
+        user_id: userId,
+        bank_name: bankName,
+        account_number: accountNumber,
+        account_name: accountName,
+        verification_status: "pending",
+      });
+    }
 
     // 6. Assign role in public.user_role_assignment
     const rolesToAssign = [role];
