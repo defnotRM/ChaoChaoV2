@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       console.error("Error checking existing user:", checkError);
       return NextResponse.json(
         { message: "เกิดข้อผิดพลาดในการตรวจสอบข้อมูล" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -36,13 +36,13 @@ export async function POST(request: Request) {
       if (existingUser.username === username) {
         return NextResponse.json(
           { message: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว" },
-          { status: 409 }
+          { status: 409 },
         );
       }
       if (existingUser.national_id === nationalId) {
         return NextResponse.json(
           { message: "เลขบัตรประชาชนนี้ถูกใช้งานแล้ว" },
-          { status: 409 }
+          { status: 409 },
         );
       }
     }
@@ -68,29 +68,26 @@ export async function POST(request: Request) {
       console.error("Error creating auth user:", authError);
       return NextResponse.json(
         { message: authError?.message || "ไม่สามารถสร้างบัญชีผู้ใช้ได้" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const userId = authData.user.id;
 
     // 5. Ensure profile exists and is active in public.useraccount
-    await admin
-      .from("useraccount")
-      .upsert(
-        {
-          user_id: userId,
-          username: username.trim(),
-          email,
-          national_id: nationalId,
-          status: "Active",
-        },
-        { onConflict: "user_id" }
-      );
+    await admin.from("useraccount").upsert(
+      {
+        user_id: userId,
+        username: username.trim(),
+        email,
+        national_id: nationalId,
+        status: "Active",
+      },
+      { onConflict: "user_id" },
+    );
 
-    // 6. Assign roles in public.user_role_assignment
-    const rolesToAssign =
-      role === "both" ? ["renter", "lender"] : [role];
+    // 6. Assign role in public.user_role_assignment
+    const rolesToAssign = [role];
 
     const { data: roleRows, error: roleFetchErr } = await admin
       .from("role")
@@ -105,7 +102,7 @@ export async function POST(request: Request) {
           .from("user_role_assignment")
           .upsert(
             { user_id: userId, role_id: r.role_id },
-            { onConflict: "user_id,role_id" }
+            { onConflict: "user_id,role_id" },
           );
       }
     }
@@ -115,13 +112,13 @@ export async function POST(request: Request) {
         message: "สมัครสมาชิกสำเร็จ",
         user: { id: userId, username, role },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -116,9 +116,7 @@ export default function RegisterForm() {
           {serverError && (
             <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-              <p className="text-sm font-medium text-red-600">
-                {serverError}
-              </p>
+              <p className="text-sm font-medium text-red-600">{serverError}</p>
             </div>
           )}
 
@@ -256,18 +254,6 @@ export default function RegisterForm() {
                   />
                   <div className="rounded-xl border-2 border-[#c0e6fd] py-3 text-center text-sm font-medium text-[#3f6593] transition hover:border-[#3f6593] peer-checked:border-[#1b3554] peer-checked:bg-[#1b3554] peer-checked:text-white">
                     ผู้ให้เช่า
-                  </div>
-                </label>
-                
-                <label className="relative col-span-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="both"
-                    className="peer sr-only"
-                    {...register("role")}
-                  />
-                  <div className="rounded-xl border-2 border-[#c0e6fd] py-3 text-center text-sm font-medium text-[#3f6593] transition hover:border-[#3f6593] peer-checked:border-[#1b3554] peer-checked:bg-[#1b3554] peer-checked:text-white">
-                    ทั้งผู้เช่าและผู้ให้เช่า
                   </div>
                 </label>
               </div>

@@ -5,7 +5,10 @@ export const registerSchema = z.object({
     .string()
     .min(4, "ชื่อผู้ใช้ต้องมีอย่างน้อย 4 ตัวอักษร")
     .max(20, "ชื่อผู้ใช้ต้องไม่เกิน 20 ตัวอักษร")
-    .regex(/^[a-zA-Z0-9_]+$/, "ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _"),
+    .regex(
+      /^[a-zA-Z0-9_]+$/,
+      "ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _",
+    ),
 
   password: z
     .string()
@@ -19,7 +22,7 @@ export const registerSchema = z.object({
     .length(13, "เลขบัตรประชาชนต้องมี 13 หลัก")
     .regex(/^\d+$/, "เลขบัตรประชาชนต้องเป็นตัวเลขเท่านั้น"),
 
-  role: z.enum(["lender", "renter", "both"], {
+  role: z.enum(["lender", "renter"], {
     message: "กรุณาเลือกประเภทผู้ใช้งาน",
   }),
 });
@@ -30,5 +33,4 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 export const roleLabels: Record<RegisterFormData["role"], string> = {
   renter: "ผู้เช่า",
   lender: "ผู้ให้เช่า",
-  both: "ทั้งผู้เช่าและผู้ให้เช่า",
 };
