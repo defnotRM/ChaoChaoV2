@@ -20,7 +20,7 @@ const VALID_OUTCOMES = [
 
 export async function POST(
   request: Request,
-  props: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createClient();
@@ -32,7 +32,7 @@ export async function POST(
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -40,7 +40,7 @@ export async function POST(
     if (rpcError || !isAdmin) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์ผู้ดูแลระบบ (Admin Access Required)" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -48,7 +48,7 @@ export async function POST(
     if (!reportId) {
       return NextResponse.json(
         { message: "กรุณาระบุรหัสข้อพิพาท (reportId)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -64,14 +64,18 @@ export async function POST(
     if (!outcome || !VALID_OUTCOMES.includes(outcome)) {
       return NextResponse.json(
         { message: "ผลการตัดสิน (outcome) ไม่ถูกต้องตามระบบ" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!verdict || typeof verdict !== "string" || verdict.trim().length === 0) {
+    if (
+      !verdict ||
+      typeof verdict !== "string" ||
+      verdict.trim().length === 0
+    ) {
       return NextResponse.json(
         { message: "กรุณาระบุคำตัดสินหรือเหตุผล (verdict)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -83,7 +87,7 @@ export async function POST(
     if (!reportStatus || !validReportStatuses.includes(reportStatus)) {
       return NextResponse.json(
         { message: "สถานะรายงาน (reportStatus) ไม่ถูกต้อง" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -99,7 +103,7 @@ export async function POST(
     if (reportError || !report) {
       return NextResponse.json(
         { message: "ไม่พบข้อพิพาทที่ต้องการตัดสิน" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -126,17 +130,18 @@ export async function POST(
           p_caller_id: user.id,
           p_outcome: outcome,
           p_damage_amount: Number(damageAmount) || 0,
-        }
+        },
       );
 
       if (settleError) {
         console.error("Error settling rental order via RPC:", settleError);
         return NextResponse.json(
           {
-            message: "เกิดข้อผิดพลาดในการตัดยอดเงินออเดอร์ (RPC settle_rental_order)",
+            message:
+              "เกิดข้อผิดพลาดในการตัดยอดเงินออเดอร์ (RPC settle_rental_order)",
             details: settleError.message,
           },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
@@ -161,7 +166,7 @@ export async function POST(
           message: "บันทึกคำตัดสินลงตาราง rentalreport ไม่สำเร็จ",
           details: updateReportError.message,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -180,54 +185,65 @@ export async function POST(
       }
     }
 
-    // 5. ส่งการแจ้งเตือนไปยังคู่กรณี
-    try {
-      const notificationsToInsert = [];
+    // 5. ส่งการแจ้งเตือนไปยังคู่กรณี — เฉพาะกรณีที่ไม่มี order ให้ trigger จัดการเองอยู่แล้ว
+    // (ถ้ามี order_id + เป็น outcome ที่เรียก settle_rental_order ไปแล้ว trigger บน
+    // rentalorder จะสร้างแจ้งเตือนให้อัตโนมัติอยู่แล้ว ไม่ต้อง insert ซ้ำตรงนี้อีก)
+    const skipNotification = report.order_id && isRpcOutcome;
 
-      // แจ้งเตือนผู้รายงาน
-      if (report.reporter_id) {
-        notificationsToInsert.push({
-          user_id: report.reporter_id,
-          type: "dispute_resolved",
-          title: "ข้อพิพาทได้รับการตัดสินแล้ว",
-          message: `คำตัดสิน: ${verdict.trim()}`,
-          related_order_id: report.order_id || null,
-        });
-      }
+    if (!skipNotification)
+      try {
+        const notificationsToInsert = [];
 
-      // แจ้งเตือนอีกฝ่าย (ถ้ามี)
-      const order = report.rentalorder;
-      if (order) {
-        const renterId = order.user_id;
-        const lenderId = order.item?.user_id;
-        const counterpartId =
-          report.reporter_id === renterId ? lenderId : renterId;
-
-        if (counterpartId && counterpartId !== report.reporter_id) {
+        // แจ้งเตือนผู้รายงาน
+        if (report.reporter_id) {
           notificationsToInsert.push({
-            user_id: counterpartId,
+            user_id: report.reporter_id,
             type: "dispute_resolved",
             title: "ข้อพิพาทได้รับการตัดสินแล้ว",
             message: `คำตัดสิน: ${verdict.trim()}`,
             related_order_id: report.order_id || null,
           });
         }
-      } else if (report.reported_user_id && report.reported_user_id !== report.reporter_id) {
-        notificationsToInsert.push({
-          user_id: report.reported_user_id,
-          type: "dispute_resolved",
-          title: "รายงานบัญชีได้รับการตัดสินแล้ว",
-          message: `คำตัดสิน: ${verdict.trim()}`,
-          related_order_id: null,
-        });
-      }
 
-      if (notificationsToInsert.length > 0) {
-        await admin.from("notification").insert(notificationsToInsert);
+        // แจ้งเตือนอีกฝ่าย (ถ้ามี)
+        const order = report.rentalorder;
+        if (order) {
+          const renterId = order.user_id;
+          const lenderId = order.item?.user_id;
+          const counterpartId =
+            report.reporter_id === renterId ? lenderId : renterId;
+
+          if (counterpartId && counterpartId !== report.reporter_id) {
+            notificationsToInsert.push({
+              user_id: counterpartId,
+              type: "dispute_resolved",
+              title: "ข้อพิพาทได้รับการตัดสินแล้ว",
+              message: `คำตัดสิน: ${verdict.trim()}`,
+              related_order_id: report.order_id || null,
+            });
+          }
+        } else if (
+          report.reported_user_id &&
+          report.reported_user_id !== report.reporter_id
+        ) {
+          notificationsToInsert.push({
+            user_id: report.reported_user_id,
+            type: "dispute_resolved",
+            title: "รายงานบัญชีได้รับการตัดสินแล้ว",
+            message: `คำตัดสิน: ${verdict.trim()}`,
+            related_order_id: null,
+          });
+        }
+
+        if (notificationsToInsert.length > 0) {
+          await admin.from("notification").insert(notificationsToInsert);
+        }
+      } catch (notifErr) {
+        console.warn(
+          "Failed to send dispute resolution notifications:",
+          notifErr,
+        );
       }
-    } catch (notifErr) {
-      console.warn("Failed to send dispute resolution notifications:", notifErr);
-    }
 
     return NextResponse.json({
       ok: true,
@@ -238,7 +254,7 @@ export async function POST(
     console.error("POST /api/admin/disputes/[id]/resolve error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
