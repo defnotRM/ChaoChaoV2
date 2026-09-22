@@ -60,6 +60,54 @@ export default function ProfilePage() {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
 
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [bankVerificationStatus, setBankVerificationStatus] = useState<
+    string | null
+  >(null);
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankSuccess, setBankSuccess] = useState<string | null>(null);
+  const [bankError, setBankError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/profile/bank-account")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.bank) {
+          setBankName(data.bank.bank_name || "");
+          setAccountNumber(data.bank.account_number || "");
+          setAccountName(data.bank.account_name || "");
+          setBankVerificationStatus(data.bank.verification_status || null);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveBankAccount() {
+    setSavingBank(true);
+    setBankError(null);
+    setBankSuccess(null);
+    try {
+      const res = await fetch("/api/profile/bank-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bankName, accountNumber, accountName }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setBankError(payload?.message ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      setBankSuccess(payload.message);
+      setBankVerificationStatus("pending");
+    } catch {
+      setBankError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setSavingBank(false);
+    }
+  }
+
   // Notifications
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [generalSuccess, setGeneralSuccess] = useState<string | null>(null);
@@ -986,6 +1034,77 @@ export default function ProfilePage() {
             ปิดการใช้งานบัญชี
           </button>
         </div>
+      </div>
+
+      {/* FR-07: แก้ไขบัญชีธนาคาร */}
+      <div className="mx-auto mt-6 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-base font-bold text-slate-900">บัญชีธนาคาร</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          เปลี่ยนบัญชีธนาคารเมื่อไหร่ แอดมินจะตรวจสอบยืนยันตัวตนใหม่ทุกครั้ง
+        </p>
+
+        {bankVerificationStatus && (
+          <span
+            className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+              bankVerificationStatus === "verified"
+                ? "bg-emerald-50 text-emerald-700"
+                : bankVerificationStatus === "rejected"
+                  ? "bg-rose-50 text-rose-700"
+                  : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            สถานะ:{" "}
+            {bankVerificationStatus === "verified"
+              ? "ยืนยันแล้ว"
+              : bankVerificationStatus === "rejected"
+                ? "ถูกปฏิเสธ"
+                : "รอตรวจสอบ"}
+          </span>
+        )}
+
+        {bankSuccess && (
+          <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700">
+            {bankSuccess}
+          </div>
+        )}
+        {bankError && (
+          <div className="mt-3 rounded-xl bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700">
+            {bankError}
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <input
+            type="text"
+            placeholder="ธนาคาร"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+          />
+          <input
+            type="text"
+            placeholder="เลขบัญชี"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+          />
+          <input
+            type="text"
+            placeholder="ชื่อบัญชี"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSaveBankAccount}
+          disabled={savingBank || !bankName || !accountNumber || !accountName}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1b3554] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#000f22] disabled:opacity-50"
+        >
+          {savingBank ? "กำลังบันทึก..." : "บันทึกบัญชีธนาคาร"}
+        </button>
       </div>
 
       {/* Modal: สมัคร role เพิ่ม */}
