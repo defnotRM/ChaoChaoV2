@@ -80,17 +80,12 @@ export default function RegisterForm() {
       {/* ฝั่งซ้าย: Branding (แสดงผลเฉพาะจอ Desktop lg ขึ้นไป) */}
       <div className="relative hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[#000f22] via-[#3f6593] to-[#1b3554] p-12 text-white lg:flex">
         <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-            <svg
-              viewBox="0 0 24 24"
-              className="h-8 w-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
-              <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
-            </svg>
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm">
+            <img
+              src="/logo.svg"
+              alt="ChaoChao"
+              className="h-full w-full rounded-2xl object-cover"
+            />
           </div>
           <h2 className="text-3xl font-bold">สร้างบัญชีใหม่</h2>
           <p className="mt-4 text-[#c0e6fd]">
@@ -104,17 +99,12 @@ export default function RegisterForm() {
         <div className="w-full max-w-md">
           {/* โลโก้ (แสดงเฉพาะจอมือถือ) */}
           <div className="mb-8 flex flex-col items-center gap-3 lg:items-start">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1b3554] lg:hidden">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-6 w-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
-                <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
-              </svg>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] lg:hidden">
+              <img
+                src="/logo.svg"
+                alt="ChaoChao"
+                className="h-full w-full object-contain"
+              />
             </div>
             <div className="text-center lg:text-left">
               <h1 className="text-2xl font-bold text-[#000f22] lg:text-3xl">
