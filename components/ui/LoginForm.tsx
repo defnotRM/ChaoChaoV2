@@ -63,12 +63,13 @@ export default function LoginForm() {
           result?.message ??
             (res.status === 404
               ? "ไม่พบเส้นทาง API (กรุณารีสตาร์ทเซิร์ฟเวอร์)"
-              : `เข้าสู่ระบบไม่สำเร็จ (${res.status})`)
+              : `เข้าสู่ระบบไม่สำเร็จ (${res.status})`),
         );
         return;
       }
 
-      const redirectPath = searchParams.get("redirect") || result.redirectTo || "/";
+      const redirectPath =
+        searchParams.get("redirect") || result.redirectTo || "/";
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-state-change"));
       }
@@ -85,17 +86,12 @@ export default function LoginForm() {
       {/* ฝั่งซ้าย: Branding (แสดงผลเฉพาะจอ Desktop lg ขึ้นไป) */}
       <div className="relative hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[#000f22] via-[#3f6593] to-[#1b3554] p-12 text-white lg:flex">
         <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-            <svg
-              viewBox="0 0 24 24"
-              className="h-8 w-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
-              <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
-            </svg>
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm">
+            <img
+              src="/logo.svg"
+              alt="ChaoChao"
+              className="h-full w-full rounded-2xl object-cover"
+            />
           </div>
           <h2 className="text-3xl font-bold">ยินดีต้อนรับกลับ</h2>
           <p className="mt-4 text-[#c0e6fd]">
@@ -109,17 +105,12 @@ export default function LoginForm() {
         <div className="w-full max-w-md">
           {/* โลโก้ (แสดงเฉพาะจอมือถือ เพราะจอ Desktop มีฝั่งซ้ายอยู่แล้ว) */}
           <div className="mb-8 flex flex-col items-center gap-3 lg:items-start">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1b3554] lg:hidden">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-6 w-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
-                <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
-              </svg>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] lg:hidden">
+              <img
+                src="/logo.svg"
+                alt="ChaoChao"
+                className="h-full w-full object-contain"
+              />
             </div>
             <div className="text-center lg:text-left">
               <h1 className="text-2xl font-bold text-[#000f22] lg:text-3xl">
@@ -135,9 +126,7 @@ export default function LoginForm() {
           {serverError && (
             <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-              <p className="text-sm font-medium text-red-600">
-                {serverError}
-              </p>
+              <p className="text-sm font-medium text-red-600">{serverError}</p>
             </div>
           )}
 
@@ -216,8 +205,6 @@ export default function LoginForm() {
                 </p>
               )}
             </div>
-
-
 
             {/* Submit */}
             <button

@@ -21,18 +21,12 @@ function Brand() {
       href="/"
       className="flex shrink-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1b3554] shadow-sm">
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          className="h-5 w-5 text-white"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
-          <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
-        </svg>
+      <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] shadow-sm">
+        <img
+          src="/logo.svg"
+          alt="ChaoChao"
+          className="h-full w-full object-contain"
+        />
       </span>
       <span className="text-xl font-bold tracking-tight text-[#000f22]">
         CHAOCHAO
@@ -150,8 +144,8 @@ export default function Navbarver2() {
     user?.role === "admin"
       ? "/admin"
       : user?.id
-      ? `/dashboard/${user.id}`
-      : "/dashboard";
+        ? `/dashboard/${user.id}`
+        : "/dashboard";
 
   const userInitial = user?.username ? user.username[0].toUpperCase() : "U";
 
