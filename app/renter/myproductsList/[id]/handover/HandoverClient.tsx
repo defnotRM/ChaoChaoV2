@@ -16,6 +16,12 @@ import {
   Trash2,
 } from "lucide-react";
 
+type EvidenceSummary = {
+  count: number;
+  uploadedAt: string;
+  imageUrls: string[];
+};
+
 export interface HandoverPageData {
   orderId: string;
   itemName: string;
@@ -28,8 +34,11 @@ export interface HandoverPageData {
   status: string;
   ownerName: string;
   ownerId: string;
-  renterEvidence: { count: number; uploadedAt: string } | null;
-  lenderEvidence: { count: number; uploadedAt: string } | null;
+  renterName: string;
+  // หน้าเดียวกันใช้ทั้งผู้เช่า (รับของ) และผู้ให้เช่า (ส่งมอบของ)
+  viewerRole: "renter" | "lender";
+  renterEvidence: EvidenceSummary | null;
+  lenderEvidence: EvidenceSummary | null;
 }
 
 const thb = new Intl.NumberFormat("th-TH", {
@@ -59,22 +68,32 @@ function formatDate(key: string) {
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-type Slot = { label: string; file: File | null; url: string | null };
+type Photo = { id: string; file: File; url: string };
 
-const DEFAULT_LABELS = ["บอดี้หน้า", "บอดี้หลัง", "เลนส์", "มุมล่างซ้าย"];
+// ต้องตรงกับ MAX_HANDOVER_PHOTOS ใน app/api/handover/route.ts
+const MAX_PHOTOS = 5;
 
 export default function HandoverClient({ data }: { data: HandoverPageData }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const activeSlotRef = useRef<number>(-1);
 
-  const [slots, setSlots] = useState<Slot[]>(
-    DEFAULT_LABELS.map((label) => ({ label, file: null, url: null })),
-  );
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const alreadyUploaded = data.renterEvidence !== null;
+  const isLender = data.viewerRole === "lender";
+  const myEvidence = isLender ? data.lenderEvidence : data.renterEvidence;
+  const otherEvidence = isLender ? data.renterEvidence : data.lenderEvidence;
+  const myName = isLender ? data.ownerName : data.renterName;
+  const otherName = isLender ? data.renterName : data.ownerName;
+  const myRoleLabel = isLender ? "ผู้ให้เช่า" : "ผู้เช่า";
+  const otherRoleLabel = isLender ? "ผู้เช่า" : "ผู้ให้เช่า";
+  const actionLabel = isLender ? "ส่งมอบของ" : "รับของ";
+  const detailHref = isLender
+    ? `/dashboard/${data.ownerId}/lend/${data.orderId}`
+    : `/renter/myproductsList/${data.orderId}`;
+  const alreadyUploaded = myEvidence !== null;
+
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState<
     "changed_mind" | "not_as_advertised"
@@ -85,51 +104,47 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
   );
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
-  const attachedCount = slots.filter((s) => s.file).length;
+  const attachedCount = photos.length;
 
-  function pick(index: number) {
-    activeSlotRef.current = index;
-    inputRef.current?.click();
-  }
-
-  function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function onFilesChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
-    if (!ALLOWED.includes(file.type)) {
-      setErrorMsg("รองรับเฉพาะไฟล์รูป JPG หรือ PNG");
-      return;
+    if (chosen.length === 0) return;
+
+    const errors: string[] = [];
+    const valid: Photo[] = [];
+    const remaining = MAX_PHOTOS - photos.length;
+    for (const file of chosen) {
+      if (!ALLOWED.includes(file.type)) {
+        errors.push("รองรับเฉพาะไฟล์รูป JPG หรือ PNG");
+        continue;
+      }
+      if (valid.length >= remaining) {
+        errors.push(`อัปโหลดได้ไม่เกิน ${MAX_PHOTOS} รูป`);
+        break;
+      }
+      valid.push({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        url: URL.createObjectURL(file),
+      });
     }
+
+    if (valid.length > 0) setPhotos((prev) => [...prev, ...valid]);
+    setErrorMsg(errors.length > 0 ? [...new Set(errors)].join(" • ") : null);
+  }
+
+  function removePhoto(id: string) {
     setErrorMsg(null);
-    const i = activeSlotRef.current;
-    setSlots((prev) => {
-      const next = [...prev];
-      if (next[i]?.url) URL.revokeObjectURL(next[i].url!);
-      next[i] = { ...next[i], file, url: URL.createObjectURL(file) };
-      return next;
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((p) => p.id !== id);
     });
-  }
-
-  function removeSlot(index: number) {
-    setSlots((prev) => {
-      const next = [...prev];
-      if (next[index]?.url) URL.revokeObjectURL(next[index].url!);
-      next[index] = { ...next[index], file: null, url: null };
-      return next;
-    });
-  }
-
-  function addSlot() {
-    setSlots((prev) => {
-      const next = [...prev, { label: "เพิ่มเติม", file: null, url: null }];
-      return next;
-    });
-    // เปิด picker ให้ช่องใหม่
-    setTimeout(() => pick(slots.length), 0);
   }
 
   async function handleSubmit() {
-    const files = slots.filter((s) => s.file).map((s) => s.file!) as File[];
+    const files = photos.map((p) => p.file);
     if (files.length === 0) {
       setErrorMsg("กรุณาแนบรูปหลักฐานอย่างน้อย 1 รูป");
       return;
@@ -185,30 +200,30 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           <Link
-            href="/renter/mydashboard"
+            href={
+              isLender ? `/dashboard/${data.ownerId}` : "/renter/mydashboard"
+            }
             className="transition hover:text-[#1b3554]"
           >
-            รายการเช่าของฉัน
+            {isLender ? "รายการปล่อยเช่าของฉัน" : "รายการเช่าของฉัน"}
           </Link>
           <span aria-hidden="true">/</span>
-          <Link
-            href={`/renter/myproductsList/${data.orderId}`}
-            className="transition hover:text-[#1b3554]"
-          >
+          <Link href={detailHref} className="transition hover:text-[#1b3554]">
             รายละเอียดการเช่า
           </Link>
           <span aria-hidden="true">/</span>
-          <span className="font-semibold text-[#1b3554]">รับของ</span>
+          <span className="font-semibold text-[#1b3554]">{actionLabel}</span>
         </nav>
 
         <header className="mb-6">
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-            รับของ
+            {actionLabel}
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
             อัปโหลดหลักฐานสภาพสินค้า{" "}
-            <strong className="text-slate-700">ก่อนเริ่มเช่า</strong>{" "}
-            ทั้งคุณและผู้ปล่อยเช่าต้องอัปโหลด · ใช้เทียบกันหากมีข้อพิพาทตอนคืน
+            <strong className="text-slate-700">ก่อนเริ่มเช่า</strong> ทั้งคุณและ
+            {otherRoleLabel}ต้องอัปโหลด และเห็นรูปของกันและกัน ·
+            ใช้เทียบกันหากมีข้อพิพาทตอนคืน
           </p>
         </header>
 
@@ -222,10 +237,10 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
               <div className="mb-4 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-rose-500" />
                 <h2 className="text-lg font-bold text-slate-900">
-                  นัดหมายรับของ
+                  นัดหมาย{actionLabel}
                 </h2>
                 <span className="text-xs text-slate-400">
-                  ตกลงกับผู้ปล่อยเช่าแล้ว
+                  ตกลงกับ{otherRoleLabel}แล้ว
                 </span>
               </div>
               <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
@@ -247,8 +262,13 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                     <Camera className="h-5 w-5" />
                   </span>
                   <h2 className="text-lg font-bold text-slate-900">
-                    หลักฐานตอนรับของ
+                    หลักฐานตอน{actionLabel}
                   </h2>
+                  {!alreadyUploaded && (
+                    <span className="text-xs font-semibold text-slate-500">
+                      {attachedCount}/{MAX_PHOTOS} รูป
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -268,70 +288,77 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <p className="text-xs leading-relaxed text-slate-600">
                   <strong className="text-slate-800">
-                    ถ่ายให้ครบก่อนรับของออกจากจุดนัดเสมอ
+                    {isLender
+                      ? "ถ่ายให้ครบก่อนส่งมอบของให้ผู้เช่าเสมอ"
+                      : "ถ่ายให้ครบก่อนรับของออกจากจุดนัดเสมอ"}
                   </strong>{" "}
-                  — อย่างน้อย 4 มุม + จุดที่มีตำหนิเดิมตามที่ระบุในโพสต์
-                  ถ้าไม่มีรูปตอนนี้ จะไม่สามารถอ้างสิทธิ์ได้หากมีข้อพิพาทภายหลัง
+                  — ถ่ายให้ครบทุกมุม รวมถึงจุดที่มีตำหนิเดิม (สูงสุด{" "}
+                  {MAX_PHOTOS} รูป) ถ้าไม่มีรูปตอนนี้
+                  จะไม่สามารถอ้างสิทธิ์ได้หากมีข้อพิพาทภายหลัง
                 </p>
               </div>
 
-              {/* กริดช่องรูป */}
+              {/* กริดรูปหลักฐาน */}
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                 {alreadyUploaded
-                  ? DEFAULT_LABELS.map((label) => (
-                      <div
-                        key={label}
-                        className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl bg-sky-50/60 text-slate-400 ring-1 ring-sky-100"
+                  ? (myEvidence?.imageUrls ?? []).map((url, index) => (
+                      <a
+                        key={`${url}-${index}`}
+                        href={url.startsWith("data:") ? undefined : url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group relative block aspect-square overflow-hidden rounded-2xl ring-1 ring-emerald-200"
                       >
-                        <Camera className="h-6 w-6" />
-                        <span className="text-[11px] text-slate-500">
-                          {label}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`รูปหลักฐานที่ ${index + 1}`}
+                          className="h-full w-full object-cover transition group-hover:scale-105"
+                        />
+                        <span className="absolute inset-x-1.5 bottom-1.5 inline-flex items-center justify-center gap-1 truncate rounded-md bg-emerald-600/85 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          <CheckCircle2 className="h-3 w-3 shrink-0" />
+                          รูปที่ {index + 1}
                         </span>
-                      </div>
+                      </a>
                     ))
-                  : slots.map((slot, index) => (
-                      <div key={index} className="relative aspect-square">
-                        {slot.url ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={slot.url}
-                              alt={slot.label}
-                              className="h-full w-full rounded-2xl object-cover ring-1 ring-slate-200"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeSlot(index)}
-                              className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-rose-600 shadow-sm transition hover:bg-white"
-                              aria-label="ลบรูป"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="absolute inset-x-1.5 bottom-1.5 truncate rounded-md bg-black/45 px-1.5 py-0.5 text-center text-[10px] font-medium text-white">
-                              {slot.label}
-                            </span>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => pick(index)}
-                            className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-2xl bg-sky-50/60 text-slate-400 ring-1 ring-sky-100 transition hover:bg-sky-100/60 hover:text-[#3f6593]"
-                          >
-                            <Camera className="h-6 w-6" />
-                            <span className="text-[11px]">{slot.label}</span>
-                          </button>
-                        )}
+                  : photos.map((photo, index) => (
+                      <div key={photo.id} className="relative aspect-square">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.url}
+                          alt={`รูปหลักฐานที่ ${index + 1}`}
+                          className="h-full w-full rounded-2xl object-cover ring-1 ring-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(photo.id)}
+                          disabled={submitting}
+                          className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-rose-600 shadow-sm transition hover:bg-white disabled:opacity-50"
+                          aria-label={`ลบรูปที่ ${index + 1}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="absolute inset-x-1.5 bottom-1.5 truncate rounded-md bg-black/45 px-1.5 py-0.5 text-center text-[10px] font-medium text-white">
+                          รูปที่ {index + 1}
+                        </span>
                       </div>
                     ))}
 
-                {!alreadyUploaded && (
+                {!alreadyUploaded && photos.length < MAX_PHOTOS && (
                   <button
                     type="button"
-                    onClick={addSlot}
-                    className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-300 text-slate-400 transition hover:border-[#3f6593] hover:text-[#3f6593]"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={submitting}
+                    className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-300 text-slate-400 transition hover:border-[#3f6593] hover:bg-sky-50/50 hover:text-[#3f6593] disabled:opacity-50"
                   >
-                    <Plus className="h-6 w-6" />
-                    <span className="text-[11px]">เพิ่มรูป</span>
+                    {photos.length === 0 ? (
+                      <Camera className="h-6 w-6" />
+                    ) : (
+                      <Plus className="h-6 w-6" />
+                    )}
+                    <span className="text-[11px]">
+                      {photos.length === 0 ? "ถ่าย / เลือกรูป" : "เพิ่มรูป"}
+                    </span>
                   </button>
                 )}
               </div>
@@ -340,8 +367,9 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                 ref={inputRef}
                 type="file"
                 accept="image/jpeg,image/png"
+                multiple
                 className="hidden"
-                onChange={onFileChosen}
+                onChange={onFilesChosen}
               />
               {errorMsg && (
                 <p className="mt-2 text-xs font-medium text-rose-600">
@@ -349,31 +377,52 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                 </p>
               )}
 
-              {/* แถวสถานะผู้เช่า */}
+              {/* แถวสถานะของเรา */}
               <UploaderRow
-                initials="วช"
-                name="คุณ (ผู้เช่า)"
+                initials={myName.slice(0, 2)}
+                name={`คุณ (${myRoleLabel})`}
                 done={alreadyUploaded}
                 subtitle={
-                  alreadyUploaded && data.renterEvidence
-                    ? `อัปโหลดแล้ว ${data.renterEvidence.count} รูป · ${dateTimeFmt.format(new Date(data.renterEvidence.uploadedAt))}`
+                  myEvidence
+                    ? `อัปโหลดแล้ว ${myEvidence.count} รูป · ${dateTimeFmt.format(new Date(myEvidence.uploadedAt))}`
                     : attachedCount > 0
                       ? `เลือกไว้ ${attachedCount} รูป · ยังไม่ได้ส่ง`
                       : "ยังไม่ได้อัปโหลด"
                 }
               />
 
-              {/* แถวสถานะผู้ปล่อยเช่า (อ่านจาก DB จริง) */}
+              {/* แถวสถานะอีกฝ่าย + รูปหลักฐานของอีกฝ่าย */}
               <UploaderRow
-                initials={data.ownerName.slice(0, 2)}
-                name={`${data.ownerName} (ผู้ปล่อยเช่า)`}
-                done={data.lenderEvidence !== null}
+                initials={otherName.slice(0, 2)}
+                name={`${otherName} (${otherRoleLabel})`}
+                done={otherEvidence !== null}
                 subtitle={
-                  data.lenderEvidence
-                    ? `อัปโหลดแล้ว ${data.lenderEvidence.count} รูป · ${dateTimeFmt.format(new Date(data.lenderEvidence.uploadedAt))}`
-                    : "รอผู้ปล่อยเช่าอัปโหลด"
+                  otherEvidence
+                    ? `อัปโหลดแล้ว ${otherEvidence.count} รูป · ${dateTimeFmt.format(new Date(otherEvidence.uploadedAt))}`
+                    : `รอ${otherRoleLabel}อัปโหลด · รีเฟรชหน้าเพื่อดูรูปล่าสุด`
                 }
-              />
+              >
+                {otherEvidence && otherEvidence.imageUrls.length > 0 && (
+                  <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {otherEvidence.imageUrls.map((url, index) => (
+                      <a
+                        key={`${url}-${index}`}
+                        href={url.startsWith("data:") ? undefined : url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group relative block aspect-square overflow-hidden rounded-xl ring-1 ring-slate-200"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`รูปหลักฐานของ${otherRoleLabel} ${index + 1}`}
+                          className="h-full w-full object-cover transition group-hover:scale-105"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </UploaderRow>
 
               {/* ปุ่มยืนยัน (เฉพาะยังไม่อัปโหลด) */}
               {!alreadyUploaded && (
@@ -386,11 +435,11 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   <Camera className="h-4 w-4" />
                   {submitting
                     ? "กำลังอัปโหลด…"
-                    : `ยืนยันรับของ / อัปโหลดหลักฐาน (${attachedCount})`}
+                    : `ยืนยัน${actionLabel} / อัปโหลดหลักฐาน (${attachedCount})`}
                 </button>
               )}
               {/* ปุ่มปฏิเสธหน้างาน (เฉพาะอัปโหลดแล้ว + สถานะยัง item_sent อยู่) */}
-              {alreadyUploaded && data.status === "item_sent" && (
+              {!isLender && alreadyUploaded && data.status === "item_sent" && (
                 <button
                   type="button"
                   onClick={() => setShowRejectModal(true)}
@@ -403,7 +452,8 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
               {/* Footer */}
               <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <Link
-                  href={`/renter/myproductsList/${data.orderId}`}
+                  href={detailHref}
+                  aria-label="กลับไปหน้ารายละเอียดการเช่า"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -444,8 +494,9 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                   เก็บรูปหลักฐานไว้เป็นสิทธิ์ของคุณ
                 </p>
                 <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
-                  หากผู้ปล่อยเช่าแจ้งความเสียหายที่ไม่ตรงกับรูปตอนรับของ
-                  ใช้รูปนี้โต้แย้งได้ที่หน้าประเมินความเสียหาย
+                  {isLender
+                    ? "หากของที่ได้รับคืนเสียหายต่างจากรูปตอนส่งมอบ ใช้รูปนี้เป็นหลักฐานตอนประเมินความเสียหาย"
+                    : "หากผู้ปล่อยเช่าแจ้งความเสียหายที่ไม่ตรงกับรูปตอนรับของ ใช้รูปนี้โต้แย้งได้ที่หน้าประเมินความเสียหาย"}
                 </p>
                 <span
                   className="mt-3 inline-flex cursor-not-allowed items-center gap-1 text-xs font-semibold text-slate-400"
@@ -616,33 +667,38 @@ function UploaderRow({
   name,
   subtitle,
   done,
+  children,
 }: {
   initials: string;
   name: string;
   subtitle: string;
   done: boolean;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-slate-200 p-3.5">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">
-        {initials.toUpperCase()}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-slate-900">{name}</p>
-        <p className="text-xs text-slate-500">{subtitle}</p>
-      </div>
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-          done
-            ? "bg-emerald-500/15 text-emerald-700"
-            : "bg-slate-100 text-slate-500"
-        }`}
-      >
+    <div className="mt-3 rounded-2xl border border-slate-200 p-3.5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">
+          {initials.toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-900">{name}</p>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
         <span
-          className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-slate-400"}`}
-        />
-        {done ? "เสร็จแล้ว" : "รอดำเนินการ"}
-      </span>
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+            done
+              ? "bg-emerald-500/15 text-emerald-700"
+              : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-slate-400"}`}
+          />
+          {done ? "เสร็จแล้ว" : "รอดำเนินการ"}
+        </span>
+      </div>
+      {children}
     </div>
   );
 }

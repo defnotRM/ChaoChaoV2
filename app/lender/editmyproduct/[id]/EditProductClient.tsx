@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -19,7 +19,17 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  X,
 } from "lucide-react";
+import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
+import type { ItemCondition as ItemUsageCondition } from "@/lib/types/product";
+import ConditionPicker from "@/components/products/ConditionPicker";
+
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
+// รูปเดิมจากฐานข้อมูลมีแค่ url, รูปใหม่มี file ที่ยังไม่ได้อัปโหลด
+type EditImage = { id: string; preview: string; url?: string; file?: File };
 
 interface Category {
   category_id: string;
@@ -59,6 +69,7 @@ interface InitialItem {
   rental_fee_per_day: number;
   deposit: number;
   status: string;
+  item_condition?: ItemUsageCondition | null;
   itemimage?: Array<{
     image_id?: string;
     image_url: string;
@@ -99,13 +110,87 @@ export default function EditProductClient({
   const initialImgs = (initialItem.itemimage || [])
     .map((i) => i.image_url)
     .filter(Boolean);
-  const [imageUrls, setImageUrls] = useState<string[]>(
-    initialImgs.length > 0
-      ? initialImgs
-      : [
-          "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80",
-        ],
+  const [images, setImages] = useState<EditImage[]>(() =>
+    initialImgs.map((url, idx) => ({ id: `existing_${idx}`, preview: url, url })),
   );
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef<EditImage[]>([]);
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((img) => {
+        if (img.file) URL.revokeObjectURL(img.preview);
+      });
+    };
+  }, []);
+
+  function handleSelectImages(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+    if (selected.length === 0) return;
+
+    setImageError(null);
+    const errors: string[] = [];
+    const valid: EditImage[] = [];
+    const remaining = MAX_PRODUCT_IMAGES - images.length;
+
+    for (const file of selected) {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        errors.push(`"${file.name}" ไม่ใช่ไฟล์ PNG, JPG หรือ WEBP`);
+        continue;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        errors.push(`"${file.name}" มีขนาดเกิน 5MB`);
+        continue;
+      }
+      if (valid.length >= remaining) {
+        errors.push(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
+        break;
+      }
+      valid.push({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        preview: URL.createObjectURL(file),
+      });
+    }
+
+    if (valid.length > 0) setImages((prev) => [...prev, ...valid]);
+    if (errors.length > 0) setImageError(errors.join(" • "));
+  }
+
+  function handleRemoveImage(id: string) {
+    setImageError(null);
+    setImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+      if (target?.file) URL.revokeObjectURL(target.preview);
+      return prev.filter((img) => img.id !== id);
+    });
+  }
+
+  async function uploadImages(): Promise<string[]> {
+    // รูปเดิมใช้ url เดิม รูปใหม่อัปโหลดทีละไฟล์ต่อ request และคงลำดับรูปไว้
+    return Promise.all(
+      images.map(async (img) => {
+        if (!img.file) return img.url as string;
+        const fd = new FormData();
+        fd.append("images", img.file);
+        const res = await fetch("/api/products/images", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.urls?.[0]) {
+          throw new Error(data.message || "อัปโหลดรูปภาพไม่สำเร็จ");
+        }
+        return data.urls[0] as string;
+      }),
+    );
+  }
 
   // Form states with initial values
   const [itemName, setItemName] = useState(initialItem.item_name || "");
@@ -121,6 +206,9 @@ export default function EditProductClient({
   );
   const [deposit, setDeposit] = useState<string>(
     String(initialItem.deposit !== undefined ? initialItem.deposit : ""),
+  );
+  const [condition, setCondition] = useState<ItemUsageCondition | null>(
+    initialItem.item_condition ?? null,
   );
   const [status, setStatus] = useState<string>(
     initialItem.status || "available",
@@ -258,9 +346,22 @@ export default function EditProductClient({
       setErrorMessage("กรุณาระบุเงินประกันให้ถูกต้อง");
       return;
     }
+    if (!condition) {
+      setErrorMessage("กรุณาเลือกสภาพการใช้งานของอุปกรณ์");
+      return;
+    }
+    if (images.length === 0) {
+      setErrorMessage("กรุณาเพิ่มรูปภาพอุปกรณ์อย่างน้อย 1 รูป");
+      return;
+    }
+    if (images.length > MAX_PRODUCT_IMAGES) {
+      setErrorMessage(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
+      const imageUrls = await uploadImages();
       const payload = {
         categoryId: categoryId || null,
         itemName: itemName.trim(),
@@ -268,6 +369,7 @@ export default function EditProductClient({
         originalPrice: originalPrice ? Number(originalPrice) : undefined,
         rentalFeePerDay: fee,
         deposit: dep,
+        condition,
         status,
         locations: [
           ...meetupLocations.map((l) => ({
@@ -433,6 +535,8 @@ export default function EditProductClient({
               </div>
             </div>
 
+            <ConditionPicker value={condition} onChange={setCondition} />
+
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 รายละเอียดและคุณสมบัติอุปกรณ์
@@ -537,47 +641,101 @@ export default function EditProductClient({
                 3. รูปภาพอุปกรณ์
               </h2>
             </div>
-            <span className="text-xs text-slate-400">ภาพตัวอย่างสินค้า</span>
+            <span className="text-xs font-semibold text-slate-500">
+              {images.length}/{MAX_PRODUCT_IMAGES} รูป
+            </span>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-5">
-            {/* กล่องรูปภาพ Preview */}
-            <div className="relative flex aspect-square w-48 sm:w-56 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-[#eaf0f6] shadow-sm overflow-hidden">
-              {imageUrls[0] ? (
-                <img
-                  src={imageUrls[0]}
-                  alt={itemName}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Package
-                  className="h-20 w-20 text-[#a0b5ce]"
-                  strokeWidth={1.5}
-                />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_IMAGE_TYPES.join(",")}
+            multiple
+            onChange={handleSelectImages}
+            className="hidden"
+          />
+
+          {images.length === 0 ? (
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              <div className="relative flex aspect-square w-48 sm:w-56 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-[#eaf0f6] shadow-sm">
+                <Package className="h-20 w-20 text-[#a0b5ce]" strokeWidth={1.5} />
+              </div>
+
+              <div className="flex flex-1 flex-col justify-center space-y-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-7 text-center transition hover:border-[#3f6593] hover:bg-sky-50/50 active:scale-[0.99]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm transition group-hover:scale-105">
+                    <Plus className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <span className="mt-3 text-sm font-semibold text-slate-700">
+                    เพิ่มรูปภาพอุปกรณ์
+                  </span>
+                  <span className="mt-1 text-xs text-slate-400">
+                    รองรับไฟล์ PNG, JPG หรือ WEBP (ไม่เกิน 5MB ต่อรูป, สูงสุด{" "}
+                    {MAX_PRODUCT_IMAGES} รูป)
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+              {images.map((img, idx) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-square overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100"
+                >
+                  <img
+                    src={img.preview}
+                    alt={`รูปอุปกรณ์ ${idx + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  {idx === 0 && (
+                    <span className="absolute left-2 top-2 rounded-full bg-[#1b3554] px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      รูปหลัก
+                    </span>
+                  )}
+                  {img.file && (
+                    <span className="absolute bottom-2 left-2 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      ใหม่
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(img.id)}
+                    disabled={isSubmitting}
+                    aria-label={`ลบรูปที่ ${idx + 1}`}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow-sm transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+
+              {images.length < MAX_PRODUCT_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                  className="group flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/60 text-center transition hover:border-[#3f6593] hover:bg-sky-50/50 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Plus className="h-6 w-6 text-slate-500 transition group-hover:scale-110" />
+                  <span className="mt-1.5 text-xs font-semibold text-slate-600">
+                    เพิ่มรูป
+                  </span>
+                </button>
               )}
             </div>
+          )}
 
-            {/* กล่องปุ่มเพิ่มรูป */}
-            <div className="flex flex-1 flex-col justify-center space-y-3 w-full">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                }}
-                className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-7 text-center transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm transition group-hover:scale-105">
-                  <Plus className="h-5 w-5 text-slate-600" />
-                </div>
-                <span className="mt-3 text-sm font-semibold text-slate-700">
-                  เพิ่มรูปภาพอุปกรณ์
-                </span>
-                <span className="mt-1 text-xs text-slate-400">
-                  รองรับไฟล์ PNG, JPG หรือ WEBP (ขนาดไม่เกิน 5MB)
-                </span>
-              </button>
-            </div>
-          </div>
+          {imageError && (
+            <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-rose-600">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{imageError}</span>
+            </p>
+          )}
         </section>
 
         {/* Section 4: สถานที่นัดรับและวันว่าง */}
@@ -1012,7 +1170,7 @@ export default function EditProductClient({
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>กำลังบันทึกข้อมูล...</span>
+                <span>กำลังอัปโหลดรูปและบันทึกข้อมูล...</span>
               </>
             ) : (
               <>

@@ -9,7 +9,6 @@ import {
   Tent,
   Video,
   Wrench,
-  ImageIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,34 +38,7 @@ function joinClassNames(...classNames: Array<string | undefined | false>) {
   return classNames.filter(Boolean).join(" ");
 }
 
-export function PlaceholderImage({
-  seed,
-  className,
-  rounded = "rounded-xl",
-}: {
-  seed: string;
-  className?: string;
-  rounded?: string;
-}) {
-  return (
-    <div
-      role="img"
-      aria-label={`ภาพตัวอย่างสินค้า ${seed}`}
-      className={joinClassNames(
-        "flex items-center justify-center bg-gradient-to-br",
-        "from-[#2980B9] to-[#6DD5FA]",
-        rounded,
-        className,
-      )}
-    >
-      <ImageIcon
-        aria-hidden="true"
-        className="h-[28%] w-[28%] text-white/70"
-        strokeWidth={1.8}
-      />
-    </div>
-  );
-}
+export { PlaceholderImage } from "./PlaceholderImage";
 
 export function Rating({ value, count }: { value: number; count: number }) {
   return (

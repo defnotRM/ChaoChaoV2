@@ -16,9 +16,8 @@ export default async function EditProductPage({
     await Promise.all([
       admin
         .from("item")
-        .select(
-          "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at, updated_at",
-        )
+        // "*" เพื่อให้ได้ item_condition ด้วย (และไม่ error ถ้ายังไม่ได้รัน migration 25)
+        .select("*")
         .eq("item_id", id)
         .maybeSingle(),
       admin
