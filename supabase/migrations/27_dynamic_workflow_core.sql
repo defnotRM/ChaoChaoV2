@@ -1,5 +1,5 @@
 -- ============================================================================
--- 24_dynamic_workflow_core.sql — Dynamic Workflow เฟส 1 (ฐานข้อมูล)
+-- 27_dynamic_workflow_core.sql — Dynamic Workflow เฟส 1 (ฐานข้อมูล)
 --
 -- แนวทาง: "เพิ่ม ไม่แทนที่" — ไม่ลบหรือเปลี่ยนคอลัมน์สถานะข้อความเดิมและฟังก์ชันเดิมเลย
 --   • เพิ่ม 7 ตารางของ workflow + คอลัมน์ *_id (FK) ในตารางธุรกิจ 7 คอลัมน์
@@ -8,7 +8,7 @@
 --       static  = ไม่ทำอะไร (ทำงานเหมือนเดิมทุกประการ)  ← ค่าเริ่มต้นหลังรันไฟล์นี้
 --       shadow  = ตรวจแล้วบันทึกการละเมิดลง workflow_history แต่ยังปล่อยผ่าน
 --       dynamic = ตรวจแล้วปฏิเสธการเปลี่ยนสถานะที่ไม่มีเส้นทางหรือผู้ทำไม่มีสิทธิ์
---   • ย้อนกลับด้วยไฟล์ 24_dynamic_workflow_core.down.sql
+--   • ย้อนกลับด้วยไฟล์ 27_dynamic_workflow_core.down.sql
 --
 -- สลับโหมด (ไม่ต้อง deploy):
 --   UPDATE system_config SET config_value = 'shadow' WHERE config_key = 'workflow_mode';

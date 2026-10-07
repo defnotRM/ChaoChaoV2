@@ -52,6 +52,9 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 
 ทุกไฟล์ข้างบน apply เข้า production แล้ว (ไฟล์ 01-06 เก่าถูกลบไปแล้ว)
 
+**ยังไม่ apply เข้า production (ใช้บน staging เท่านั้น ในกิ่ง dynamic-workflow):**
+`27_dynamic_workflow_core.sql` (ไฟล์ย้อนกลับ `down/27_dynamic_workflow_core.down.sql`)
+
 ## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
 
 ตรวจเมื่อทำ `full_install.sql` โดยเล่นซ้ำ 07→23 บน Postgres ว่าง แล้วเทียบโครงสร้างกับ production

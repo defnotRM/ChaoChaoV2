@@ -3,6 +3,10 @@
 เอกสารนี้เขียนให้ **อ่านแล้วทำงานต่อได้เอง** ไม่ต้องมี WiWat (Port) อยู่ด้วย
 ถ้าคุณคือ AI ที่โรมันเปิดไฟล์นี้ให้อ่าน ให้อ่านทั้งไฟล์ก่อนลงมือ และปฏิบัติตามหัวข้อ 3 (กฎเหล็ก) เสมอ
 
+> **หมายเหตุการเปลี่ยนเลข migration (8 ต.ค. 2026):** PR #9 ของเพื่อนใช้ migration เลข 24-26 และ merge เข้า main แล้ว (apply บน production แล้ว)
+> migration เฟส 1 ของเราจึงเปลี่ยนชื่อเป็น `27_dynamic_workflow_core.sql` (เนื้อหาเดิม) เลข `24b` และ `25` ที่เขียนในเอกสารนี้ให้อ่านเป็น `28` (แก้ข้อมูลเส้นทาง) และ `29` (ให้ cron อ่านค่าจาก system_config)
+> ที่เอกสารนี้เขียนว่า "migration 24" ให้อ่านเป็น "migration 27" ค่า hash หลังรัน 27 บนฐานข้อมูลที่มี 25/26 อยู่แล้วคือ `4449b52cd098`
+
 ## 0. วิธีใช้ไฟล์นี้
 
 ให้โรมันวางข้อความนี้ให้ AI ของเขาพร้อมแนบไฟล์นี้:
@@ -62,7 +66,7 @@
 
 1. **ห้ามรันอะไรบน Supabase production** (project `awnwvckyjkkuhufmdgas`, org ของโรมัน) ทั้ง migration, SQL, และห้ามใส่ key ของ production ใน `.env.local` ของโฟลเดอร์ staging และต้องไม่มีตัวแปรของ production ตั้งอยู่ในระบบปฏิบัติการ (ดูหัวข้อ 4.2)
 2. **ห้าม commit ไฟล์ `.env*` ห้ามแปะ key (โดยเฉพาะ service_role / secret) ในแชท, PR, issue หรือโค้ด** ไฟล์ `.env.local` อยู่ใน `.gitignore` อยู่แล้ว
-3. **ห้ามแก้ไฟล์ migration ที่ commit และรันบน staging แล้ว** (`24_dynamic_workflow_core.sql`) ถ้าต้องแก้ ให้สร้างไฟล์ใหม่ต่อเลข (`24b_...`, `25_...`) พร้อมไฟล์ย้อนกลับ
+3. **ห้ามแก้ไฟล์ migration ที่ commit และรันบน staging แล้ว** (`27_dynamic_workflow_core.sql`) ถ้าต้องแก้ ให้สร้างไฟล์ใหม่ต่อเลข (`24b_...`, `25_...`) พร้อมไฟล์ย้อนกลับ
 4. **ทุกการเปลี่ยนฐานข้อมูล = ไฟล์ migration + ไฟล์ `down` + ทดสอบ UP → DOWN แล้ว structure hash ต้องกลับเป็นค่าเดิม** วางไฟล์ down ใน `supabase/migrations/down/`
 5. **ห้ามใช้ `git add -A` / `git add .`** ให้ระบุไฟล์ทีละไฟล์เสมอ (`package-lock.json` มักถูกแก้เองจาก npm ไม่ต้อง commit)
 6. **ห้าม push ตรงเข้า `dynamic-workflow`, `Port`, หรือ `main`** ให้แตก branch ย่อยแล้วเปิด Pull Request เข้า `dynamic-workflow` เท่านั้น (ดูหัวข้อ 13)
@@ -114,7 +118,7 @@ echo %NEXT_PUBLIC_SUPABASE_URL%
 
 1. `supabase/setup/full_install.sql`
 2. `supabase/setup/check_install.sql` (คิวรีที่ 1 ต้องได้ `structure_hash = 77b289a75e91`, `fingerprint_rows = 132`)
-3. `supabase/migrations/24_dynamic_workflow_core.sql`
+3. `supabase/migrations/27_dynamic_workflow_core.sql`
 4. `supabase/setup/check_workflow_phase1.sql` คิวรีที่ 1 (ต้องได้ `6a0e828cd7c6`, 174, 7, 40, 51, `static`)
 
 ข้อเสียคือผลทดสอบของสองคนไม่รวมกันใน `workflow_history` เดียว
@@ -220,7 +224,7 @@ UPDATE public.system_config SET config_value = 'shadow' WHERE config_key = 'work
 
 ## 7. เส้นทางที่ seed ไว้ (51 เส้นทาง)
 
-ดูรายละเอียดและ action code ครบใน `supabase/migrations/24_dynamic_workflow_core.sql` (ส่วนที่ 3) ที่นี่สรุปเฉพาะออเดอร์
+ดูรายละเอียดและ action code ครบใน `supabase/migrations/27_dynamic_workflow_core.sql` (ส่วนที่ 3) ที่นี่สรุปเฉพาะออเดอร์
 
 | จาก                         | ไป                              | action                                                              | ผู้ทำ                        |
 | --------------------------- | ------------------------------- | ------------------------------------------------------------------- | ---------------------------- |
@@ -389,7 +393,7 @@ GROUP BY 1,2,3,4 ORDER BY times DESC;
 
 1. **สลับโหมดกลับ** (ทันที ไม่ต้อง deploy ข้อมูลไม่หาย):
    `UPDATE public.system_config SET config_value = 'static' WHERE config_key = 'workflow_mode';`
-2. **ย้อนฐานข้อมูลเฟส 1** รัน `supabase/migrations/down/24_dynamic_workflow_core.down.sql`
+2. **ย้อนฐานข้อมูลเฟส 1** รัน `supabase/migrations/down/27_dynamic_workflow_core.down.sql`
    (export `workflow_history` ก่อนถ้าต้องการเก็บ) ตรวจด้วย `supabase/setup/check_install.sql` ต้องได้ `structure_hash = 77b289a75e91`
 3. **ย้อนโค้ดแอป** ติด tag ไว้ที่ `v1-static-workflow` (โค้ดก่อนเริ่มงานนี้) หรือทิ้ง branch `dynamic-workflow`
 4. **ถ้า dynamic workflow ล้มเหลวทั้งหมด:** ตามข้อตกลงในหัวข้อ 8 ให้กลับไปแก้ F1-F3 ใน production จริง
@@ -432,8 +436,8 @@ git push -u origin dynamic-workflow-admin
 | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | `supabase/setup/full_install.sql`                            | ติดตั้งฐานข้อมูลทั้งหมดบนโปรเจกต์ว่าง                         |
 | `supabase/setup/check_install.sql`                           | ตรวจโครงสร้างหลังติดตั้ง (hash `77b289a75e91`)                |
-| `supabase/migrations/24_dynamic_workflow_core.sql`           | migration เฟส 1                                               |
-| `supabase/migrations/down/24_dynamic_workflow_core.down.sql` | ย้อนกลับเฟส 1                                                 |
+| `supabase/migrations/27_dynamic_workflow_core.sql`           | migration เฟส 1                                               |
+| `supabase/migrations/down/27_dynamic_workflow_core.down.sql` | ย้อนกลับเฟส 1                                                 |
 | `supabase/setup/check_workflow_phase1.sql`                   | ตรวจหลังรัน 24 (hash `6a0e828cd7c6`), ดูรายการผิดกฎ, สลับโหมด |
 | `supabase/migrations/README.md`                              | อธิบายการจัดไฟล์ migration                                    |
 | `lib/admin-auth.ts`                                          | `requireAdmin()` (หน้า) และ `verifyAdminApi()` (API)          |
