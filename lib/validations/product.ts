@@ -3,6 +3,8 @@ import { z } from "zod";
 // ตรงกับ constraint ใน Item table: original_price/rental_fee_per_day/deposit >= 0
 const nonNegativeNumber = z.number().min(0, "ต้องเป็นจำนวนที่ไม่ติดลบ");
 
+export const MAX_PRODUCT_IMAGES = 10;
+
 export const createProductSchema = z.object({
   categoryId: z.string().nullish(),
   itemName: z
@@ -21,6 +23,7 @@ export const createProductSchema = z.object({
         sequence: z.number().int().nullish(),
       }),
     )
+    .max(MAX_PRODUCT_IMAGES, `อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`)
     .nullish()
     .default([]),
   locations: z
@@ -60,6 +63,7 @@ export const updateProductSchema = z.object({
         sequence: z.number().int().nullish(),
       }),
     )
+    .max(MAX_PRODUCT_IMAGES, `อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`)
     .nullish(),
   locations: z
     .array(
