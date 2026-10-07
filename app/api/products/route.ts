@@ -7,6 +7,7 @@ import {
   listProductsQuerySchema,
 } from "@/lib/validations/product";
 import { getProducts } from "@/lib/products/queries";
+import { saveItemCondition } from "@/lib/products/itemCondition";
 
 export const dynamic = "force-dynamic";
 
@@ -196,6 +197,8 @@ export async function POST(request: NextRequest) {
       console.error("Error creating item listing:", error);
       return apiError("ไม่สามารถสร้างประกาศสินค้าได้", 500, error.message);
     }
+
+    await saveItemCondition(admin, String(itemId), input.condition);
 
     return apiSuccess(
       { message: "สร้างประกาศสินค้าสำเร็จ", itemId: String(itemId) },

@@ -18,7 +18,7 @@ import BookingWidget from "@/components/products/BookingWidget";
 import { StatusChip } from "@/components/products/designSystem";
 import ProductGallery from "@/components/products/ProductGallery";
 import { getProductById } from "@/lib/products/queries";
-import type { ItemStatus } from "@/lib/types/product";
+import { ITEM_CONDITION_LABELS, type ItemStatus } from "@/lib/types/product";
 
 const thbFormatter = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -120,21 +120,27 @@ export default async function ProductDetailPage({
                   <span>({product.reviewCount} รีวิว)</span>
                 </span>
 
-                <span className="h-4 w-px bg-slate-200" aria-hidden="true" />
+                {product.condition && (
+                  <>
+                    <span
+                      className="h-4 w-px bg-slate-200"
+                      aria-hidden="true"
+                    />
 
-                <span className="inline-flex items-center gap-1.5">
-                  <Tag aria-hidden="true" className="h-4 w-4 text-slate-400" />
-                  <span>
-                    สภาพ:{" "}
-                    <strong className="font-semibold text-slate-700">
-                      {product.condition === "like-new"
-                        ? "เหมือนใหม่"
-                        : product.condition === "good"
-                          ? "ดี"
-                          : "พอใช้"}
-                    </strong>
-                  </span>
-                </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Tag
+                        aria-hidden="true"
+                        className="h-4 w-4 text-slate-400"
+                      />
+                      <span>
+                        สภาพ:{" "}
+                        <strong className="font-semibold text-slate-700">
+                          {ITEM_CONDITION_LABELS[product.condition]}
+                        </strong>
+                      </span>
+                    </span>
+                  </>
+                )}
 
                 <span className="h-4 w-px bg-slate-200" aria-hidden="true" />
 

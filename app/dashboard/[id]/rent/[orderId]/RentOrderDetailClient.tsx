@@ -181,6 +181,10 @@ export default function RentOrderDetailClient({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  // updated_at ล่าสุด — ผู้ให้เช่าปฏิเสธสลิปแล้วระบบต่อเวลาชำระเงินใหม่จากค่านี้
+  const [orderUpdatedAt, setOrderUpdatedAt] = useState<string>(
+    order.updated_at,
+  );
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -195,6 +199,9 @@ export default function RentOrderDetailClient({
 
       if (latestOrder.status) {
         setCurrentStatus(latestOrder.status);
+      }
+      if (latestOrder.updated_at) {
+        setOrderUpdatedAt(latestOrder.updated_at);
       }
 
       if (Array.isArray(latestOrder.payment)) {
@@ -268,9 +275,12 @@ export default function RentOrderDetailClient({
   };
 
   const canPay = currentStatus === "awaiting_payment" && !hasPending;
+  // สลิปก่อนหน้าถูกผู้ให้เช่าปฏิเสธ และยังไม่ได้อัปโหลดใหม่
+  const slipRejected =
+    canPay && paymentsList.some((p) => p.status === "rejected");
   const showCountdown = currentStatus === "awaiting_payment" && !hasPending;
   const deadlineISO = new Date(
-    new Date(order.updated_at).getTime() + PAYMENT_WINDOW_HOURS * 3_600_000,
+    new Date(orderUpdatedAt).getTime() + PAYMENT_WINDOW_HOURS * 3_600_000,
   ).toISOString();
 
   const paymentStatusLabel =
@@ -278,7 +288,9 @@ export default function RentOrderDetailClient({
       ? "ชำระครบแล้ว"
       : hasPending
         ? "รอตรวจสอบสลิป"
-        : "ยังไม่ชำระเงิน";
+        : slipRejected
+          ? "สลิปถูกปฏิเสธ"
+          : "ยังไม่ชำระเงิน";
   const paymentShownAmount = paidAmount > 0 ? paidAmount : pendingAmount;
 
   const canHandover = currentStatus === "paid" || currentStatus === "item_sent";
@@ -473,6 +485,22 @@ export default function RentOrderDetailClient({
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
             <span>{successMsg}</span>
+          </div>
+        )}
+
+        {slipRejected && (
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+            <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+            <div>
+              <p className="text-sm font-bold text-rose-800">
+                สลิปการชำระเงินถูกปฏิเสธ
+              </p>
+              <p className="mt-0.5 text-xs text-rose-700">
+                ผู้ให้เช่าตรวจสอบแล้วไม่พบยอดเงินตามสลิป
+                กรุณาตรวจสอบการโอนแล้วอัปโหลดสลิปใหม่ภายในเวลาที่กำหนด
+                (ดูเหตุผลได้ในการแจ้งเตือน)
+              </p>
+            </div>
           </div>
         )}
 
@@ -834,7 +862,11 @@ export default function RentOrderDetailClient({
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98]"
                       >
                         <Wallet className="h-4 w-4" />
-                        <span>ชำระเงิน / อัปโหลดสลิป</span>
+                        <span>
+                          {slipRejected
+                            ? "อัปโหลดสลิปใหม่"
+                            : "ชำระเงิน / อัปโหลดสลิป"}
+                        </span>
                       </button>
                       <button
                         type="button"

@@ -187,6 +187,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
+  // ยกเลิกระหว่างรอชำระเงิน → สลิปที่ยังรอตรวจ (pending) ถือว่าถูกปฏิเสธ
+  if (status === "cancelled") {
+    await admin
+      .from("payment")
+      .update({ status: "rejected" })
+      .eq("order_id", id)
+      .eq("status", "pending");
+  }
+
   // อนุมัติคำขอนี้สำเร็จแล้ว → ยกเลิกคำขออื่นที่ยังรออนุมัติ (requested) ของสินค้า
   // เดียวกันที่ซ้อนวันกัน ทันทีโดยไม่ต้องรอครบ 8 ชม.
   if (status === "awaiting_payment") {

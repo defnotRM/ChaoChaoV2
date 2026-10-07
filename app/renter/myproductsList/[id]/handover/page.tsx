@@ -43,16 +43,11 @@ export default async function HandoverPage({
     .eq("order_id", id)
     .maybeSingle();
 
-  if (
-    error ||
-    !order ||
-    order.user_id !== user.id ||
-    !ALLOWED.includes(order.status)
-  ) {
+  if (error || !order || !ALLOWED.includes(order.status)) {
     notFound();
   }
 
-  const [itemRes, imageRes, evidenceRes] = await Promise.all([
+  const [itemRes, imageRes, evidenceRes, renterRes] = await Promise.all([
     admin
       .from("item")
       .select("item_name, user_id")
@@ -65,12 +60,28 @@ export default async function HandoverPage({
       .order("sequence", { ascending: true }),
     admin
       .from("rentalevidenceimage")
-      .select("evidence_type, created_at")
+      .select("evidence_type, image_url, created_at")
       .eq("order_id", id)
       .order("created_at", { ascending: true }),
+    admin
+      .from("useraccount")
+      .select("firstname, lastname, username")
+      .eq("user_id", order.user_id)
+      .maybeSingle(),
   ]);
 
   const ownerId = itemRes.data?.user_id ?? "";
+
+  // หน้าเดียวกันใช้ได้ทั้งผู้เช่าและผู้ให้เช่าของออเดอร์นี้ (เห็นหลักฐานของกันและกัน)
+  const viewerRole =
+    user.id === order.user_id
+      ? "renter"
+      : ownerId && user.id === ownerId
+        ? "lender"
+        : null;
+  if (!viewerRole) {
+    notFound();
+  }
   const ownerAccount = ownerId
     ? (
         await admin
@@ -87,6 +98,15 @@ export default async function HandoverPage({
       .trim() ||
     ownerAccount?.username ||
     "ผู้ปล่อยเช่า";
+
+  const renterAccount = renterRes.data;
+  const renterName =
+    [renterAccount?.firstname, renterAccount?.lastname]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    renterAccount?.username ||
+    "ผู้เช่า";
 
   const evidence = evidenceRes.data || [];
   const renterRows = evidence.filter(
@@ -113,11 +133,14 @@ export default async function HandoverPage({
     status: order.status,
     ownerName,
     ownerId,
+    renterName,
+    viewerRole,
     renterEvidence:
       renterRows.length > 0
         ? {
             count: renterRows.length,
             uploadedAt: renterRows[renterRows.length - 1].created_at,
+            imageUrls: renterRows.map((r) => r.image_url).filter(Boolean),
           }
         : null,
     lenderEvidence:
@@ -125,6 +148,7 @@ export default async function HandoverPage({
         ? {
             count: lenderRows.length,
             uploadedAt: lenderRows[lenderRows.length - 1].created_at,
+            imageUrls: lenderRows.map((r) => r.image_url).filter(Boolean),
           }
         : null,
   };

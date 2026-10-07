@@ -45,6 +45,9 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 21_itemlocation_multi.sql
 22_notification_system.sql
 23_review_reply_account_reports.sql
+24_item_images_bucket.sql
+25_item_condition.sql
+26_payment_slip_rejection.sql
 ```
 
 ทุกไฟล์ข้างบน apply เข้า production แล้ว (ไฟล์ 01-06 เก่าถูกลบไปแล้ว)

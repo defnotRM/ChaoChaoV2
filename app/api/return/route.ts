@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB/ใบ
+const MAX_RETURN_PHOTOS = 5; // หลักฐานตอนคืนของ ไม่เกิน 5 รูป
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
       const json = await request.json();
       orderId = json.orderId || "";
       const rawUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      if (rawUrls.length > MAX_RETURN_PHOTOS) {
+        return NextResponse.json(
+          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_RETURN_PHOTOS} รูป` },
+          { status: 400 },
+        );
+      }
       try {
         imageUrls = await uploadMultipleImagesToStorage(rawUrls, {
           bucket: "rental-evidence",
@@ -39,7 +46,10 @@ export async function POST(request: Request) {
           filenamePrefix: "lender_return",
         });
       } catch (uploadErr) {
-        console.warn("Storage upload failed for return evidence (JSON), fallback:", uploadErr);
+        console.warn(
+          "Storage upload failed for return evidence (JSON), fallback:",
+          uploadErr,
+        );
         imageUrls = rawUrls;
       }
     } else {
@@ -49,6 +59,12 @@ export async function POST(request: Request) {
         .getAll("photos")
         .filter((f): f is File => f instanceof File);
 
+      if (files.length > MAX_RETURN_PHOTOS) {
+        return NextResponse.json(
+          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_RETURN_PHOTOS} รูป` },
+          { status: 400 },
+        );
+      }
       for (const f of files) {
         if (!ALLOWED_TYPES.includes(f.type)) {
           return NextResponse.json(
@@ -71,7 +87,10 @@ export async function POST(request: Request) {
           filenamePrefix: "lender_return",
         });
       } catch (uploadErr) {
-        console.warn("Storage upload failed for return evidence (files), fallback to base64:", uploadErr);
+        console.warn(
+          "Storage upload failed for return evidence (files), fallback to base64:",
+          uploadErr,
+        );
         for (const f of files) {
           const buffer = Buffer.from(await f.arrayBuffer());
           const mime = f.type || "image/png";
@@ -123,7 +142,18 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-
+    // ส่งหลักฐานตอนคืนของได้ครั้งเดียว (กันส่งซ้ำจนเกินเพดาน)
+    const { count: existingCount } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_id", { count: "exact", head: true })
+      .eq("order_id", orderId)
+      .eq("evidence_type", "lender_after");
+    if ((existingCount ?? 0) > 0) {
+      return NextResponse.json(
+        { message: "คุณอัปโหลดหลักฐานสำหรับขั้นตอนนี้ไปแล้ว" },
+        { status: 409 },
+      );
+    }
     const rows = imageUrls.map((url) => ({
       order_id: orderId,
       uploaded_by: user.id,
@@ -159,6 +189,7 @@ export async function POST(request: Request) {
           ok: true,
           count: rows.length,
           status: order.status,
+          bothUploaded: false,
           message:
             "บันทึกหลักฐานของคุณเรียบร้อยแล้ว กำลังรอผู้เช่าอัปโหลดหลักฐานคืนของด้วย",
         },
@@ -189,6 +220,7 @@ export async function POST(request: Request) {
         ok: true,
         count: rows.length,
         status: outcome,
+        bothUploaded: true,
         message:
           "บันทึกหลักฐานครบทั้งสองฝ่ายแล้ว เสร็จสิ้นการเช่าเรียบร้อยแล้ว",
       },
