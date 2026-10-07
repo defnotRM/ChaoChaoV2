@@ -70,6 +70,7 @@ export function ProductCard({
         >
           <PlaceholderImage
             seed={listing.imageUrls[0] ?? listing.title}
+            alt={listing.title}
             className="h-28 w-28 shrink-0 sm:h-32 sm:w-32"
           />
 
@@ -112,6 +113,7 @@ export function ProductCard({
         <div className="relative">
           <PlaceholderImage
             seed={listing.imageUrls[0] ?? listing.title}
+            alt={listing.title}
             className="aspect-[4/3] w-full lg:aspect-[16/10]"
             rounded="rounded-none"
           />

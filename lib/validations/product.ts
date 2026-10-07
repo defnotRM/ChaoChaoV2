@@ -3,6 +3,13 @@ import { z } from "zod";
 // ตรงกับ constraint ใน Item table: original_price/rental_fee_per_day/deposit >= 0
 const nonNegativeNumber = z.number().min(0, "ต้องเป็นจำนวนที่ไม่ติดลบ");
 
+export const MAX_PRODUCT_IMAGES = 10;
+
+// ตรงกับ CHECK constraint ของ item.item_condition (migration 25)
+const itemCondition = z.enum(["like-new", "good", "fair"], {
+  message: "กรุณาเลือกสภาพการใช้งานของอุปกรณ์",
+});
+
 export const createProductSchema = z.object({
   categoryId: z.string().nullish(),
   itemName: z
@@ -13,6 +20,7 @@ export const createProductSchema = z.object({
   originalPrice: nonNegativeNumber.nullish(),
   rentalFeePerDay: nonNegativeNumber,
   deposit: nonNegativeNumber,
+  condition: itemCondition,
   images: z
     .array(
       z.object({
@@ -21,6 +29,7 @@ export const createProductSchema = z.object({
         sequence: z.number().int().nullish(),
       }),
     )
+    .max(MAX_PRODUCT_IMAGES, `อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`)
     .nullish()
     .default([]),
   locations: z
@@ -52,6 +61,7 @@ export const updateProductSchema = z.object({
   rentalFeePerDay: nonNegativeNumber.nullish(),
   deposit: nonNegativeNumber.nullish(),
   status: z.enum(["available", "rented", "maintenance", "inactive"]).optional(),
+  condition: itemCondition.optional(),
   images: z
     .array(
       z.object({
@@ -60,6 +70,7 @@ export const updateProductSchema = z.object({
         sequence: z.number().int().nullish(),
       }),
     )
+    .max(MAX_PRODUCT_IMAGES, `อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`)
     .nullish(),
   locations: z
     .array(

@@ -142,6 +142,13 @@ export default async function LenderOrderDetailPage({
 
   const avatarUrl = renter?.avatar_url || null;
 
+  // ผู้ให้เช่าส่งหลักฐานตอนคืนของแล้วหรือยัง (ใช้แสดงสถานะ "รอผู้เช่า")
+  const { count: lenderAfterCount } = await admin
+    .from("rentalevidenceimage")
+    .select("evidence_id", { count: "exact", head: true })
+    .eq("order_id", orderId)
+    .eq("evidence_type", "lender_after");
+
   const data: LendOrderData = {
     order: {
       order_id: order.order_id,
@@ -181,6 +188,7 @@ export default async function LenderOrderDetailPage({
       slip_image_url: p.slip_image_url || null,
       date: p.date,
     })),
+    lenderAfterCount: lenderAfterCount ?? 0,
   };
 
   return <LendOrderDetailClient data={data} userId={userId} />;

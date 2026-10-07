@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Heart,
   MessageCircle,
+  Pencil,
   ShieldAlert,
   ShieldCheck,
   Star,
@@ -66,7 +67,8 @@ export default function BookingWidget({
     loadUser();
   }, []);
 
-  const roles = currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
+  const roles =
+    currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
   const isOwner = Boolean(currentUser?.id && currentUser.id === ownerId);
   const isAdmin =
     currentUser !== null &&
@@ -75,7 +77,9 @@ export default function BookingWidget({
       currentUser.role === "admin");
   const isLenderOnly =
     currentUser !== null &&
-    (roles.includes("lender") || roles.includes("ผู้ให้เช่า") || currentUser.role === "lender") &&
+    (roles.includes("lender") ||
+      roles.includes("ผู้ให้เช่า") ||
+      currentUser.role === "lender") &&
     !roles.includes("renter") &&
     !roles.includes("ผู้เช่า") &&
     !roles.includes("both") &&
@@ -119,7 +123,8 @@ export default function BookingWidget({
           </button>
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-center text-xs text-rose-800">
             <p className="font-medium">
-              คุณเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ (Admin) ซึ่งไม่สามารถทำรายการเช่าอุปกรณ์ได้
+              คุณเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ (Admin)
+              ซึ่งไม่สามารถทำรายการเช่าอุปกรณ์ได้
             </p>
           </div>
         </div>
@@ -153,7 +158,8 @@ export default function BookingWidget({
           </button>
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-center text-xs text-amber-800">
             <p className="font-medium">
-              บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น หากต้องการเช่าอุปกรณ์ กรุณาเพิ่มบทบาทผู้เช่าหรือสลับบัญชี
+              บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น หากต้องการเช่าอุปกรณ์
+              กรุณาเพิ่มบทบาทผู้เช่าหรือสลับบัญชี
             </p>
           </div>
         </div>
@@ -216,29 +222,42 @@ export default function BookingWidget({
         </Link>
       </div>
 
-      {/* ปุ่มคู่: แชท / บันทึก */}
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      {/* เจ้าของประกาศ: แชท/บันทึกกับของตัวเองไม่มีความหมาย → แสดงปุ่มแก้ไขแทน */}
+      {isOwner ? (
         <Link
-          href={`/chat?userId=${ownerId}`}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
+          href={`/lender/editmyproduct/${productId}`}
+          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
         >
-          <MessageCircle className="h-4 w-4" />
-          แชท
+          <Pencil className="h-4 w-4" />
+          แก้ไขประกาศ
         </Link>
-        <button
-          type="button"
-          onClick={() => setSaved((v) => !v)}
-          aria-pressed={saved}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 ${
-            saved
-              ? "border-rose-200 bg-rose-50 text-rose-600"
-              : "border-slate-200 bg-white text-slate-700 hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
-          }`}
-        >
-          <Heart className={`h-4 w-4 ${saved ? "fill-rose-500 text-rose-500" : ""}`} />
-          {saved ? "บันทึกแล้ว" : "บันทึก"}
-        </button>
-      </div>
+      ) : (
+        /* ปุ่มคู่: แชท / บันทึก */
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Link
+            href={`/chat?userId=${ownerId}`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
+          >
+            <MessageCircle className="h-4 w-4" />
+            แชท
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSaved((v) => !v)}
+            aria-pressed={saved}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 ${
+              saved
+                ? "border-rose-200 bg-rose-50 text-rose-600"
+                : "border-slate-200 bg-white text-slate-700 hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
+            }`}
+          >
+            <Heart
+              className={`h-4 w-4 ${saved ? "fill-rose-500 text-rose-500" : ""}`}
+            />
+            {saved ? "บันทึกแล้ว" : "บันทึก"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

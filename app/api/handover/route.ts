@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB/ใบ
+// หลักฐานตอนรับ/ส่งมอบของ ได้ไม่เกิน 5 รูปต่อฝ่าย (ตรงกับ HandoverClient)
+const MAX_HANDOVER_PHOTOS = 5;
 
 function extractPhase(value: string | null | undefined): "before" | "after" {
   if (value && value.toLowerCase().includes("after")) return "after";
@@ -39,6 +41,12 @@ export async function POST(request: Request) {
       orderId = json.orderId || "";
       requestedPhase = extractPhase(json.evidenceType || json.phase);
       const rawUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      if (rawUrls.length > MAX_HANDOVER_PHOTOS) {
+        return NextResponse.json(
+          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_HANDOVER_PHOTOS} รูป` },
+          { status: 400 },
+        );
+      }
       try {
         imageUrls = await uploadMultipleImagesToStorage(rawUrls, {
           bucket: "rental-evidence",
@@ -60,6 +68,13 @@ export async function POST(request: Request) {
       const files = formData
         .getAll("photos")
         .filter((f): f is File => f instanceof File);
+
+      if (files.length > MAX_HANDOVER_PHOTOS) {
+        return NextResponse.json(
+          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_HANDOVER_PHOTOS} รูป` },
+          { status: 400 },
+        );
+      }
 
       for (const f of files) {
         if (!ALLOWED_TYPES.includes(f.type)) {
@@ -144,6 +159,19 @@ export async function POST(request: Request) {
     }
 
     const evidenceType = `${actualRole}_${requestedPhase}`;
+
+    // หลักฐานแต่ละฝ่ายต่อแต่ละช่วงส่งได้ครั้งเดียว (กันส่งซ้ำจนเกิน 5 รูป)
+    const { count: existingCount } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_id", { count: "exact", head: true })
+      .eq("order_id", orderId)
+      .eq("evidence_type", evidenceType);
+    if ((existingCount ?? 0) > 0) {
+      return NextResponse.json(
+        { message: "คุณอัปโหลดหลักฐานสำหรับขั้นตอนนี้ไปแล้ว" },
+        { status: 409 },
+      );
+    }
 
     const rows = imageUrls.map((url) => ({
       order_id: orderId,

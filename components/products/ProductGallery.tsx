@@ -74,6 +74,7 @@ export function ProductGallery({ imageUrls, title }: ProductGalleryProps) {
         >
           <PlaceholderImage
             seed={visibleImages[0]}
+            alt={`${title} รูปที่ 1`}
             className="h-56 w-full transition duration-300 group-hover:scale-[1.01] sm:h-72"
             rounded="rounded-3xl"
           />
@@ -97,6 +98,7 @@ export function ProductGallery({ imageUrls, title }: ProductGalleryProps) {
                 >
                   <PlaceholderImage
                     seed={image}
+                    alt={`${title} รูปที่ ${imageIndex + 1}`}
                     className="h-20 w-full transition duration-300 group-hover:scale-105 sm:h-24"
                     rounded="rounded-xl"
                   />
@@ -141,6 +143,8 @@ export function ProductGallery({ imageUrls, title }: ProductGalleryProps) {
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl">
               <PlaceholderImage
                 seed={images[activeIndex]}
+                alt={`${title} รูปที่ ${activeIndex + 1}`}
+                fit="contain"
                 className="h-full min-h-72 w-full"
                 rounded="rounded-2xl"
               />
