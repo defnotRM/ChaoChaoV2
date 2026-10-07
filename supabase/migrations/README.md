@@ -35,6 +35,7 @@
 23_review_reply_account_reports.sql
 24_item_images_bucket.sql
 25_item_condition.sql
+26_payment_slip_rejection.sql
 
 ไฟล์ทั้งหมดนี้ **apply เข้า production จริงแล้ว** ทุกไฟล์ — โฟลเดอร์นี้เป็นแค่
 บันทึกเก็บไว้ให้ทีมอ้างอิงตรงกัน ไม่ต้องรันซ้ำกับ production ที่มีอยู่แล้ว

@@ -34,6 +34,7 @@ import {
   User,
   X,
   XCircle,
+  ZoomIn,
 } from "lucide-react";
 
 export interface LendOrderData {
@@ -200,6 +201,9 @@ export default function LendOrderDetailClient({
   const [beforePreview, setBeforePreview] = useState<string | null>(null);
   const [afterPreview, setAfterPreview] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [slipLightboxUrl, setSlipLightboxUrl] = useState<string | null>(null);
+  const [showRejectSlipForm, setShowRejectSlipForm] = useState(false);
+  const [rejectSlipReason, setRejectSlipReason] = useState("");
   const [cancelReason, setCancelReason] = useState<string>("");
   const [cancelImagePreview, setCancelImagePreview] = useState<string | null>(
     null,
@@ -240,6 +244,16 @@ export default function LendOrderDetailClient({
       // ignore
     }
   }, [order.order_id]);
+
+  // ปิดหน้าดูสลิปเต็มจอด้วยปุ่ม Esc
+  useEffect(() => {
+    if (!slipLightboxUrl) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setSlipLightboxUrl(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [slipLightboxUrl]);
 
   // Realtime subscription + fallback poll
   useEffect(() => {
@@ -331,6 +345,47 @@ export default function LendOrderDetailClient({
     }
   }
 
+  // ปฏิเสธสลิป: payment -> rejected ออเดอร์ยังรอชำระเงิน ให้ผู้เช่าอัปโหลดใหม่
+  async function handleRejectSlip() {
+    try {
+      setIsUpdating(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+
+      const res = await fetch("/api/payments/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.order_id,
+          reason: rejectSlipReason,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ปฏิเสธสลิปไม่สำเร็จ");
+        return;
+      }
+
+      setPaymentsList((list) =>
+        list.map((p) =>
+          p.status === "pending" ? { ...p, status: "rejected" } : p,
+        ),
+      );
+      setShowRejectSlipForm(false);
+      setRejectSlipReason("");
+      setSuccessMsg(
+        result.message || "ปฏิเสธสลิปแล้ว ระบบแจ้งให้ผู้เช่าอัปโหลดสลิปใหม่",
+      );
+      router.refresh();
+    } catch (err) {
+      console.error("Error rejecting slip:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   async function handleUpdateStatus(
     newStatus: "awaiting_payment" | "rejected_by_lender",
   ) {
@@ -386,6 +441,11 @@ export default function LendOrderDetailClient({
       }
 
       setCurrentStatus("cancelled");
+      setPaymentsList((list) =>
+        list.map((p) =>
+          p.status === "pending" ? { ...p, status: "rejected" } : p,
+        ),
+      );
       setSuccessMsg("ยกเลิกรายการเช่าเรียบร้อยแล้ว");
       router.refresh();
     } catch (err) {
@@ -936,14 +996,30 @@ export default function LendOrderDetailClient({
                             <ImageIcon className="h-3.5 w-3.5" />
                             <span>รูปสลิปหลักฐาน</span>
                           </p>
-                          <img
-                            src={
-                              paymentsList.find((p) => p.status === "pending")
-                                ?.slip_image_url || ""
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSlipLightboxUrl(
+                                paymentsList.find((p) => p.status === "pending")
+                                  ?.slip_image_url || null,
+                              )
                             }
-                            alt="สลิปโอนเงิน"
-                            className="max-h-64 rounded-xl border border-amber-200 object-contain shadow-sm"
-                          />
+                            className="group relative block cursor-zoom-in overflow-hidden rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+                            aria-label="ดูสลิปโอนเงินขนาดเต็ม"
+                          >
+                            <img
+                              src={
+                                paymentsList.find((p) => p.status === "pending")
+                                  ?.slip_image_url || ""
+                              }
+                              alt="สลิปโอนเงิน"
+                              className="max-h-64 rounded-xl border border-amber-200 object-contain shadow-sm transition group-hover:opacity-90"
+                            />
+                            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
+                              <ZoomIn className="h-3.5 w-3.5" />
+                              กดเพื่อขยาย
+                            </span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -961,6 +1037,69 @@ export default function LendOrderDetailClient({
                       )}
                       <span>ตรวจสอบและยืนยันการชำระเงิน</span>
                     </button>
+
+                    {showRejectSlipForm ? (
+                      <div className="space-y-2.5 rounded-2xl border border-rose-200 bg-rose-50/60 p-4">
+                        <label
+                          htmlFor="reject-slip-reason"
+                          className="block text-xs font-bold text-rose-800"
+                        >
+                          เหตุผลที่ปฏิเสธสลิป{" "}
+                          <span className="font-normal text-rose-600">
+                            (ไม่บังคับ แจ้งให้ผู้เช่าทราบ)
+                          </span>
+                        </label>
+                        <textarea
+                          id="reject-slip-reason"
+                          rows={2}
+                          maxLength={300}
+                          value={rejectSlipReason}
+                          onChange={(e) => setRejectSlipReason(e.target.value)}
+                          placeholder="เช่น ยอดเงินไม่ตรง / ไม่พบเงินเข้าบัญชี / สลิปไม่ชัด"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-[#3f6593] focus:ring-4 focus:ring-sky-100"
+                        />
+                        <p className="text-[11px] text-rose-700">
+                          ผู้เช่าจะได้รับแจ้งเตือนให้อัปโหลดสลิปใหม่ภายใน 8 ชั่วโมง
+                          รายการเช่ายังไม่ถูกยกเลิก
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowRejectSlipForm(false);
+                              setRejectSlipReason("");
+                            }}
+                            disabled={isUpdating}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+                          >
+                            กลับ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRejectSlip}
+                            disabled={isUpdating}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+                          >
+                            {isUpdating ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5" />
+                            )}
+                            ยืนยันปฏิเสธสลิป
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowRejectSlipForm(true)}
+                        disabled={isUpdating}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 active:scale-95 disabled:opacity-50"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>ปฏิเสธสลิป ให้ผู้เช่าอัปโหลดใหม่</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2.5">
@@ -973,6 +1112,12 @@ export default function LendOrderDetailClient({
                         ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว
                         เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
                       </p>
+                      {paymentsList.some((p) => p.status === "rejected") && (
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-rose-700">
+                          <XCircle className="h-3.5 w-3.5 shrink-0" />
+                          คุณปฏิเสธสลิปก่อนหน้าแล้ว · รอผู้เช่าอัปโหลดสลิปใหม่
+                        </p>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -1300,6 +1445,56 @@ export default function LendOrderDetailClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {slipLightboxUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="สลิปโอนเงินขนาดเต็ม"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8"
+        >
+          <button
+            type="button"
+            aria-label="ปิด"
+            onClick={() => setSlipLightboxUrl(null)}
+            className="absolute inset-0 bg-[#000f22]/85 backdrop-blur-sm"
+          />
+          <div className="relative z-10 flex max-h-full w-full max-w-2xl flex-col">
+            <div className="mb-3 flex items-center justify-between gap-3 text-white">
+              <p className="text-sm font-medium">
+                สลิปโอนเงิน · ยอด {thb.format(totalPaid)}
+              </p>
+              <div className="flex items-center gap-2">
+                {/* สลิปเก่าบางรายการเก็บเป็น data URI ซึ่งเบราว์เซอร์ไม่ให้เปิดในแท็บใหม่ */}
+                {!slipLightboxUrl.startsWith("data:") && (
+                  <a
+                    href={slipLightboxUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold transition hover:bg-white/20"
+                  >
+                    เปิดในแท็บใหม่
+                  </a>
+                )}
+                <button
+                  type="button"
+                  autoFocus
+                  aria-label="ปิด"
+                  onClick={() => setSlipLightboxUrl(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <img
+              src={slipLightboxUrl}
+              alt="สลิปโอนเงินขนาดเต็ม"
+              className="max-h-[80vh] w-full rounded-2xl bg-white object-contain"
+            />
           </div>
         </div>
       )}
