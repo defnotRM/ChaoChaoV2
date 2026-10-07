@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB/ใบ
+// ผู้เช่าอัปโหลดหลักฐานตอนรับของได้ไม่เกิน 5 รูป (ตรงกับ HandoverClient)
+const MAX_RENTER_PHOTOS = 5;
 
 function extractPhase(value: string | null | undefined): "before" | "after" {
   if (value && value.toLowerCase().includes("after")) return "after";
@@ -60,6 +62,13 @@ export async function POST(request: Request) {
       const files = formData
         .getAll("photos")
         .filter((f): f is File => f instanceof File);
+
+      if (files.length > MAX_RENTER_PHOTOS) {
+        return NextResponse.json(
+          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_RENTER_PHOTOS} รูป` },
+          { status: 400 },
+        );
+      }
 
       for (const f of files) {
         if (!ALLOWED_TYPES.includes(f.type)) {
