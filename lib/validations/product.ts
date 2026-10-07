@@ -5,6 +5,11 @@ const nonNegativeNumber = z.number().min(0, "ต้องเป็นจำน�
 
 export const MAX_PRODUCT_IMAGES = 10;
 
+// ตรงกับ CHECK constraint ของ item.item_condition (migration 25)
+const itemCondition = z.enum(["like-new", "good", "fair"], {
+  message: "กรุณาเลือกสภาพการใช้งานของอุปกรณ์",
+});
+
 export const createProductSchema = z.object({
   categoryId: z.string().nullish(),
   itemName: z
@@ -15,6 +20,7 @@ export const createProductSchema = z.object({
   originalPrice: nonNegativeNumber.nullish(),
   rentalFeePerDay: nonNegativeNumber,
   deposit: nonNegativeNumber,
+  condition: itemCondition,
   images: z
     .array(
       z.object({
@@ -55,6 +61,7 @@ export const updateProductSchema = z.object({
   rentalFeePerDay: nonNegativeNumber.nullish(),
   deposit: nonNegativeNumber.nullish(),
   status: z.enum(["available", "rented", "maintenance", "inactive"]).optional(),
+  condition: itemCondition.optional(),
   images: z
     .array(
       z.object({

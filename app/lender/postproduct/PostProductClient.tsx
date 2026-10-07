@@ -21,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
+import type { ItemCondition } from "@/lib/types/product";
+import ConditionPicker from "@/components/products/ConditionPicker";
 
 interface Category {
   category_id: string;
@@ -78,6 +80,7 @@ export default function PostProductClient({
   const [originalPrice, setOriginalPrice] = useState<string>("");
   const [rentalFeePerDay, setRentalFeePerDay] = useState<string>("");
   const [deposit, setDeposit] = useState<string>("");
+  const [condition, setCondition] = useState<ItemCondition | null>(null);
 
   // Images — เก็บไฟล์ไว้ในเครื่องก่อน แล้วค่อยอัปโหลดตอนกดลงประกาศ
   const [images, setImages] = useState<LocalImage[]>([]);
@@ -267,6 +270,10 @@ export default function PostProductClient({
       setErrorMessage("กรุณาระบุเงินประกันให้ถูกต้อง");
       return;
     }
+    if (!condition) {
+      setErrorMessage("กรุณาเลือกสภาพการใช้งานของอุปกรณ์");
+      return;
+    }
     if (images.length === 0) {
       setErrorMessage("กรุณาเพิ่มรูปภาพอุปกรณ์อย่างน้อย 1 รูป");
       return;
@@ -286,6 +293,7 @@ export default function PostProductClient({
         originalPrice: originalPrice ? Number(originalPrice) : undefined,
         rentalFeePerDay: fee,
         deposit: dep,
+        condition,
         images: uploadedUrls.map((url, idx) => ({
           imageUrl: url,
           isPrimary: idx === 0,
@@ -455,6 +463,8 @@ export default function PostProductClient({
                 />
               </div>
             </div>
+
+            <ConditionPicker value={condition} onChange={setCondition} />
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">

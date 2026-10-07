@@ -22,6 +22,8 @@ import {
   X,
 } from "lucide-react";
 import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
+import type { ItemCondition as ItemUsageCondition } from "@/lib/types/product";
+import ConditionPicker from "@/components/products/ConditionPicker";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -67,6 +69,7 @@ interface InitialItem {
   rental_fee_per_day: number;
   deposit: number;
   status: string;
+  item_condition?: ItemUsageCondition | null;
   itemimage?: Array<{
     image_id?: string;
     image_url: string;
@@ -204,6 +207,9 @@ export default function EditProductClient({
   const [deposit, setDeposit] = useState<string>(
     String(initialItem.deposit !== undefined ? initialItem.deposit : ""),
   );
+  const [condition, setCondition] = useState<ItemUsageCondition | null>(
+    initialItem.item_condition ?? null,
+  );
   const [status, setStatus] = useState<string>(
     initialItem.status || "available",
   );
@@ -340,6 +346,10 @@ export default function EditProductClient({
       setErrorMessage("กรุณาระบุเงินประกันให้ถูกต้อง");
       return;
     }
+    if (!condition) {
+      setErrorMessage("กรุณาเลือกสภาพการใช้งานของอุปกรณ์");
+      return;
+    }
     if (images.length === 0) {
       setErrorMessage("กรุณาเพิ่มรูปภาพอุปกรณ์อย่างน้อย 1 รูป");
       return;
@@ -359,6 +369,7 @@ export default function EditProductClient({
         originalPrice: originalPrice ? Number(originalPrice) : undefined,
         rentalFeePerDay: fee,
         deposit: dep,
+        condition,
         status,
         locations: [
           ...meetupLocations.map((l) => ({
@@ -523,6 +534,8 @@ export default function EditProductClient({
                 />
               </div>
             </div>
+
+            <ConditionPicker value={condition} onChange={setCondition} />
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   ItemCategoryRow,
+  ItemCondition,
   ItemStatus,
   Product,
   ProductLocation,
@@ -29,6 +30,13 @@ function normalizeStatus(status: unknown): ItemStatus {
   return VALID_STATUSES.includes(status as ItemStatus)
     ? (status as ItemStatus)
     : "inactive";
+}
+
+// item_condition เป็น NULL ได้ (สินค้าก่อน migration 25 ยังไม่ได้ระบุสภาพ)
+function normalizeCondition(value: unknown): ItemCondition | null {
+  return value === "like-new" || value === "good" || value === "fair"
+    ? value
+    : null;
 }
 
 // รวมที่อยู่ย่อยเป็นบรรทัดเดียว (คัดจาก lib/mock/product.ts:256)
@@ -106,9 +114,7 @@ export async function getProducts(): Promise<Product[]> {
 
   const { data: items } = await admin
     .from("item")
-    .select(
-      "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at"
-    )
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (!items || items.length === 0) return [];
@@ -190,7 +196,7 @@ export async function getProducts(): Promise<Product[]> {
       originalPrice: toNumber(it.original_price),
       pricePerDay: toNumber(it.rental_fee_per_day),
       deposit: toNumber(it.deposit),
-      condition: "good", // ไม่มีคอลัมน์ condition ใน DB — ค่า default (ไม่ถูกแสดงผล)
+      condition: normalizeCondition(it.item_condition),
       rating: agg ? agg.sum / agg.count : 0,
       reviewCount: agg ? agg.count : 0,
       locations: locationsByItem.get(it.item_id) || [],
@@ -219,9 +225,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   const { data: it, error } = await admin
     .from("item")
-    .select(
-      "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at"
-    )
+    .select("*")
     .eq("item_id", id)
     .maybeSingle();
 
@@ -380,7 +384,7 @@ export async function getProductById(id: string): Promise<Product | null> {
     originalPrice: toNumber(it.original_price),
     pricePerDay: toNumber(it.rental_fee_per_day),
     deposit: toNumber(it.deposit),
-    condition: "good", // ไม่มีใน DB — ไม่ถูกแสดงผล
+    condition: normalizeCondition(it.item_condition),
     rating: itemRating,
     reviewCount: reviews.length,
     locations,
