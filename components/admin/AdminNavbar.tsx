@@ -12,6 +12,7 @@ import {
   X,
   ShieldAlert,
   User as UserIcon,
+  GitBranch,
 } from "lucide-react";
 
 interface AdminNavbarProps {
@@ -55,6 +56,12 @@ export function AdminNavbar({ user }: AdminNavbarProps = {}) {
       label: "ตัดสินข้อพิพาท",
       href: "/admin/disputes",
       icon: Scale,
+      exact: false,
+    },
+    {
+      label: "ตั้งค่า Workflow",
+      href: "/admin/workflow",
+      icon: GitBranch,
       exact: false,
     },
   ];
