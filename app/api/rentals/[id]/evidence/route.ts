@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return apiError(firstError, 400, parsed.error.flatten());
   }
 
-  const { evidenceType, imageUrls: rawImageUrls, newStatus } = parsed.data;
+  const { evidenceType, imageUrls: rawImageUrls } = parsed.data;
 
   let finalImageUrls = rawImageUrls;
   try {
@@ -46,7 +46,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     p_user_id: user.id,
     p_evidence_type: evidenceType,
     p_image_urls: finalImageUrls,
-    p_new_status: newStatus ?? null,
+    // ไม่รับสถานะจากผู้เรียกอีกต่อไป (เดิมเปิดช่องให้ตั้งสถานะออเดอร์เองได้) สถานะเปลี่ยนผ่าน route เฉพาะเท่านั้น
+    p_new_status: null,
   });
 
   if (error) {

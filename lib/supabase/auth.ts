@@ -1,4 +1,5 @@
 import { createClient } from "./server";
+import { rolesFromMetadata } from "@/lib/roles";
 import { createAdminClient } from "./admin";
 
 export type UserRole = "renter" | "lender" | "admin";
@@ -46,8 +47,7 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
       .filter(Boolean) as UserRole[];
 
     if (roles.length === 0) {
-      const uRole = user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
-      roles = (uRole === "both" ? ["renter", "lender"] : [uRole]) as UserRole[];
+      roles = rolesFromMetadata(user.user_metadata);
     }
 
     return {

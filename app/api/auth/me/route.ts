@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rolesFromMetadata } from "@/lib/roles";
 import { cookies } from "next/headers";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,8 +39,7 @@ export async function GET() {
         { onConflict: "user_id" }
       );
 
-      const uRole = user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
-      const rolesToAssign = uRole === "both" ? ["renter", "lender"] : [uRole];
+      const rolesToAssign = rolesFromMetadata(user.user_metadata);
       const { data: roleRows } = await admin
         .from("role")
         .select("role_id, role_type")
@@ -81,8 +81,7 @@ export async function GET() {
       .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {
-      const uRole = user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
-      roles = uRole === "both" ? ["renter", "lender"] : [uRole];
+      roles = rolesFromMetadata(user.user_metadata);
     }
 
     const cookieStore = await cookies();
@@ -97,7 +96,7 @@ export async function GET() {
         ? "lender"
         : roles.includes("renter")
         ? "renter"
-        : user.user_metadata?.role || "renter";
+        : "renter";
 
     const avatarUrl = profile?.avatar_url || null;
 

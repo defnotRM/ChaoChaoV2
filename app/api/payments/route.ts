@@ -52,11 +52,11 @@ export async function POST(request: Request) {
             filenamePrefix: "slip",
           });
         } catch (uploadErr) {
-          console.warn(
-            "Storage upload failed for JSON slip, fallback to raw input:",
-            uploadErr,
+          console.error("Storage upload failed for JSON slip:", uploadErr);
+          return NextResponse.json(
+            { message: "อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
+            { status: 502 },
           );
-          slipDataUri = json.slipImageUrl;
         }
       }
     } else {

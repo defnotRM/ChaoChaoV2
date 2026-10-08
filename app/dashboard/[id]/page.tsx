@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { rolesFromMetadata } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import DashboardUserClient from "./DashboardUserClient";
@@ -55,8 +56,6 @@ export default async function UserDashboardPage({
       const uName =
         u.user_metadata?.username || u.email?.split("@")[0] || "ผู้ใช้งาน";
       const uEmail = u.email || `${uName}@chaochao.local`;
-      const uRole =
-        u.user_metadata?.signup_role || u.user_metadata?.role || "renter";
 
       await admin.from("useraccount").upsert(
         {
@@ -69,7 +68,7 @@ export default async function UserDashboardPage({
         { onConflict: "user_id" },
       );
 
-      const rolesToAssign = uRole === "both" ? ["renter", "lender"] : [uRole];
+      const rolesToAssign = rolesFromMetadata(u.user_metadata);
       const { data: roleRows } = await admin
         .from("role")
         .select("role_id, role_type")
