@@ -2,7 +2,9 @@
 
 เอกสารนี้สรุป endpoint ที่ Role B (Port) เตรียมไว้ให้ Fanta (Product frontend)
 และ Yok/Toey (Rental, Payment, Dashboard) เริ่มต่อ frontend คู่ขนานได้เลย
-โดยไม่ต้องรอ backend deploy จริง — ทุก field ตรงกับ `supabase/migrations/01_schema.sql`
+โดยไม่ต้องรอ backend deploy จริง — ทุก field ตรงกับ schema ใน `supabase/setup/full_install.sql` (ไฟล์ `01_schema.sql` เดิมถูกลบแล้ว)
+
+> หมายเหตุ: เอกสารนี้เขียนตอนเริ่มโปรเจกต์ โค้ดใน `app/api/**` เป็นตัวจริง หากขัดกันให้ยึดโค้ด (เช่น ชื่อสถานะ `rejected_by_lender` และการตรวจกฎผ่าน `lib/workflow.ts`)
 
 ทุก endpoint คืนค่า error ในรูปแบบเดียวกัน: `{ "message": "...", "details"?: ... }`
 
@@ -84,11 +86,11 @@
 ### `PATCH /api/rentals/[id]`
 เปลี่ยนสถานะแบบไม่กระทบเงิน — ใช้สำหรับปุ่ม "อนุมัติ/ปฏิเสธ/ยกเลิก" ของเจ้าของสินค้า
 
-**Body** `{ "status": "awaiting_payment" | "rejected" | "cancelled" }`
+**Body** `{ "status": "awaiting_payment" | "rejected_by_lender" | "cancelled" }`
 กติกาการเปลี่ยนสถานะที่อนุญาต:
 | จากสถานะ | ไปได้เป็น |
 |---|---|
-| `requested` | `awaiting_payment`, `rejected` |
+| `requested` | `awaiting_payment`, `rejected_by_lender` |
 | `requested`, `awaiting_payment` | `cancelled` |
 
 สถานะอื่น (`paid`, `completed` ฯลฯ) เปลี่ยนผ่าน Payment/Settle endpoint เท่านั้น

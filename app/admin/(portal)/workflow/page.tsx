@@ -13,7 +13,6 @@ import {
   Edit2,
   X,
   Save,
-  Filter,
   Check,
   ChevronRight,
   Info,
@@ -136,7 +135,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ดึงข้อมูลการตั้งค่าไม่สำเร็จ");
       }
-    } catch (err: any) {
+    } catch {
       showToast("error", "เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อดึงการตั้งค่า");
     }
   }, []);
@@ -162,7 +161,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ดึงประวัติ workflow ไม่สำเร็จ");
       }
-    } catch (err: any) {
+    } catch {
       showToast("error", "เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อดึงประวัติ");
     }
   }, [filterViolationsOnly, selectedWorkflowCode]);
@@ -174,9 +173,18 @@ export default function AdminWorkflowPage() {
     setLoading(false);
   }, [fetchConfigs, fetchHistory]);
 
+  // โหลดครั้งแรกและเมื่อเปลี่ยนตัวกรอง (loading เริ่มเป็น true อยู่แล้ว จึงไม่ต้อง setState ใน effect)
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    let cancelled = false;
+    // setState เกิดหลัง await ของ fetch เท่านั้น ไม่ใช่แบบ synchronous
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    Promise.all([fetchConfigs(), fetchHistory()]).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchConfigs, fetchHistory]);
 
   // บันทึกการเปลี่ยนโหมด
   const handleModeChange = async (targetMode: string) => {
@@ -203,7 +211,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ไม่สามารถเปลี่ยนโหมดได้");
       }
-    } catch (err: any) {
+    } catch {
       showToast("error", "เกิดข้อผิดพลาดในการเปลี่ยนโหมด");
     } finally {
       setModeChanging(false);
@@ -228,7 +236,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "อัปเดตไม่สำเร็จ");
       }
-    } catch (err: any) {
+    } catch {
       showToast("error", "เกิดข้อผิดพลาดในการบันทึกค่า");
     } finally {
       setSavingKey(false);
