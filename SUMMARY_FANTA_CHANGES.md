@@ -109,7 +109,7 @@ AuthRefreshDiscardedError: Refresh result discarded: session state changed mid-f
    - `/api/auth/me`
    - `/api/notifications`
    - `/api/dashboard/*`
-2. `middleware.ts` ตั้ง matcher ข้าม `api` ไว้ API แต่ละตัวจึงต่ออายุ token เองพร้อมกัน
+2. `proxy.ts` (เดิมชื่อ middleware.ts) ตั้ง matcher ข้าม `api` ไว้ API แต่ละตัวจึงต่ออายุ token เองพร้อมกัน
 3. Supabase ตอบ 429 ต่ออายุไม่สำเร็จ แล้วคำขอถัดไปก็ต่ออายุใหม่และโดน 429 อีก วนซ้ำ
 4. หน้าออเดอร์ได้ user เป็น `null` เลยสั่ง `redirect("/login")`
 
