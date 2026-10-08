@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { enforceTransition } from "@/lib/workflow";
 import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,10 @@ export async function POST(request: Request) {
           filenamePrefix: `handover_${requestedPhase}`,
         });
       } catch (uploadErr) {
-        console.warn("Storage upload failed for handover (JSON), fallback:", uploadErr);
+        console.warn(
+          "Storage upload failed for handover (JSON), fallback:",
+          uploadErr,
+        );
         imageUrls = rawUrls;
       }
       // หมายเหตุ: ไม่อ่าน json.userId แล้ว — ใช้ user.id จาก session เท่านั้น
@@ -98,7 +102,10 @@ export async function POST(request: Request) {
           filenamePrefix: `handover_${requestedPhase}`,
         });
       } catch (uploadErr) {
-        console.warn("Storage upload failed for handover (files), fallback to base64:", uploadErr);
+        console.warn(
+          "Storage upload failed for handover (files), fallback to base64:",
+          uploadErr,
+        );
         for (const f of files) {
           const buffer = Buffer.from(await f.arrayBuffer());
           const mime = f.type || "image/png";
@@ -159,6 +166,23 @@ export async function POST(request: Request) {
     }
 
     const evidenceType = `${actualRole}_${requestedPhase}`;
+
+    // ตรวจสถานะออเดอร์ก่อนรับหลักฐาน: ช่วงก่อนเช่าต้องเป็น paid, ช่วงหลังเช่าต้องเป็น item_sent
+    const gate = await enforceTransition({
+      workflow: "RENTAL_ORDER",
+      from: order.status,
+      to: requestedPhase === "before" ? "item_sent" : "completed",
+      actors: [actualRole],
+      codeAllowedFrom:
+        requestedPhase === "before" ? ["paid"] : ["item_sent", "item_received"],
+      label: "handover",
+    });
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนรับ-ส่งมอบของ" },
+        { status: 409 },
+      );
+    }
 
     // หลักฐานแต่ละฝ่ายต่อแต่ละช่วงส่งได้ครั้งเดียว (กันส่งซ้ำจนเกิน 5 รูป)
     const { count: existingCount } = await admin

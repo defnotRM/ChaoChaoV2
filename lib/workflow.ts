@@ -130,3 +130,50 @@ export async function checkTransition(
     return null;
   }
 }
+
+// ตัวตรวจกลางสำหรับ route ที่เขียนสถานะด้วย service role (ฐานข้อมูลตรวจ "ใครกด" ไม่ได้ แอปจึงต้องตรวจเอง)
+//   static  = ใช้กฎในโค้ด (codeAllowedFrom)
+//   shadow  = ใช้กฎในโค้ดเป็นตัวตัดสิน แต่เทียบกับฐานข้อมูลและ console.warn เมื่อไม่ตรงกัน
+//   dynamic = ใช้กฎจากฐานข้อมูลเป็นตัวตัดสิน (อ่านฐานข้อมูลไม่ได้ = ใช้กฎในโค้ด)
+export interface EnforceArgs {
+  workflow: string;
+  from: string;
+  to: string;
+  actors: WorkflowActor[];
+  codeAllowedFrom: string[];
+  label?: string;
+}
+
+export interface EnforceResult {
+  allowed: boolean;
+  mode: WorkflowMode;
+  source: "code" | "db";
+  reason: string;
+}
+
+export async function enforceTransition(
+  a: EnforceArgs,
+): Promise<EnforceResult> {
+  const codeAllowed = a.codeAllowedFrom.includes(a.from);
+  const mode = await getWorkflowMode();
+  const byCode: EnforceResult = {
+    allowed: codeAllowed,
+    mode,
+    source: "code",
+    reason: codeAllowed ? "ok" : "code_rule",
+  };
+  if (mode === "static") return byCode;
+
+  const db = await checkTransition(a.workflow, a.from, a.to, a.actors);
+  if (!db) return byCode;
+
+  if (db.ok !== codeAllowed) {
+    console.warn(
+      `[workflow] กฎในโค้ดกับฐานข้อมูลไม่ตรงกัน ${a.label ?? a.workflow} ${a.from}->${a.to} code=${codeAllowed} db=${db.ok} (${db.reason})`,
+    );
+  }
+  if (mode === "dynamic") {
+    return { allowed: db.ok, mode, source: "db", reason: db.reason };
+  }
+  return byCode;
+}
