@@ -62,10 +62,10 @@ export async function GET() {
       currentMode,
       configs: enrichedConfigs,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("GET /api/admin/workflow/config error:", err);
     return NextResponse.json(
-      { message: "เกิดข้อผิดพลาดในการดึงข้อมูล", error: err.message },
+      { message: "เกิดข้อผิดพลาดในการดึงข้อมูล", error: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
   }
@@ -220,10 +220,10 @@ export async function PATCH(req: NextRequest) {
       value: strVal,
       updated_at: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("PATCH /api/admin/workflow/config error:", err);
     return NextResponse.json(
-      { message: "เกิดข้อผิดพลาดในการอัปเดตการตั้งค่า", error: err.message },
+      { message: "เกิดข้อผิดพลาดในการอัปเดตการตั้งค่า", error: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
   }

@@ -153,10 +153,10 @@ export async function GET(req: NextRequest) {
         name: w.workflow_name,
       })),
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("GET /api/admin/workflow/history error:", err);
     return NextResponse.json(
-      { message: "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติ", error: err.message },
+      { message: "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติ", error: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
   }
