@@ -12,6 +12,7 @@ const ALLOWED = [
   "item_received",
   "item_returned",
   "awaiting_additional_payment",
+  "completed",
 ];
 
 export default async function ReturnPage({
