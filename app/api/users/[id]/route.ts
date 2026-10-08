@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rolesFromMetadata } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
@@ -62,12 +63,7 @@ export async function GET(
             created_at: au.created_at || new Date().toISOString(),
           };
 
-          const uRole =
-            au.user_metadata?.signup_role ||
-            au.user_metadata?.role ||
-            "renter";
-          const rolesToAssign =
-            uRole === "both" ? ["renter", "lender"] : [uRole];
+          const rolesToAssign = rolesFromMetadata(au.user_metadata);
           const { data: roleRows } = await admin
             .from("role")
             .select("role_id, role_type")
@@ -127,11 +123,7 @@ export async function GET(
     if (roles.length === 0) {
       try {
         const { data: authUser } = await admin.auth.admin.getUserById(userId);
-        const uRole =
-          authUser?.user?.user_metadata?.signup_role ||
-          authUser?.user?.user_metadata?.role ||
-          "renter";
-        roles = uRole === "both" ? ["renter", "lender"] : [uRole];
+        roles = rolesFromMetadata(authUser?.user?.user_metadata);
       } catch {
         roles = ["renter"];
       }

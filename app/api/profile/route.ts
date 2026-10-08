@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rolesFromMetadata } from "@/lib/roles";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
@@ -114,9 +115,7 @@ export async function GET() {
       .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {
-      const uRole =
-        user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
-      roles = uRole === "both" ? ["renter", "lender"] : [uRole];
+      roles = rolesFromMetadata(user.user_metadata);
     }
 
     const phones = profile.phone ? [profile.phone] : [];

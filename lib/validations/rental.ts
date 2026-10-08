@@ -39,19 +39,6 @@ export const uploadEvidenceSchema = z.object({
     "lender_after",
   ]),
   imageUrls: z.array(z.string().url()).min(1, "ต้องแนบรูปอย่างน้อย 1 รูป"),
-  newStatus: z
-    .enum([
-      "requested",
-      "awaiting_payment",
-      "paid",
-      "item_sent",
-      "item_returned",
-      "awaiting_additional_payment",
-      "completed",
-      "rejected_by_lender",
-      "cancelled",
-    ])
-    .optional(),
 });
 
 export const listRentalOrdersQuerySchema = z.object({

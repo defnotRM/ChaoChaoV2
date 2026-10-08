@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { rolesFromMetadata } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
@@ -141,9 +142,7 @@ export async function POST(request: NextRequest) {
       .filter(Boolean);
 
     if (roles.length === 0) {
-      const uRole =
-        user.user_metadata?.signup_role || user.user_metadata?.role || "renter";
-      roles = uRole === "both" ? ["renter", "lender"] : [uRole];
+      roles = rolesFromMetadata(user.user_metadata);
     }
 
     const isLender = roles.includes("lender") || roles.includes("admin");
