@@ -433,7 +433,10 @@ BEGIN
   SET status = 'cancelled', updated_at = NOW()
   WHERE ro.status = 'awaiting_payment'
     AND ro.updated_at < NOW() - INTERVAL '8 hours'
-    AND NOT EXISTS (SELECT 1 FROM payment p WHERE p.order_id = ro.order_id);
+        AND NOT EXISTS (
+      SELECT 1 FROM payment p
+      WHERE p.order_id = ro.order_id AND p.status IN ('pending', 'paid')
+    );
 
   WITH auto_approved AS (
     UPDATE payment
@@ -804,7 +807,9 @@ CREATE TABLE public.item (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     rented integer DEFAULT 0 NOT NULL,
     average_rating numeric(3,2) DEFAULT 0 NOT NULL,
+        item_condition text,
     CONSTRAINT item_deposit_check CHECK ((deposit >= (0)::numeric)),
+        CONSTRAINT item_item_condition_check CHECK ((item_condition = ANY (ARRAY['like-new'::text, 'good'::text, 'fair'::text]))),
     CONSTRAINT item_original_price_check CHECK ((original_price >= (0)::numeric)),
     CONSTRAINT item_rental_fee_per_day_check CHECK ((rental_fee_per_day >= (0)::numeric)),
     CONSTRAINT item_status_check CHECK ((status = ANY (ARRAY['available'::text, 'rented'::text, 'maintenance'::text, 'inactive'::text])))
@@ -2141,7 +2146,8 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
   ('avatars',         'avatars',         true, 5242880,  ARRAY['image/jpeg','image/png','image/webp','image/gif']),
   ('banners',         'banners',         true, 5242880,  ARRAY['image/jpeg','image/png','image/webp','image/gif']),
   ('rental-evidence', 'rental-evidence', true, NULL,     NULL),
-  ('slips',           'slips',           true, 10485760, ARRAY['image/jpeg','image/png','image/webp','application/pdf'])
+  ('slips',           'slips',           true, 10485760, ARRAY['image/jpeg','image/png','image/webp','application/pdf']),
+    ('item-images',     'item-images',     true, 5242880,  ARRAY['image/jpeg','image/png','image/webp'])
 ON CONFLICT (id) DO UPDATE SET
   public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit,

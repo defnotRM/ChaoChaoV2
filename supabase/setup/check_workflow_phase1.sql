@@ -6,11 +6,11 @@
 -- ----------------------------------------------------------------------------
 -- คิวรีที่ 1: ตรวจหลังรัน 27_dynamic_workflow_core.sql
 -- ผลที่ควรได้ (1 แถว):
---   structure_hash = 6a0e828cd7c6   fingerprint_rows = 174
---   workflows = 7   states = 40   transitions = 51   mode = static
+--   structure_hash = 4449b52cd098   fingerprint_rows = 174
+--   workflows = 7   states = 40   transitions = 53 (51 ถ้ายังไม่ได้รัน 28)   mode = static
 -- ถ้าตัวเลขอื่นตรงแต่ structure_hash ไม่ตรง ให้ส่งผลมา (ต่างจากเครื่องทดสอบของผมที่ใช้ Postgres รุ่นอื่น
 -- ผมจะส่งคิวรีที่ชี้ว่าวัตถุไหนต่างให้)
--- ถ้าย้อนกลับด้วยไฟล์ .down.sql แล้ว ให้ใช้ check_install.sql ตรวจ: structure_hash ต้องเป็น 77b289a75e91
+-- ถ้าย้อนกลับด้วยไฟล์ .down.sql แล้ว ให้ใช้ check_install.sql ตรวจ: structure_hash ต้องเป็น 9483396d90ab
 -- ----------------------------------------------------------------------------
 WITH
 cols AS (SELECT 'cols' k, c.relname::text nm, left(md5(string_agg(a.attname||' '||format_type(a.atttypid,a.atttypmod)||' '||a.attnotnull::text||' '||coalesce(pg_get_expr(d.adbin,d.adrelid),''), ',' ORDER BY a.attname COLLATE "C")),8) h

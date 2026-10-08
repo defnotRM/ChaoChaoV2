@@ -2,7 +2,7 @@
 -- 27_dynamic_workflow_core.down.sql — ย้อนกลับ Dynamic Workflow เฟส 1 ทั้งหมด
 --
 -- ผลลัพธ์: ฐานข้อมูลกลับเป็นโครงสร้างก่อนรัน 27_dynamic_workflow_core.sql ทุกประการ
--- (ทดสอบแล้วว่าค่า structure_hash จาก check_install.sql กลับมาเป็น 77b289a75e91)
+-- (ทดสอบแล้วว่าค่า structure_hash จาก check_install.sql กลับมาเป็น 9483396d90ab)
 --
 -- ข้อควรระวัง: ข้อมูลในตาราง workflow_history (ประวัติเปลี่ยนสถานะ/การละเมิดที่โหมด shadow บันทึกไว้)
 -- และค่าที่แก้ใน system_config จะหายไป ถ้าต้องการเก็บไว้ ให้ export ก่อน

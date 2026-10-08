@@ -5,9 +5,9 @@
 --          (รันคิวรีที่ 1 แยกจากคิวรีที่ 2 เพราะ SQL Editor แสดงผลลัพธ์ของคำสั่งสุดท้ายเท่านั้น)
 --
 -- ผลที่ควรได้จากคิวรีที่ 1 (1 แถว):
---   structure_hash   = 77b289a75e91
+--   structure_hash   = 9483396d90ab
 --   fingerprint_rows = 132
---   tables = 22, roles = 3, report_types = 5, cancel_types = 3, categories = 5, buckets = 4
+--   tables = 22, roles = 3, report_types = 5, cancel_types = 3, categories = 5, buckets = 5
 --
 -- ผลที่ควรได้จากคิวรีที่ 2: 2 แถว (process-expired-orders และ daily-reminders)
 --
