@@ -55,6 +55,11 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 **ไฟล์ workflow (apply เข้า production แล้วเมื่อ 8 ต.ค. 2026 โหมดเริ่มต้น shadow):**
 `27_dynamic_workflow_core.sql`, `28_workflow_payment_reject.sql`, `29_workflow_config_wiring.sql` (ไฟล์ย้อนกลับอยู่ใน `down/` ชื่อเดียวกันลงท้าย `.down.sql`)
 
+**ไฟล์ความปลอดภัย (ยังไม่ได้ apply เข้า production ต้องทดสอบบน staging และรันโดยเจ้าของฐานข้อมูลก่อน):**
+`30_secdef_execute_hardening.sql` (ถอนสิทธิ์เรียกฟังก์ชัน SECURITY DEFINER ผ่าน REST และผูก `p_caller_id` ของ `settle_rental_order` / `cancel_rental_order` กับ `auth.uid()`),
+`31_advisor_hardening.sql` (ตั้ง `search_path` ให้ `set_updated_at` และย้าย `btree_gist` ไป schema `extensions`)
+ไฟล์ย้อนกลับอยู่ใน `down/` เช่นเดียวกัน หมายเหตุ: `full_install.sql` ยังเป็นสภาพหลัง 26 ส่วน 27–31 ให้รันต่อท้ายตามลำดับ
+
 ## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
 
 ตรวจเมื่อทำ `full_install.sql` โดยเล่นซ้ำ 07→23 บน Postgres ว่าง แล้วเทียบโครงสร้างกับ production
