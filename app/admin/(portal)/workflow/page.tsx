@@ -178,11 +178,6 @@ export default function AdminWorkflowPage() {
     loadAll();
   }, [loadAll]);
 
-  // เมื่อเปลี่ยนตัวกรองประวัติ
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
   // บันทึกการเปลี่ยนโหมด
   const handleModeChange = async (targetMode: string) => {
     if (targetMode === "dynamic") {

@@ -35,14 +35,22 @@ export async function GET(req: NextRequest) {
     }, {} as Record<string, { workflow_code: string; workflow_name: string }>);
 
     // 2. ดึงข้อมูล States ทั้งหมดไว้เป็น cache map
-    const { data: states } = await admin
+    const { data: states, error: statesError } = await admin
       .from("workflow_state")
-      .select("state_id, state_code, name_th");
+      .select("state_id, state_code, state_name_th");
+
+    if (statesError) {
+      console.error("Query workflow_state error:", statesError);
+      return NextResponse.json(
+        { message: "ไม่สามารถดึงข้อมูลสถานะ workflow ได้", error: statesError.message },
+        { status: 500 }
+      );
+    }
 
     const stateMap = (states || []).reduce((acc, s) => {
       acc[s.state_id] = s;
       return acc;
-    }, {} as Record<string, { state_code: string; name_th: string }>);
+    }, {} as Record<string, { state_code: string; state_name_th: string }>);
 
     // 3. ดึงข้อมูล Transitions ทั้งหมดไว้เป็น cache map
     const { data: transitions } = await admin
@@ -123,9 +131,9 @@ export async function GET(req: NextRequest) {
         workflow_name: wf?.workflow_name || "ไม่ระบุวงจร",
         entity_id: h.entity_id,
         from_state_code: fromSt?.state_code || "(เริ่มต้น)",
-        from_state_name: fromSt?.name_th || "(เริ่มต้น)",
+        from_state_name: fromSt?.state_name_th || "(เริ่มต้น)",
         to_state_code: toSt?.state_code || "unknown",
-        to_state_name: toSt?.name_th || "ไม่ระบุ",
+        to_state_name: toSt?.state_name_th || "ไม่ระบุ",
         action_code: trans?.action_code || null,
         action_description: trans?.description || null,
         changed_by_username: h.changed_by ? userMap[h.changed_by] || "ผู้ใช้" : "ระบบ (System / Cron)",
