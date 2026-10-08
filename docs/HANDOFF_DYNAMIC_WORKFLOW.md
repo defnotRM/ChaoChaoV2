@@ -8,6 +8,8 @@
 > ที่เอกสารนี้เขียนว่า "migration 24" ให้อ่านเป็น "migration 27" ค่า hash หลังรัน 27 บนฐานข้อมูลที่มี 25/26 อยู่แล้วคือ `4449b52cd098`
 > ค่า hash ที่เขียนในเอกสารนี้ (`77b289a75e91`, `6a0e828cd7c6`) เป็นค่าก่อน migration 25/26 ของ PR #9 ให้ใช้ค่าปัจจุบันแทน คือ ฐานเปล่าหลัง `full_install.sql` = `9483396d90ab`, หลังรัน 27 = `4449b52cd098` (51 เส้นทาง), หลังรัน 28 ก็ยังเป็น `4449b52cd098` แต่เส้นทางเป็น 53
 
+> **สถานะล่าสุด (8 ต.ค. 2026):** migration 27, 28 และ 29 **apply บน production แล้ว** โหมดบน production คือ `shadow` (จดอย่างเดียว ไม่บล็อกใคร) ดูรายละเอียดในหัวข้อ 2
+
 ## 0. วิธีใช้ไฟล์นี้
 
 ให้โรมันวางข้อความนี้ให้ AI ของเขาพร้อมแนบไฟล์นี้:
@@ -23,14 +25,12 @@
 
 ## 1. สรุป 1 นาที
 
-- **เป้าหมาย:** ทำให้ฐานข้อมูลรองรับ dynamic workflow คือ สถานะ เส้นทางเปลี่ยนสถานะ ผู้ที่ทำได้ และค่าตั้งระบบ
-  ถูกเก็บเป็น **ข้อมูลในตาราง** แทนที่จะฝังในโค้ด/ฟังก์ชัน และต้องมีวิธีย้อนกลับเป็นแบบเดิมได้ถ้าพัง
-- **วิธีทำ:** "เพิ่ม ไม่แทนที่" คือเพิ่มตาราง/คอลัมน์/trigger โดยไม่ลบของเดิม และมีสวิตช์ 3 โหมด
-  (`static` เหมือนเดิม, `shadow` จดอย่างเดียว, `dynamic` บังคับจริง) สลับด้วยคำสั่ง SQL เดียว
-- **ทำที่ไหน:** บน **Supabase staging** (โปรเจกต์ของ WiWat ใน org ตัวเอง) และ branch `dynamic-workflow`
-  ไม่ใช่ production (production อยู่ใน org ของโรมัน project `awnwvckyjkkuhufmdgas` ห้ามแตะ)
-- **เฟส 1 (ฐานข้อมูล) เสร็จแล้ว** และผ่านการทดสอบ ตอนนี้อยู่ขั้น **ทดสอบแอปจริงในโหมด shadow**
-  แล้วจึงแก้ข้อมูลเส้นทาง ต่อด้วยโค้ดแอปและเปิดโหมด dynamic
+- **เป้าหมาย:** ย้ายกฎของสถานะ (เส้นทางเปลี่ยนสถานะ ผู้ที่ทำได้ ค่าเวลา/ค่าธรรมเนียม) จากโค้ดและฟังก์ชันไปเป็น **ข้อมูลในตาราง**
+  มีสวิตช์ 3 โหมด (`static` เหมือนเดิม, `shadow` จดอย่างเดียว, `dynamic` บังคับจริง) และย้อนกลับได้ด้วยคำสั่งเดียว
+- **วิธีทำ:** "เพิ่ม ไม่แทนที่" คือเพิ่มตาราง/คอลัมน์/trigger โดยไม่ลบของเดิม
+- **สถานะ:** ฐานข้อมูล (migration 27, 28, 29) และโค้ดตัวอ่านกฎ (`lib/workflow.ts`) อยู่บน **production แล้ว** โหมดคือ **`shadow`**
+  (production = โปรเจกต์ `awnwvckyjkkuhufmdgas` ใน org ของโรมัน) ส่วน staging ของ WiWat (org ตัวเอง) ใช้ทดสอบเท่านั้น
+- **ที่เหลือหลัก:** หน้าแอดมินตั้งค่า workflow (งานของโรมัน), ดูรายการผิดกฎจาก production 1-2 วันที่มีผู้ใช้จริง แล้วค่อยเปิดโหมด `dynamic`
 
 ---
 
@@ -38,28 +38,27 @@
 
 ### ทำเสร็จและยืนยันแล้ว
 
-| รายการ                                                                               | หลักฐาน                                                                                                                             |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| ไฟล์ติดตั้งฐานข้อมูลรวมไฟล์เดียว `supabase/setup/full_install.sql` ตรงกับ production | เทียบ hash 127 จาก 132 รายการ ที่เหลือเป็นตาราง `test_results` ที่ตั้งใจไม่ใส่                                                      |
-| ติดตั้ง `full_install.sql` บน staging แล้ว                                           | WiWat รันแล้ว `structure_hash = 77b289a75e91` ตรงกับที่คาด                                                                          |
-| Migration 24 (เฟส 1) เขียนและทดสอบบน Postgres จำลอง                                  | ทดสอบทั้ง 3 โหมด จำลองช่องโหว่ F1/F2 และทดสอบ UP → DOWN 2 รอบ hash กลับเป็นเดิม                                                     |
-| Migration 24 รันบน staging แล้ว                                                      | WiWat รันแล้ว `structure_hash = 6a0e828cd7c6`, 174 แถว, 7 วงจร, 40 สถานะ, 51 เส้นทาง                                                |
-| Commit และ push ขึ้น GitHub                                                          | branch `dynamic-workflow` (commit `f269045`)                                                                                        |
-| แอปเวอร์ชัน staging รันได้ที่ port 3001 ชี้ฐานข้อมูล staging                         | สมัครและล็อกอินได้                                                                                                                  |
-| tag `v1-static-workflow` (จุดย้อนกลับของโค้ด)                                        | มีทั้งในเครื่องและบน remote ชี้ commit `3fb0b76` (ปลาย `Port` ที่มี `full_install.sql`)                                             |
-| สภาพ staging ล่าสุด                                                                  | `workflow_mode = shadow`, 7 วงจร / 40 สถานะ / 51 เส้นทางตรง, **`orders = 0`, `workflow_history = 0`** (ยังไม่มีข้อมูลทดสอบ)         |
-| `.env.local` ของ WiWat                                                               | อยู่ใน `.gitignore`, มี 3 ตัวแปรที่ต้องใช้, ไม่ชี้ production (ตรวจโดย Claude Code)                                                 |
-| รายงานการตรวจโค้ดกับ branch จริง                                                     | ข้อความอ้างอิงเกี่ยวกับ `allowedFrom`, `newStatus` (F1), การไม่ตรวจสถานะใน payments/approve, handover, return ตรงกับโค้ดจริงทั้งหมด |
+| รายการ                                                                        | หลักฐาน                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supabase/setup/full_install.sql` ตรงกับ production หลัง migration 26         | ติดตั้งบนฐานข้อมูลว่างแล้ว `structure_hash = 9483396d90ab`, 132 แถว                                                                                                                                                           |
+| migration 27 (ฐานข้อมูลเฟส 1) บน production                                   | `structure_hash = 4449b52cd098`, 174 แถว (เมื่อ **ตัดตาราง `test_results` ออก** ซึ่งมีเฉพาะบน production), ข้อมูลที่ seed ตรงต้นแบบ (md5 ของสถานะ เส้นทาง ค่าตั้ง), ข้อมูลธุรกิจไม่เปลี่ยน (ออเดอร์ 22, สินค้า 5, การชำระ 15) |
+| migration 28 (เส้นทางปฏิเสธสลิป) บน production                                | เส้นทางรวม 53, ของการชำระเงิน 5                                                                                                                                                                                               |
+| migration 29 (ให้ cron/ปิดยอด/ยกเลิกอ่านค่าจาก `system_config`) บน production | ทดสอบเทียบกับฟังก์ชันเดิม 76 บรรทัดเหมือนกันทุกบรรทัด, แก้ค่าแล้วมีผลจริง, hash ฟังก์ชันตรง, cron รอบถัดไปสำเร็จ                                                                                                              |
+| โค้ดแอป `lib/workflow.ts` + `PATCH /api/rentals/[id]` ใช้กฎตามโหมด            | เทียบกฎจากฐานข้อมูลกับกฎเดิม 162 กรณี ไม่ตรงกัน 0, fallback ถูกต้อง (merge เข้า `main` แล้ว PR #12)                                                                                                                           |
+| บั๊กรูปสินค้า/สลิป/ส่งมอบ-คืนของ/หน้าคืนของ 404                               | แก้และ merge เข้า `main` แล้ว (PR #9, #10, #11)                                                                                                                                                                               |
+| ทดสอบบน staging                                                               | กลุ่มผู้เช่า/ผู้ให้เช่าเล่นแล้วบางส่วน (7 จาก 43 เส้นทาง) รายการผิดกฎมีเพียง `pending -> rejected` ซึ่ง migration 28 แก้แล้ว                                                                                                  |
+| tag `v1-static-workflow` (จุดย้อนกลับของโค้ด)                                 | มีบน GitHub                                                                                                                                                                                                                   |
 
 ### ยังไม่ได้ทำหรือยังไม่ยืนยัน (ห้ามถือว่าเสร็จ)
 
-- **ยังไม่ได้ทดสอบแอปจริงในโหมด shadow เลย** staging ยังไม่มีสินค้าหรือออเดอร์ (`orders = 0`, `workflow_history = 0`) เส้นทางที่ seed ไว้ได้จากการอ่านโค้ด อาจตกหล่น
-- **ยังไม่มี engine ฝั่งแอป** (`lib/workflow.ts` ยังไม่มี) โค้ดแอปยังใช้ตารางเส้นทางเขียนตายตัวของมันเอง
-- **ค่าตั้งใน `system_config` ยังไม่ถูกอ่านโดย cron/ฟังก์ชัน** (ตอนนี้อ่านจริงแค่ `workflow_mode`) ฟังก์ชันเดิมยังใช้ค่าคงที่ของตัวเอง (8 ชม., 2 วัน, 10% ฯลฯ)
-- **ตาราง `workflow_transition_condition` ว่างเปล่า** (ยังไม่มีเงื่อนไขและยังไม่มีโค้ดตรวจ)
-- **ไม่บันทึกประวัติตอนสร้างรายการใหม่ (INSERT)** บันทึกเฉพาะตอนเปลี่ยนสถานะ (UPDATE)
-- **ยังไม่ได้ทดสอบงานตั้งเวลา (cron)** ใต้โหมด shadow/dynamic (ต้องมีวิธีจำลองเวลา ดูงาน W3)
-- **หน้าแอดมินสำหรับ workflow ยังไม่มี**
+- **ยังไม่มีข้อมูลการใช้งานจริงใน shadow บน production** (`workflow_history = 0` ณ เวลาตรวจ ยังไม่มีผู้ใช้ทำรายการ) ต้องรอการใช้งานจริงก่อนสรุปว่าเส้นทางครบ
+- **36 จาก 43 เส้นทางยังไม่เคยถูกใช้จริงในแอป** (ส่วนใหญ่คือฝั่งแอดมิน และเส้นทางตามเวลา) งานตามเวลาทดสอบแล้วเฉพาะในฐานข้อมูลจำลอง
+- engine ฝั่งแอปครอบคลุมเฉพาะ `PATCH /api/rentals/[id]` route อื่นที่เขียนสถานะยังใช้กฎในโค้ด (โหมด `dynamic` ใช้ trigger ในฐานข้อมูลคุมให้ทุกเส้นทางอยู่แล้ว)
+- ค่าที่ **ยังไม่เชื่อม** กับฟังก์ชัน: `reminder_days_before` (อยู่ในคำสั่ง cron โดยตรง) และสัดส่วน 20/80 ของกรณีผู้เช่าไม่รับของหน้างาน
+- ป้ายชื่อ action ในประวัติอาจไม่ตรงความจริง เมื่อมีหลายเส้นทาง "จาก -> ไป" เดียวกันและแอปเขียนผ่าน service role (เช่น ผู้ให้เช่ากดอนุมัติเอง แต่ประวัติขึ้น `auto_approve_slip`) กระทบแค่ป้ายชื่อ ไม่กระทบการอนุญาต
+- ตาราง `workflow_transition_condition` ว่าง และไม่บันทึกประวัติตอนสร้างรายการใหม่ (INSERT)
+- ช่องว่างเล็กที่รู้แล้ว: `newStatus` (F1) ยังอยู่ในโค้ดอัปโหลดหลักฐาน, ฝั่งผู้เช่าตอนคืนของยังไม่มีเพดานรูป, มีรูปสลิปปลอมสำรองใน `app/api/payments/route.ts`
+- หน้าแอดมินสำหรับ workflow ยังไม่มี และโหมด `dynamic` ยังไม่เปิดบน production
 
 ---
 
@@ -73,6 +72,7 @@
 6. **ห้าม push ตรงเข้า `dynamic-workflow`, `Port`, หรือ `main`** ให้แตก branch ย่อยแล้วเปิด Pull Request เข้า `dynamic-workflow` เท่านั้น (ดูหัวข้อ 13)
 7. **ห้ามเปิดโหมด `dynamic` บน staging จนกว่า WiWat ยืนยัน** (หัวข้อ 12) และห้ามรัน `DOWN` โดยไม่ export `workflow_history` ที่ต้องการเก็บก่อน
 8. **ถ้าไม่แน่ใจ ถามโรมัน/WiWat ก่อน ห้ามเดา** โดยเฉพาะเรื่องเส้นทางเปลี่ยนสถานะ เพราะ seed ผิด 1 เส้นในโหมด dynamic จะบล็อกขั้นตอนจริงของผู้ใช้
+9. **production อยู่ในโหมด `shadow` และเป็นระบบจริง:** ห้ามรัน SQL ใดๆ บน production และห้ามเปลี่ยน `workflow_mode` เป็น `dynamic` (รวมถึงผ่านหน้าแอดมินที่จะสร้าง) จนกว่า WiWat ยืนยัน ทดสอบบน staging เท่านั้น
 
 ---
 
@@ -126,7 +126,7 @@ echo %NEXT_PUBLIC_SUPABASE_URL%
 
 ---
 
-## 5. สถาปัตยกรรมที่ทำไว้ (migration 24)
+## 5. สถาปัตยกรรมที่ทำไว้ (migration 27, 28, 29)
 
 ### 5.1 ตารางใหม่ 7 ตาราง
 
@@ -186,6 +186,25 @@ UPDATE public.system_config SET config_value = 'shadow' WHERE config_key = 'work
 ตารางกฎ (`workflow*`) อ่านได้ทุกคนที่ล็อกอิน แก้ได้เฉพาะแอดมิน (`is_admin()`), `system_config` และ `workflow_history` เฉพาะแอดมิน
 (ฝั่งแอปที่ใช้ `createAdminClient` ข้าม RLS อยู่แล้ว)
 
+### 5.7 migration 28 และ 29
+
+- **28:** เพิ่มเส้นทาง `PAYMENT pending -> rejected` 2 เส้น (`reject_slip` โดยผู้ให้เช่า และ `cancel_order_cleanup` อัตโนมัติ) รองรับปุ่มปฏิเสธสลิปของ PR #9
+- **29:** ฟังก์ชัน `workflow_cfg_num(key, default)` อ่านตัวเลขจาก `system_config` (ไม่มีคีย์หรือไม่ใช่ตัวเลข = ใช้ค่าเดิมที่เคยฝังไว้ ผลลัพธ์จึงเหมือนเดิมถ้าไม่แก้ค่า)
+  แล้วแก้ `process_expired_orders`, `cancel_rental_order`, `settle_rental_order` ให้อ่านค่า:
+
+| คีย์ใน `system_config`         | ค่าเริ่มต้น | ใช้ที่                                                      | เชื่อมแล้ว                     |
+| ------------------------------ | ----------- | ----------------------------------------------------------- | ------------------------------ |
+| `approval_timeout_hours`       | 8           | ผู้ให้เช่าตอบรับคำขอ                                        | ใช่                            |
+| `payment_timeout_hours`        | 8           | ผู้เช่าชำระเงินหลังอนุมัติ                                  | ใช่                            |
+| `slip_review_timeout_hours`    | 8           | ผู้ให้เช่าตรวจสลิป (เกินแล้วระบบอนุมัติให้)                 | ใช่                            |
+| `noshow_grace_hours`           | 1           | ผ่อนผันหลังเวลานัด (ไม่มาตามนัด / ปิดงานอัตโนมัติตอนคืนของ) | ใช่                            |
+| `extra_payment_deadline_hours` | 48          | จ่ายส่วนต่างค่าเสียหาย (เกินแล้วระงับบัญชี)                 | ใช่                            |
+| `platform_fee_percent`         | 10          | ค่าธรรมเนียมในการปิดยอดและการยกเลิก                         | ใช่                            |
+| `cancel_threshold_days`        | 2           | ยกเลิกก่อนนัดน้อยกว่าหรือเท่ากับกี่วันถือว่ายกเลิกช้า       | ใช่                            |
+| `reminder_days_before`         | 1           | แจ้งเตือนล่วงหน้า                                           | **ไม่** (ค่าอยู่ในคำสั่ง cron) |
+
+ค่าที่แก้ในตารางมีผลตั้งแต่รอบถัดไปของ cron (ทุก 10 นาที) หรือการเรียกครั้งถัดไป ไม่ต้อง deploy
+
 ---
 
 ## 6. แผนที่โค้ด: ที่ไหนเปลี่ยนสถานะบ้าง (ได้จากการอ่านโค้ดจริง)
@@ -223,7 +242,7 @@ UPDATE public.system_config SET config_value = 'shadow' WHERE config_key = 'work
 
 ---
 
-## 7. เส้นทางที่ seed ไว้ (51 เส้นทาง)
+## 7. เส้นทางที่ seed ไว้ (53 เส้นทาง หลัง migration 28)
 
 ดูรายละเอียดและ action code ครบใน `supabase/migrations/27_dynamic_workflow_core.sql` (ส่วนที่ 3) ที่นี่สรุปเฉพาะออเดอร์
 
@@ -278,20 +297,21 @@ UPDATE public.system_config SET config_value = 'shadow' WHERE config_key = 'work
 
 ### ใครทำอะไร
 
-| รหัส | งาน                                                                                                | ผู้ทำ         | ต้องรอ             |
-| ---- | -------------------------------------------------------------------------------------------------- | ------------- | ------------------ |
-| R1   | ตั้งเครื่อง staging (หัวข้อ 4) และยืนยันว่าแอปรันได้                                               | โรมัน         | ไม่ต้องรอ          |
-| R2   | ทดสอบฝั่งแอดมินในโหมด shadow (หัวข้อ 11) แล้วส่งผลคิวรีรายการละเมิด                                | โรมัน         | R1 และข้อมูลจาก W1 |
-| R3   | หน้าแอดมิน "ตั้งค่า workflow" (หัวข้อ 10)                                                          | โรมัน         | R1 (เริ่มได้เลย)   |
-| R4   | `lib/workflow.ts` + เปลี่ยน `allowedFrom` ใน `PATCH /api/rentals/[id]` ให้อ่านจากฐานข้อมูล         | โรมัน         | W2                 |
-| W1   | ทดสอบฝั่งผู้เช่า/ผู้ให้เช่าในโหมด shadow ตามตาราง 13 ขั้น                                          | WiWat         | ไม่ต้องรอ          |
-| W2   | วิเคราะห์รายการละเมิด แยกบั๊กจริงออกจากเส้นทางที่ตกหล่น แล้วออก migration `24b` (แก้ข้อมูลเส้นทาง) | WiWat         | W1, R2             |
-| W3   | วิธีจำลองงานตั้งเวลา (หมดเวลา 8 ชม., ไม่มาตามนัด) บน staging                                       | WiWat         | ไม่ต้องรอ          |
-| W4   | migration `25`: ให้ cron/ฟังก์ชันอ่านค่าจาก `system_config` + ไฟล์ down + ทดสอบ                    | WiWat         | W2                 |
-| W5   | อัปเดต `full_install.sql`, ER diagram, เอกสาร                                                      | WiWat         | W4                 |
-| G    | ทดสอบเปิดโหมด `dynamic` บน staging ทั้งระบบ และซ้อมถอยกลับ                                         | WiWat + โรมัน | W2, W4, R4         |
+| รหัส | งาน                                                                      | ผู้ทำ         | สถานะ                                                         |
+| ---- | ------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------- |
+| R1   | ตั้งเครื่อง staging (หัวข้อ 4) และยืนยันว่าแอปรันได้                     | โรมัน         | รอโรมัน                                                       |
+| R2   | ทดสอบฝั่งแอดมินบน **staging** (หัวข้อ 11) แล้วส่งผลคิวรีรายการละเมิด     | โรมัน         | รอโรมัน                                                       |
+| R3   | หน้าแอดมิน "ตั้งค่า workflow" (หัวข้อ 10)                                | โรมัน         | ยังไม่เริ่ม (เริ่มได้เลย ไม่ต้องรอใคร)                        |
+| R4   | engine ฝั่งแอป (`lib/workflow.ts` + `PATCH /api/rentals/[id]`)           | WiWat         | **เสร็จ** (หัวข้อ 10)                                         |
+| W1   | ทดสอบฝั่งผู้เช่า/ผู้ให้เช่าบน staging                                    | WiWat         | ทำแล้วบางส่วน                                                 |
+| W2   | วิเคราะห์รายการละเมิดและเพิ่มเส้นทางที่ตกหล่น                            | WiWat         | migration 28 เสร็จ รอบถัดไปดูจาก production                   |
+| W3   | วิธีจำลองงานตามเวลา                                                      | WiWat         | มีสูตรใช้ได้บน staging (ทดสอบแล้ว)                            |
+| W4   | migration 29 (ค่าตั้งมีผลกับ cron/ปิดยอด)                                | WiWat         | **เสร็จ** อยู่บน production                                   |
+| W5   | `full_install.sql`, hash, เอกสาร                                         | WiWat         | `full_install.sql` ตรง production หลัง 26 เอกสารนี้อัปเดตแล้ว |
+| P    | ดูรายการผิดกฎจาก production (โหมด shadow) วันละครั้ง 1-2 วัน (หัวข้อ 11) | WiWat         | กำลังดำเนินการ                                                |
+| G    | เปิดโหมด `dynamic` บน production                                         | WiWat + โรมัน | หลัง P ว่างเปล่าและผ่านการใช้ฝั่งแอดมิน                       |
 
-เส้นทางวิกฤต: W1/R2 → W2 → (W4, R4) → G ข้อที่โรมันเริ่มได้ทันที: R1, R3
+เส้นทางวิกฤต: P (รอผู้ใช้จริง) → ตัดสินใจเปิด `dynamic` (G) ส่วน R3 ทำขนานกันได้
 
 ---
 
@@ -325,14 +345,17 @@ UPDATE public.system_config SET config_value = 'shadow' WHERE config_key = 'work
 - [ ] ใส่ค่าผิดชนิด (เช่นตัวอักษรในค่า `int`) แล้วถูกปฏิเสธพร้อมข้อความ
 - [ ] `npm run build` ผ่าน
 
-### R4: engine ฝั่งแอป (เริ่มหลัง W2 เท่านั้น)
+### R4: engine ฝั่งแอป (WiWat ทำแล้ว ไม่ต้องทำซ้ำ)
 
-เป้าหมาย: ลดการเขียนกฎซ้ำสองที่ โดยให้ `PATCH /api/rentals/[id]` อ่านเส้นทางจากตาราง แทนตาราง `allowedFrom` เขียนตายตัว
+`lib/workflow.ts` มี `getWorkflowMode()` และ `checkTransition(workflowCode, from, to, actors)` ส่วน `PATCH /api/rentals/[id]` ใช้ตามโหมด
+(static = กฎเดิมในโค้ด, shadow = กฎเดิมแต่ `console.warn` ถ้าไม่ตรงกับฐานข้อมูล, dynamic = กฎจากฐานข้อมูล, อ่านฐานข้อมูลไม่ได้ = fallback กฎเดิม)
+ถ้าจะขยายไป route อื่น ให้ถาม WiWat ก่อน
 
-- สร้าง `lib/workflow.ts` ฟังก์ชัน เช่น `canTransition(workflowCode, fromState, toState, actorRoles)` อ่านจาก `workflow_transition` + `workflow_transition_role` (มี cache สั้นๆ ได้)
-- ข้อความ error และรหัส HTTP ต้องคงเดิม (พฤติกรรมต้องเหมือนเดิมทุกกรณีที่ใช้อยู่)
-- ไฟล์ที่ต้องดู: `app/api/rentals/[id]/route.ts` (ตาราง `allowedFrom` และการตรวจผู้ให้เช่า/ผู้เช่า)
-- รายละเอียดเพิ่มเติม WiWat จะส่งหลัง W2 อย่าเริ่มก่อนเพราะเส้นทางอาจเปลี่ยน
+**หมายเหตุสำหรับ R3 (หน้าแอดมิน):**
+
+- ค่าใน `system_config` ที่ **มีผลจริง** คือ 7 ตัวในตาราง 5.7 ให้แสดงป้าย "ยังไม่มีผล" ที่ `reminder_days_before`
+- การสลับ `workflow_mode` บนหน้านี้กระทบระบบจริงทันทีเมื่อแอปชี้ production ต้องมีกล่องยืนยัน และห้ามให้เลือก `dynamic` โดยไม่เตือน (กฎเหล็กข้อ 9)
+- แก้ค่าต้องตั้ง `updated_by` และ `updated_at` และตรวจชนิดตาม `value_type`
 
 ---
 
@@ -388,61 +411,85 @@ WHERE h.reason LIKE 'SHADOW_VIOLATION%'
 GROUP BY 1,2,3,4 ORDER BY times DESC;
 ```
 
+### คิวรีบน production (อ่านอย่างเดียว ใช้ตรวจโหมด shadow)
+
+```sql
+SELECT w.workflow_code, coalesce(fs.state_code,'(ว่าง)') AS from_state, ts.state_code AS to_state,
+       left(h.reason,80) AS reason, count(*) AS times, min(h.changed_at) AS first_seen
+FROM public.workflow_history h
+JOIN public.workflow w ON w.workflow_id = h.workflow_id
+LEFT JOIN public.workflow_state fs ON fs.state_id = h.from_state_id
+JOIN public.workflow_state ts ON ts.state_id = h.to_state_id
+WHERE h.reason LIKE 'SHADOW_VIOLATION%'
+GROUP BY 1,2,3,4 ORDER BY times DESC;
+```
+
+ผลว่างเปล่า = ทุกการเปลี่ยนสถานะที่เกิดขึ้นอยู่ในเส้นทางที่ seed ไว้ ถ้ามีแถว ให้ส่งให้ WiWat วิเคราะห์ว่าเป็นเส้นทางที่ตกหล่นหรือบั๊กจริง
+(หมายเหตุ: คิวรี hash โครงสร้างบน production ต้อง **ตัดตาราง `test_results` ออก** ถึงจะได้ `4449b52cd098` / 174 แถว)
+
 ---
 
 ## 12. วิธีถอยกลับ (เรียงจากเบาไปหนัก)
 
 1. **สลับโหมดกลับ** (ทันที ไม่ต้อง deploy ข้อมูลไม่หาย):
    `UPDATE public.system_config SET config_value = 'static' WHERE config_key = 'workflow_mode';`
-2. **ย้อนฐานข้อมูลเฟส 1** รัน `supabase/migrations/down/27_dynamic_workflow_core.down.sql`
-   (export `workflow_history` ก่อนถ้าต้องการเก็บ) ตรวจด้วย `supabase/setup/check_install.sql` ต้องได้ `structure_hash = 77b289a75e91`
-3. **ย้อนโค้ดแอป** ติด tag ไว้ที่ `v1-static-workflow` (โค้ดก่อนเริ่มงานนี้) หรือทิ้ง branch `dynamic-workflow`
-4. **ถ้า dynamic workflow ล้มเหลวทั้งหมด:** ตามข้อตกลงในหัวข้อ 8 ให้กลับไปแก้ F1-F3 ใน production จริง
+2. **ย้อน migration 29** (คืนฟังก์ชัน 3 ตัวเป็นค่าคงที่ฝังตัว) รัน `supabase/migrations/down/29_workflow_config_wiring.down.sql`
+   ตรวจ hash ฟังก์ชัน `process_expired_orders` ต้องกลับเป็นของ migration 26 (`md5` แบบตัดคอมเมนต์ = `fa3cd19ebe554b080671ffba57b2b91b`)
+3. **ย้อน migration 28 แล้ว 27** รัน `down/28_...` แล้ว `down/27_...` (export `workflow_history` ก่อนถ้าต้องการเก็บ)
+   ตรวจโครงสร้างด้วยคิวรี hash ที่ตัด `test_results` ออก ต้องกลับเป็น `9483396d90ab` / 132 แถว
+4. **ย้อนโค้ดแอป** กด Revert ของ Pull Request บน GitHub หรือใช้ tag `v1-static-workflow` (โค้ดก่อนเริ่มงานนี้)
+5. **ถ้า dynamic workflow ล้มเหลวทั้งหมด:** ตามข้อตกลงในหัวข้อ 8 ให้กลับไปแก้ F1-F3 ใน production จริง
 
 ข้อมูลธุรกิจ (ออเดอร์ การชำระเงิน ฯลฯ) และคอลัมน์สถานะข้อความเดิม **ไม่ถูกแตะ** ในทุกขั้นข้างบน
+(ทุกการเปลี่ยนบน production ที่ผ่านมาทำด้วยคำสั่งที่ทดสอบ UP → DOWN แล้ว และตรวจ hash ก่อน-หลังทุกครั้ง)
 
 ---
 
 ## 13. วิธีส่งงานกลับ (Git)
 
 ```
-git checkout dynamic-workflow
-git pull origin dynamic-workflow
-git checkout -b dynamic-workflow-admin      # ตั้งชื่อตามงาน
+git fetch origin
+git checkout main
+git pull origin main
+git checkout -b feat/workflow-admin         # ตั้งชื่อตามงาน
 # ... แก้โค้ด ...
 npm run build                               # ต้องผ่านก่อน commit
 git add <ไฟล์ทีละไฟล์>
 git commit -m "feat(admin): ..."
-git push -u origin dynamic-workflow-admin
+git push -u origin feat/workflow-admin
 ```
 
-แล้วเปิด Pull Request บน GitHub จาก `dynamic-workflow-admin` ไปยัง **`dynamic-workflow`** (ไม่ใช่ `main` หรือ `Port`)
+แล้วเปิด Pull Request บน GitHub จาก `feat/workflow-admin` ไปยัง **`main`** (กิ่ง `dynamic-workflow` ถูกรวมเข้า `main` แล้วใน PR #12) ห้าม push ตรงเข้า `main` และ merge ได้เมื่อ build ผ่านและ WiWat หรือโรมันตรวจแล้ว
 ใส่ในรายละเอียด PR: ทำอะไร, ทดสอบอย่างไร, เกณฑ์ผ่านข้อไหนผ่านแล้ว, ถ้ามีการเปลี่ยนฐานข้อมูล ให้แนบไฟล์ down และผลทดสอบ hash
 
 ---
 
 ## 14. คำถามที่ยังเปิดอยู่ (ต้องตัดสินใจร่วมกัน)
 
-1. เส้นทางผิดปกติ (ส่งสลิปตอน `requested` ข้ามการอนุมัติ) จะ **ไม่ใส่** ใน seed (ปล่อยให้ถูกบล็อกในโหมด dynamic) หรือ **ใส่** (ถือเป็นพฤติกรรมที่ตั้งใจ)? ตอนนี้ยังไม่ได้ใส่
-2. สถานะที่ไม่มีทางเข้า (`item_received`, `item_returned`, `rejected`, `Banned`) เก็บไว้หรือตัดทิ้ง? ตอนนี้เก็บไว้ในรายการ
-3. ต้องการเส้นทาง `Suspended`/`Deactivated` → `Active` (แอดมินยกเลิกการระงับ / ผู้ใช้เปิดบัญชีคืน) และ KYC `rejected` → `pending` (ส่งเอกสารใหม่) หรือไม่?
-4. F1 (`newStatus` ในฟังก์ชันอัปโหลดหลักฐาน) ซึ่งไม่ได้ถูกใช้ ควรลบทิ้งจากโค้ดเลยหรือไม่ (ตอนนี้ตกลงว่ารอโหมด dynamic ปิดให้)
-5. เมื่อทดสอบผ่านแล้ว จะนำเข้า production อย่างไร (ต้องรัน migration 24, 24b, 25 บน production พร้อมไฟล์ down และมี `full_install.sql` ใหม่) ตัดสินใจร่วมกับทีมก่อน ไม่มีใครรันบน production เดี่ยวๆ
+1. ปล่อยโหมด `shadow` บน production กี่วันก่อนเปิด `dynamic` (เสนอ 1-2 วันที่มีการใช้งานครบทั้งผู้เช่า ผู้ให้เช่า และแอดมิน)
+2. เส้นทางผิดปกติ F6 (ส่งสลิปตอน `requested` ข้ามการอนุมัติ): ปล่อยให้ถูกบล็อกในโหมด `dynamic` (ค่าตั้งต้น) หรือใส่ใน seed
+3. สถานะที่ไม่มีทางเข้า (`item_received`, `item_returned`, `Banned`) เก็บไว้หรือตัดทิ้ง (สถานะ `rejected` ของการชำระเงินใช้งานแล้วตั้งแต่ migration 28)
+4. ต้องการเส้นทาง `Suspended`/`Deactivated` → `Active` (ยกเลิกการระงับ / เปิดบัญชีคืน) และ KYC `rejected` → `pending` (ส่งเอกสารใหม่) หรือไม่
+5. ลบ `newStatus` (F1) ออกจากโค้ดอัปโหลดหลักฐานและเพิ่มเพดานรูปฝั่งผู้เช่าตอนคืนของ (ตอนนี้โหมด `dynamic` ปิดช่องโหว่ F1 ให้ แต่ยังไม่ได้เปิด)
+6. จะเชื่อม `reminder_days_before` (ต้องแก้คำสั่ง cron) และสัดส่วน 20/80 กรณีผู้เช่าไม่รับของหน้างานเข้ากับ `system_config` หรือไม่
+7. ให้แอปส่งชื่อ action ให้ฐานข้อมูลเพื่อให้ป้ายชื่อในประวัติตรงความจริงหรือไม่
 
 ---
 
-## 15. ไฟล์อ้างอิงใน repo (branch `dynamic-workflow`)
+## 15. ไฟล์อ้างอิงใน repo (branch `main`)
 
-| ไฟล์                                                         | หน้าที่                                                       |
-| ------------------------------------------------------------ | ------------------------------------------------------------- |
-| `supabase/setup/full_install.sql`                            | ติดตั้งฐานข้อมูลทั้งหมดบนโปรเจกต์ว่าง                         |
-| `supabase/setup/check_install.sql`                           | ตรวจโครงสร้างหลังติดตั้ง (hash `77b289a75e91`)                |
-| `supabase/migrations/27_dynamic_workflow_core.sql`           | migration เฟส 1                                               |
-| `supabase/migrations/down/27_dynamic_workflow_core.down.sql` | ย้อนกลับเฟส 1                                                 |
-| `supabase/setup/check_workflow_phase1.sql`                   | ตรวจหลังรัน 24 (hash `6a0e828cd7c6`), ดูรายการผิดกฎ, สลับโหมด |
-| `supabase/migrations/README.md`                              | อธิบายการจัดไฟล์ migration                                    |
-| `lib/admin-auth.ts`                                          | `requireAdmin()` (หน้า) และ `verifyAdminApi()` (API)          |
-| `app/api/rentals/[id]/route.ts`                              | ตาราง `allowedFrom` ที่ R4 จะแทนที่                           |
+| ไฟล์                                                           | หน้าที่                                                                                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `supabase/setup/full_install.sql`                              | ติดตั้งฐานข้อมูลทั้งหมดบนโปรเจกต์ว่าง (ตรง production หลัง migration 26, hash `9483396d90ab`)                        |
+| `supabase/setup/check_install.sql`                             | ตรวจโครงสร้างหลังติดตั้ง                                                                                             |
+| `supabase/migrations/27_dynamic_workflow_core.sql` + `down/`   | migration เฟส 1 และไฟล์ย้อนกลับ                                                                                      |
+| `supabase/migrations/28_workflow_payment_reject.sql` + `down/` | เส้นทางปฏิเสธสลิป และไฟล์ย้อนกลับ                                                                                    |
+| `supabase/migrations/29_workflow_config_wiring.sql` + `down/`  | ให้ cron/ปิดยอด/ยกเลิกอ่านค่าจาก `system_config` และไฟล์ย้อนกลับ                                                     |
+| `supabase/setup/check_workflow_phase1.sql`                     | ตรวจหลังรัน 27-29 (hash `be039ebd1e79` / 175 แถวหลัง 29 บนฐานข้อมูลที่ไม่มี `test_results`), ดูรายการผิดกฎ, สลับโหมด |
+| `supabase/migrations/README.md`                                | อธิบายการจัดไฟล์ migration                                                                                           |
+| `lib/workflow.ts`                                              | ตัวอ่านโหมดและกฎ workflow จากฐานข้อมูล                                                                               |
+| `app/api/rentals/[id]/route.ts`                                | `PATCH` เปลี่ยนสถานะ ใช้ `lib/workflow.ts` ตามโหมด                                                                   |
+| `lib/admin-auth.ts`                                            | `requireAdmin()` (หน้า) และ `verifyAdminApi()` (API)                                                                 |
 
 ### ติดต่อ
 
