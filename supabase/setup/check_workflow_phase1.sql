@@ -6,7 +6,7 @@
 -- ----------------------------------------------------------------------------
 -- คิวรีที่ 1: ตรวจหลังรัน 27_dynamic_workflow_core.sql
 -- ผลที่ควรได้ (1 แถว):
---   structure_hash = 4449b52cd098   fingerprint_rows = 174
+--   structure_hash = be039ebd1e79   fingerprint_rows = 175
 --   workflows = 7   states = 40   transitions = 53 (51 ถ้ายังไม่ได้รัน 28)   mode = static
 -- ถ้าตัวเลขอื่นตรงแต่ structure_hash ไม่ตรง ให้ส่งผลมา (ต่างจากเครื่องทดสอบของผมที่ใช้ Postgres รุ่นอื่น
 -- ผมจะส่งคิวรีที่ชี้ว่าวัตถุไหนต่างให้)

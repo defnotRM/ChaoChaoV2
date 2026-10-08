@@ -52,8 +52,8 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 
 ทุกไฟล์ข้างบน apply เข้า production แล้ว (ไฟล์ 01-06 เก่าถูกลบไปแล้ว)
 
-**ยังไม่ apply เข้า production (ใช้บน staging เท่านั้น ในกิ่ง dynamic-workflow):**
-`27_dynamic_workflow_core.sql` (ไฟล์ย้อนกลับ `down/27_dynamic_workflow_core.down.sql`)
+**ไฟล์ workflow (apply เข้า production แล้วเมื่อ 8 ต.ค. 2026 โหมดเริ่มต้น shadow):**
+`27_dynamic_workflow_core.sql`, `28_workflow_payment_reject.sql`, `29_workflow_config_wiring.sql` (ไฟล์ย้อนกลับอยู่ใน `down/` ชื่อเดียวกันลงท้าย `.down.sql`)
 
 ## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
 
