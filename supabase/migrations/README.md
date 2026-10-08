@@ -1,22 +1,34 @@
-# Database Setup — ChaoChao
+# Database — ChaoChao
 
-ไฟล์ SQL ในโฟลเดอร์นี้คือ schema, business logic, RLS policies และ migration
-ทั้งหมดของฐานข้อมูล ChaoChao บน Supabase Cloud (project: ChaoChao, ref:
-`awnwvckyjkkuhufmdgas`)
+ฐานข้อมูลอยู่บน Supabase Cloud (project: ChaoChao, ref: `awnwvckyjkkuhufmdgas`)
+โฟลเดอร์นี้เก็บ "ประวัติการเปลี่ยนแปลง" ส่วนไฟล์ติดตั้งใหม่อยู่ที่ `supabase/setup/`
 
-## ลำดับการรัน (สำคัญมาก ห้ามสลับ)
+## ต้องการทำอะไร
 
-**เริ่มจาก `07_baseline_actual_schema.sql` เสมอ ไม่ใช่ `01`**
+### A) ติดตั้งโปรเจกต์ Supabase ใหม่ (dev / staging / เครื่องเพื่อนร่วมทีม)
 
-> ไฟล์ `01-06` เดิมถูกลบไปแล้ว (เขียนไว้ตอนต้นโปรเจกต์ แต่หลังจากนั้นมีการแก้ไข
-> schema จริงบนคลาวด์แบบ manual หลายรอบผ่าน Supabase Studio โดยไม่ได้อัปเดต
-> ไฟล์ migration ให้ตรงกัน ทำให้ใช้อ้างอิงความจริงไม่ได้อีกต่อไป — ไฟล์
-> `07_baseline_actual_schema.sql` คือ "ภาพถ่าย" ของโครงสร้างจริง ณ วันที่บันทึก
-> ใช้แทนตั้งแต่นั้นมา)
+ใช้ไฟล์เดียว: **`supabase/setup/full_install.sql`**
 
-รันตามลำดับนี้ผ่าน **Supabase SQL Editor** (Dashboard → SQL Editor → New query)
-หรือ `psql` ก็ได้ ทีละไฟล์เรียงเลขจากน้อยไปมาก เริ่มที่ `07`:
+1. สร้าง Supabase project ใหม่ (ว่างเปล่า)
+2. SQL Editor → New query → วางทั้งไฟล์ → Run
+3. ตั้ง `.env.local` ของแอปให้ชี้ไป project ใหม่
+4. ทำตามหัวข้อ "ทำเองหลังติดตั้ง" ท้ายไฟล์ (สร้างแอดมินคนแรก, เปิด Realtime ถ้าต้องการ)
 
+ไฟล์นี้รวม extension, ตาราง, constraint, index, function, trigger, RLS/policy,
+seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ตัว และ cron 2 งาน
+**ไม่ต้องรันไฟล์เรียงเลขในโฟลเดอร์นี้ร่วมด้วย**
+และ **ห้ามรันบน production ที่มีอยู่แล้ว** (จะ error เพราะตารางมีอยู่แล้ว)
+
+### B) แก้ไขฐานข้อมูล production ที่มีอยู่
+
+1. เขียนไฟล์ใหม่ต่อเลข (ถัดจากไฟล์ล่าสุดในรายการด้านล่าง) ในโฟลเดอร์นี้
+2. สั่ง apply ผ่าน Supabase (SQL Editor หรือ MCP) แล้ว commit ไฟล์เข้า repo
+3. **อัปเดต `supabase/setup/full_install.sql` ให้ตรงกับสภาพใหม่ด้วยทุกครั้ง**
+   ไม่เช่นนั้นไฟล์ติดตั้งจะเก่ากว่า production ทันที (ปัญหาเดียวกับที่เกิดกับไฟล์ 07 มาแล้ว)
+
+## ลำดับไฟล์ประวัติ (ใช้อ้างอิงเท่านั้น ไม่ใช่วิธีติดตั้ง)
+
+```
 07_baseline_actual_schema.sql
 08_tighten_rls_policies.sql
 09_structural_additions.sql
@@ -27,7 +39,7 @@
 14_settlement_rewrite.sql
 15_expiry_cron.sql
 16_cancel_reason_fields.sql
-18_payment_fixes.sql (17 ถูกรวมเข้า 18 แล้ว ไม่มีไฟล์ 17 แยก)
+18_payment_fixes.sql          (17 ถูกรวมเข้า 18 แล้ว ไม่มีไฟล์ 17 แยก)
 19_chat_bound_to_order.sql
 20_eight_hour_deadlines_2case_cancel.sql
 21_itemlocation_multi.sql
@@ -36,17 +48,31 @@
 24_item_images_bucket.sql
 25_item_condition.sql
 26_payment_slip_rejection.sql
+```
 
-ไฟล์ทั้งหมดนี้ **apply เข้า production จริงแล้ว** ทุกไฟล์ — โฟลเดอร์นี้เป็นแค่
-บันทึกเก็บไว้ให้ทีมอ้างอิงตรงกัน ไม่ต้องรันซ้ำกับ production ที่มีอยู่แล้ว
-ใช้สำหรับ: (1) เอกสารอ้างอิงสภาพจริงของทีม (2) รันสร้าง Supabase project ใหม่
-ทั้งหมด (เผื่อจำเป็นต้อง reset หรือทำ dev environment แยก)
+ทุกไฟล์ข้างบน apply เข้า production แล้ว (ไฟล์ 01-06 เก่าถูกลบไปแล้ว)
 
-## ก่อนรัน
+**ยังไม่ apply เข้า production (ใช้บน staging เท่านั้น ในกิ่ง dynamic-workflow):**
+`27_dynamic_workflow_core.sql` (ไฟล์ย้อนกลับ `down/27_dynamic_workflow_core.down.sql`)
 
-ทุกคนในทีมต้องใช้ **Supabase project เดียวกัน** (ไม่ว่าจะเป็น cloud project
-กลาง หรือ local ผ่าน Supabase CLI ที่ sync กัน) — ถ้าใครรันไฟล์นี้บน project
-แยกของตัวเอง ตารางที่ได้จะไม่ match กับที่คนอื่นเห็น และ API ที่เขียนต่อกัน
-จะพังตอน integration
+## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
 
-ถ้ายังไม่แน่ใจว่าทีมใช้ project ไหนอยู่ ให้เช็คกับ Role B (Port) ก่อนรัน
+ตรวจเมื่อทำ `full_install.sql` โดยเล่นซ้ำ 07→23 บน Postgres ว่าง แล้วเทียบโครงสร้างกับ production
+พบว่ารันผ่านและ function/policy/trigger ตรงกัน แต่ **ไฟล์ 07 ซึ่งบันทึกว่าเป็น "ภาพถ่ายของจริง" ไม่ตรง
+production ในจุดต่อไปนี้** (production ถูกแก้ผ่าน Supabase Studio ที่ไม่ได้บันทึกเป็นไฟล์)
+
+- คอลัมน์เงิน 9 ตัวเป็น `numeric(12,2)` (07 เป็น `numeric` เฉยๆ), `itemimage.sequence` เป็น NOT NULL
+- กฎ `ON DELETE` ของ FK หลายตัว (CASCADE / RESTRICT / SET NULL)
+- CHECK เพิ่ม 3 ตัว: `end_date >= start_date` (availability, rentalorder), `user_a <> user_b` (chatroom)
+- unique index `idx_itemimage_one_primary_per_item` (1 สินค้ามีรูปหลักได้รูปเดียว)
+- PK ของ `user_role_assignment` เรียงเป็น `(user_id, role_id)`
+
+และมีของที่ production มีแต่ไม่อยู่ในไฟล์ไหนเลย: storage bucket 4 ตัว, seed data, การเปิด extension
+สิ่งเหล่านี้ถูกรวมไว้ใน `full_install.sql` แล้ว
+
+ตาราง `test_results` มีเฉพาะใน production (ตารางเทสต์ตอนพัฒนา) ไม่ได้ใส่ใน `full_install.sql`
+
+## Supabase project เดียวกันทั้งทีม
+
+ทุกคนที่ทำงานกับข้อมูลร่วมกันต้องชี้ไป Supabase project เดียวกัน ถ้าใครติดตั้งโปรเจกต์แยกของตัวเอง
+ข้อมูลจะไม่ตรงกับคนอื่น ถ้าไม่แน่ใจว่าทีมใช้ project ไหน เช็คกับ WiWat (Role B / Port) ก่อน

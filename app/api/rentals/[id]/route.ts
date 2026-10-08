@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
+import {
+  checkTransition,
+  getWorkflowMode,
+  type WorkflowActor,
+} from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +135,32 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     cancelled: ["requested", "awaiting_payment"],
   };
 
-  if (!allowedFrom[status]?.includes(current.status)) {
+  // โหมด static = ใช้ตารางด้านบนเหมือนเดิม | shadow = ใช้ตารางด้านบน แต่เทียบกับกฎในฐานข้อมูลแล้ว warn
+  // | dynamic = ใช้กฎจากฐานข้อมูล (ถ้าอ่านฐานข้อมูลไม่ได้ จะ fallback ใช้ตารางด้านบน)
+  let transitionAllowed =
+    allowedFrom[status]?.includes(current.status) ?? false;
+  const workflowMode = await getWorkflowMode();
+  if (workflowMode !== "static") {
+    const actors: WorkflowActor[] = [];
+    if (isRenter) actors.push("renter");
+    if (isLender) actors.push("lender");
+    const dbCheck = await checkTransition(
+      "RENTAL_ORDER",
+      current.status,
+      status,
+      actors,
+    );
+    if (dbCheck) {
+      if (dbCheck.ok !== transitionAllowed) {
+        console.warn(
+          `[workflow] กฎในโค้ดกับฐานข้อมูลไม่ตรงกัน order=${id} ${current.status}->${status} code=${transitionAllowed} db=${dbCheck.ok} (${dbCheck.reason})`,
+        );
+      }
+      if (workflowMode === "dynamic") transitionAllowed = dbCheck.ok;
+    }
+  }
+
+  if (!transitionAllowed) {
     return apiError(
       `ไม่สามารถเปลี่ยนสถานะจาก "${current.status}" เป็น "${status}" ได้`,
       409,
