@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { enforceTransition } from "@/lib/workflow";
 import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
@@ -140,6 +141,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์ยืนยันรับคืนสินค้าสำหรับออเดอร์นี้" },
         { status: 403 },
+      );
+    }
+
+    // ยืนยันรับคืนได้เฉพาะออเดอร์ที่กำลังเช่า (item_sent) ตามกฎในโค้ดหรือฐานข้อมูลตามโหมด workflow
+    const gate = await enforceTransition({
+      workflow: "RENTAL_ORDER",
+      from: order.status,
+      to: "completed",
+      actors: ["lender"],
+      codeAllowedFrom: ["item_sent", "item_received"],
+      label: "return",
+    });
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนรับคืนสินค้า" },
+        { status: 409 },
       );
     }
     // ส่งหลักฐานตอนคืนของได้ครั้งเดียว (กันส่งซ้ำจนเกินเพดาน)

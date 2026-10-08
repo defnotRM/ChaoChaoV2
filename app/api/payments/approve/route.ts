@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { enforceTransition } from "@/lib/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -57,12 +58,42 @@ export async function POST(request: Request) {
       );
     }
 
-    // อัปเดต payment เป็น paid
-    await admin
+    // อนุมัติสลิปได้เฉพาะออเดอร์ที่รอชำระเงิน (กฎในโค้ด หรือจากฐานข้อมูลตามโหมด workflow)
+    const gate = await enforceTransition({
+      workflow: "RENTAL_ORDER",
+      from: order.status,
+      to: "paid",
+      actors: ["lender"],
+      codeAllowedFrom: ["awaiting_payment"],
+      label: "payments/approve",
+    });
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนตรวจสอบการชำระเงิน" },
+        { status: 409 },
+      );
+    }
+
+    // อัปเดต payment เป็น paid (ต้องมีสลิปที่รอตรวจจริง)
+    const { data: approvedSlips, error: slipErr } = await admin
       .from("payment")
       .update({ status: "paid" })
       .eq("order_id", orderId)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("payment_id");
+    if (slipErr) {
+      console.error("approve payment update error:", slipErr);
+      return NextResponse.json(
+        { message: "อนุมัติสลิปไม่สำเร็จ" },
+        { status: 500 },
+      );
+    }
+    if (!approvedSlips || approvedSlips.length === 0) {
+      return NextResponse.json(
+        { message: "ไม่พบสลิปที่รอตรวจสอบ (อาจถูกตรวจไปแล้ว) กรุณารีเฟรช" },
+        { status: 409 },
+      );
+    }
 
     // อัปเดต rentalorder เป็น paid
     const { error: orderErr } = await admin

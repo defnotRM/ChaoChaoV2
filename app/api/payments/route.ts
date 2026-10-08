@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       amount = Number(json.amount) || 0;
       transferDate = json.transferDate || new Date().toISOString();
       transactionRef = json.transactionRef || null;
-      
+
       if (json.slipImageUrl) {
         try {
           slipDataUri = await uploadImageToStorage(json.slipImageUrl, {
@@ -52,7 +52,10 @@ export async function POST(request: Request) {
             filenamePrefix: "slip",
           });
         } catch (uploadErr) {
-          console.warn("Storage upload failed for JSON slip, fallback to raw input:", uploadErr);
+          console.warn(
+            "Storage upload failed for JSON slip, fallback to raw input:",
+            uploadErr,
+          );
           slipDataUri = json.slipImageUrl;
         }
       }
@@ -88,7 +91,10 @@ export async function POST(request: Request) {
             filenamePrefix: "slip",
           });
         } catch (uploadErr) {
-          console.warn("Storage upload failed for form slip, fallback to base64:", uploadErr);
+          console.warn(
+            "Storage upload failed for form slip, fallback to base64:",
+            uploadErr,
+          );
           const buffer = Buffer.from(await slip.arrayBuffer());
           const mimeType = slip.type || "image/png";
           slipDataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
@@ -121,7 +127,7 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-    if (order.status !== "awaiting_payment" && order.status !== "requested") {
+    if (order.status !== "awaiting_payment") {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่อยู่ในสถานะรอชำระเงิน" },
         { status: 400 },
@@ -135,10 +141,12 @@ export async function POST(request: Request) {
         0;
     }
 
-    // Default mock slip image if not provided
+    // บังคับต้องแนบสลิปจริง (เดิมมีรูปปลอมเป็นค่าสำรอง)
     if (!slipDataUri) {
-      slipDataUri =
-        "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60";
+      return NextResponse.json(
+        { message: "กรุณาแนบรูปสลิปการโอนเงิน" },
+        { status: 400 },
+      );
     }
 
     // 3) ลบหรืออัปเดตสลิปเดิมหากมี
