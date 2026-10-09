@@ -59,8 +59,18 @@ function formatTimestamp(date: string) {
   return dateFormatter.format(new Date(date));
 }
 
-function ProductStatus({ status }: { status: ItemStatus }) {
-  const content = statusContent[status];
+function ProductStatus({
+  status,
+  isRentedOut,
+}: {
+  status: ItemStatus;
+  isRentedOut?: boolean;
+}) {
+  // ถูกเช่าออกไปอยู่ตอนนี้ แต่ยังจองวันอื่นได้ (ปฏิทินบอกวันว่างจริง)
+  const content =
+    status === "available" && isRentedOut
+      ? statusContent.rented
+      : statusContent[status];
   return <StatusChip tone={content.tone}>{content.label}</StatusChip>;
 }
 
@@ -98,7 +108,10 @@ export default async function ProductDetailPage({
                 <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                   {product.categoryName}
                 </span>
-                <ProductStatus status={product.status} />
+                <ProductStatus
+                  status={product.status}
+                  isRentedOut={product.isRentedOut}
+                />
               </div>
 
               <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#000f22] sm:text-4xl">
