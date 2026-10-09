@@ -138,11 +138,25 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. คำนวณสรุปสถิติสำหรับผู้ให้เช่า
+    // ถูกเช่าออกไปอยู่ตอนนี้ = มีออเดอร์ item_sent/item_received (แสดงผลเท่านั้น ไม่แก้ item.status)
+    const rentedOutIds = new Set(
+      incomingOrders
+        .filter((o) => o.status === "item_sent" || o.status === "item_received")
+        .map((o) => o.item_id as string),
+    );
+    for (const item of itemList) {
+      (item as { isRentedOut?: boolean }).isRentedOut = rentedOutIds.has(
+        item.item_id,
+      );
+    }
+
     const totalItems = itemList.length;
     const availableItems = itemList.filter(
-      (i) => i.status === "available",
+      (i) => i.status === "available" && !rentedOutIds.has(i.item_id),
     ).length;
-    const rentedItems = itemList.filter((i) => i.status === "rented").length;
+    const rentedItems = itemList.filter(
+      (i) => i.status === "rented" || rentedOutIds.has(i.item_id),
+    ).length;
     const pendingRequests = incomingOrders.filter(
       (o) => o.status === "requested" || o.status === "awaiting_payment",
     ).length;

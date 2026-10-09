@@ -26,7 +26,17 @@ function formatLocations(locations: Product["locations"]) {
   return locations.map((location) => location.description).join(" • ");
 }
 
-function ListingStatus({ status }: { status: Product["status"] }) {
+function ListingStatus({
+  status,
+  isRentedOut,
+}: {
+  status: Product["status"];
+  isRentedOut?: boolean;
+}) {
+  // ถูกเช่าออกไปอยู่ตอนนี้ แต่ยังจองวันอื่นได้ (ปฏิทินในหน้าสินค้าบอกวันว่างจริง)
+  if (status === "available" && isRentedOut) {
+    return <StatusChip tone="rented">กำลังถูกเช่า</StatusChip>;
+  }
   if (status === "available") {
     return <StatusChip tone="success">พร้อมให้เช่า</StatusChip>;
   }
@@ -86,7 +96,7 @@ export function ProductCard({
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Rating value={listing.rating} count={listing.reviewCount} />
-              <ListingStatus status={listing.status} />
+              <ListingStatus status={listing.status} isRentedOut={listing.isRentedOut} />
             </div>
             <div className="mt-3 flex flex-wrap items-baseline gap-1">
               <span className="text-lg font-bold text-[#1b3554]">
@@ -118,7 +128,7 @@ export function ProductCard({
             rounded="rounded-none"
           />
           <div className="absolute bottom-2 left-2">
-            <ListingStatus status={listing.status} />
+            <ListingStatus status={listing.status} isRentedOut={listing.isRentedOut} />
           </div>
         </div>
 
