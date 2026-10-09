@@ -100,10 +100,8 @@
 
 **Body** `{ "evidenceType": "renter_before|renter_after|lender_before|lender_after", "imageUrls": ["https://..."], "newStatus": "item_sent?" }`
 
-### `POST /api/rentals/[id]/settle`
-เจ้าของกด "ยืนยันคืนสินค้า" พร้อมระบุค่าเสียหาย (ถ้ามี) — คำนวณเงินคืน/หักมัดจำอัตโนมัติ
-
-**Body** `{ "damageCost": 0 }`
+### ~~`POST /api/rentals/[id]/settle`~~ (ลบแล้ว)
+ลบออกเมื่อ ต.ค. 2026 เพราะให้ผู้เช่า/ผู้ให้เช่าเลือกผลลัพธ์ปิดยอดเองได้ ปิดยอดผ่าน `/api/return`, `/api/rentals/[id]/evidence`, `/api/rentals/[id]/reject-pickup` (ผู้ใช้) และ `/api/admin/disputes/[id]/resolve` (แอดมิน) เท่านั้น ฐานข้อมูลจำกัดผลลัพธ์ของผู้ใช้ทั่วไปด้วย migration 33
 
 ---
 
