@@ -31,6 +31,7 @@ import {
   XCircle,
 } from "lucide-react";
 import CountdownBanner from "./CountdownBanner";
+import type { OrderTimeouts } from "@/lib/system-config";
 
 export interface RentOrderDetailData {
   order: {
@@ -75,7 +76,6 @@ export interface RentOrderDetailData {
   }>;
 }
 
-const PAYMENT_WINDOW_HOURS = 8;
 
 const thb = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -164,9 +164,11 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
 export default function RentOrderDetailClient({
   data,
   userId,
+  timeouts,
 }: {
   data: RentOrderDetailData;
   userId: string;
+  timeouts: OrderTimeouts;
 }) {
   const router = useRouter();
   const { order, item, owner } = data;
@@ -280,7 +282,7 @@ export default function RentOrderDetailClient({
     canPay && paymentsList.some((p) => p.status === "rejected");
   const showCountdown = currentStatus === "awaiting_payment" && !hasPending;
   const deadlineISO = new Date(
-    new Date(orderUpdatedAt).getTime() + PAYMENT_WINDOW_HOURS * 3_600_000,
+    new Date(orderUpdatedAt).getTime() + timeouts.paymentHours * 3_600_000,
   ).toISOString();
 
   const paymentStatusLabel =
