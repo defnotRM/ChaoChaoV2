@@ -1,3 +1,4 @@
+import { getRentedOutItemIds } from "@/lib/products/rented-out";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   ItemCategoryRow,
@@ -120,6 +121,7 @@ export async function getProducts(): Promise<Product[]> {
   if (!items || items.length === 0) return [];
 
   const ids = items.map((it) => it.item_id);
+  const rentedOutIds = await getRentedOutItemIds(admin, ids);
 
   const [catRes, imgRes, locRes, availRes, reviewRes] = await Promise.all([
     admin.from("itemcategory").select("category_id, category_name"),
@@ -213,6 +215,7 @@ export async function getProducts(): Promise<Product[]> {
       rentalTerms: [],
       reviews: [],
       status: normalizeStatus(it.status),
+      isRentedOut: rentedOutIds.has(it.item_id),
       availability: availByItem.get(it.item_id) || [],
       createdAt: it.created_at,
     } satisfies Product;
@@ -402,6 +405,7 @@ export async function getProductById(id: string): Promise<Product | null> {
     rentalTerms,
     reviews,
     status: normalizeStatus(it.status),
+    isRentedOut: (await getRentedOutItemIds(admin, [it.item_id])).has(it.item_id),
     availability,
     createdAt: it.created_at,
   } satisfies Product;

@@ -27,6 +27,8 @@ interface LenderItem {
   rental_fee_per_day: number;
   deposit: number;
   status: string;
+  /** แสดงผลเท่านั้น: ถูกเช่าออกไปอยู่ตอนนี้ (มีออเดอร์ item_sent/item_received) */
+  isRentedOut?: boolean;
   created_at: string;
   category?: {
     category_name: string;
@@ -418,7 +420,9 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {items.map((item) => {
-              const badge = getItemStatusBadge(item.status);
+              const badge = getItemStatusBadge(
+                item.status === 'available' && item.isRentedOut ? 'rented' : item.status,
+              );
 
               return (
                 <div

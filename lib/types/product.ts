@@ -141,6 +141,8 @@ export interface Product {
   rentalTerms: string[];
   reviews: ProductReview[];
   status: ItemStatus;
+  /** แสดงผลเท่านั้น: ถูกเช่าออกไปอยู่ตอนนี้ (มีออเดอร์ item_sent/item_received) ไม่ใช่ตัวตัดสินการจอง */
+  isRentedOut?: boolean;
   availability: Array<{
     startDate: string;
     endDate: string;
