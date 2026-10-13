@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import BookingClient from "./BookingClient";
 import type { BookingLocation, BookingPageData, DateRange } from "./types";
@@ -7,16 +8,6 @@ import type { BookingLocation, BookingPageData, DateRange } from "./types";
 // ข้อมูลมาจาก DB ตอน request จริง (มีออเดอร์/คิวว่างที่เปลี่ยนได้) → ไม่ prerender
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// สถานะออเดอร์ที่ "กันคิว" (ล็อควันเฉพาะหลังจากผู้ให้เช่ากดอนุมัติแล้ว/กำลังชำระเงิน/ชำระเงินแล้ว)
-const ACTIVE_ORDER_STATUSES = [
-  "awaiting_payment",
-  "paid",
-  "item_sent",
-  "item_received",
-  "item_returned",
-  "awaiting_additional_payment",
-];
 
 function formatFullAddress(location: {
   no: string | null;
@@ -96,7 +87,7 @@ export default async function ProductRentPage({
       .from("rentalorder")
       .select("start_date, end_date, status, order_id")
       .eq("item_id", id)
-      .in("status", ACTIVE_ORDER_STATUSES),
+      .in("status", [...BOOKING_BLOCKING_STATUSES]),
     // เรตติ้งสินค้า: review join ผ่าน rentalorder.order_id ของชิ้นนี้
     admin
       .from("review")

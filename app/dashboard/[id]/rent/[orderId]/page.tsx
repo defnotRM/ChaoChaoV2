@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getOrderTimeouts } from "@/lib/system-config";
 import { createClient } from "@/lib/supabase/server";
 import RentOrderDetailClient, {
   type RentOrderDetailData,
@@ -162,5 +163,9 @@ export default async function UserRentalOrderDetailPage({
     })),
   };
 
-  return <RentOrderDetailClient data={data} userId={userId} />;
+  const timeouts = await getOrderTimeouts();
+
+  return (
+    <RentOrderDetailClient data={data} userId={userId} timeouts={timeouts} />
+  );
 }

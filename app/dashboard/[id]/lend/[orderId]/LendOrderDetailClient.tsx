@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import CountdownBanner from "./CountdownBanner";
+import type { OrderTimeouts } from "@/lib/system-config";
 import {
   AlertCircle,
   AlertTriangle,
@@ -183,9 +184,11 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
 export default function LendOrderDetailClient({
   data,
   userId,
+  timeouts,
 }: {
   data: LendOrderData;
   userId: string;
+  timeouts: OrderTimeouts;
 }) {
   const router = useRouter();
   const { order, item, renter, payments } = data;
@@ -903,7 +906,8 @@ export default function LendOrderDetailClient({
                 <div className="space-y-3">
                   <CountdownBanner
                     deadlineISO={new Date(
-                      new Date(order.created_at).getTime() + 8 * 3_600_000,
+                      new Date(order.created_at).getTime() +
+                        timeouts.approvalHours * 3_600_000,
                     ).toISOString()}
                   />
                   <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
@@ -949,7 +953,7 @@ export default function LendOrderDetailClient({
                           paymentsList.find((p) => p.status === "pending")
                             ?.date || order.updated_at,
                         ).getTime() +
-                          8 * 3_600_000,
+                          timeouts.slipReviewHours * 3_600_000,
                       ).toISOString()}
                     />
                     <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">

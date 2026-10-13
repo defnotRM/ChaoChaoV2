@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { apiError, apiSuccess } from "@/lib/api-response";
+import {
+  apiError,
+  apiSuccess,
+  isBookingConflictError,
+} from "@/lib/api-response";
+import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
 import {
   checkTransition,
@@ -181,12 +186,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         .select("order_id")
         .eq("item_id", fullOrder.item_id)
         .neq("order_id", id)
-        .in("status", [
-          "awaiting_payment",
-          "paid",
-          "item_sent",
-          "item_received",
-        ])
+        .in("status", [...BOOKING_BLOCKING_STATUSES])
         .lte("start_date", fullOrder.end_date)
         .gte("end_date", fullOrder.start_date);
 
@@ -207,6 +207,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     .maybeSingle();
 
   if (error) {
+    // constraint no_overlapping_active_bookings กันสินค้าชิ้นเดียวกันถูกใช้ซ้อนวัน
+    // (เช่น ยังมีออเดอร์ข้อพิพาท/รอชำระส่วนต่างที่ยังไม่จบ) ต้องบอกเหตุผลที่ชัดเจน ไม่ใช่ error ทั่วไป
+    if (isBookingConflictError(error)) {
+      return apiError(
+        "ไม่สามารถอนุมัติได้ เนื่องจากช่วงเวลานี้มีรายการเช่าอื่นของสินค้านี้ที่ยังไม่เสร็จสิ้น (เช่น รอตัดสินข้อพิพาท หรือรอชำระส่วนต่าง) กรุณารอให้รายการนั้นจบก่อน หรือปฏิเสธคำขอนี้",
+        409,
+      );
+    }
     console.error("Error updating rental order status:", error);
     return apiError("ไม่สามารถเปลี่ยนสถานะได้", 500);
   }

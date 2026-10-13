@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getOrderTimeouts } from "@/lib/system-config";
 import { createClient } from "@/lib/supabase/server";
 import LendOrderDetailClient, {
   type LendOrderData,
@@ -191,5 +192,9 @@ export default async function LenderOrderDetailPage({
     lenderAfterCount: lenderAfterCount ?? 0,
   };
 
-  return <LendOrderDetailClient data={data} userId={userId} />;
+  const timeouts = await getOrderTimeouts();
+
+  return (
+    <LendOrderDetailClient data={data} userId={userId} timeouts={timeouts} />
+  );
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
       .from("rentalorder")
       .select("order_id, start_date, end_date")
       .eq("item_id", itemId)
-      .in("status", ["awaiting_payment", "paid", "item_sent", "item_received"])
+      .in("status", [...BOOKING_BLOCKING_STATUSES])
       .lte("start_date", endDate)
       .gte("end_date", startDate);
 
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message:
-            "ช่วงเวลาดังกล่าวมีรายการเช่าที่ได้รับการอนุมัติไปแล้ว กรุณาเลือกช่วงเวลาอื่น",
+            "ช่วงเวลาดังกล่าวมีรายการเช่าอื่นของสินค้านี้ที่ยังไม่เสร็จสิ้น (เช่น อนุมัติแล้ว กำลังเช่า หรือรอตัดสินข้อพิพาท) กรุณาเลือกช่วงเวลาอื่น",
         },
         { status: 409 },
       );
