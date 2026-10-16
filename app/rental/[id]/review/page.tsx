@@ -5,6 +5,15 @@ import ReviewClient from "./ReviewClient";
 
 export const dynamic = "force-dynamic";
 
+// ครอบหน้ารีวิวให้มีระยะห่าง ไม่ติดแถบเมนูด้านบน (ใช้กับทุกสถานะของ ReviewClient)
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 pb-16 pt-6 sm:pb-20 sm:pt-8">
+      {children}
+    </div>
+  );
+}
+
 export default async function ReviewPage({
   params,
 }: {
@@ -59,18 +68,20 @@ export default async function ReviewPage({
   }
 
   return (
-    <ReviewClient
-      orderId={order.order_id}
-      itemName={item?.item_name ?? "อุปกรณ์เช่า"}
-      existingReview={
-        existingReview
-          ? {
-              rating: existingReview.rating,
-              comment: existingReview.comment || "",
-              images: existingImages,
-            }
-          : null
-      }
-    />
+    <PageShell>
+      <ReviewClient
+        orderId={order.order_id}
+        itemName={item?.item_name ?? "อุปกรณ์เช่า"}
+        existingReview={
+          existingReview
+            ? {
+                rating: existingReview.rating,
+                comment: existingReview.comment || "",
+                images: existingImages,
+              }
+            : null
+        }
+      />
+    </PageShell>
   );
 }

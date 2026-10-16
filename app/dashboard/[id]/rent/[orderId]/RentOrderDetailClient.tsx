@@ -562,12 +562,13 @@ export default function RentOrderDetailClient({
                             </span>
                           </div>
                           <span
-                            className={`mt-2 block text-xs ${isCurrent
+                            className={`mt-2 block text-xs ${
+                              isCurrent
                                 ? "font-bold text-[#1b3554]"
                                 : isDone
                                   ? "font-semibold text-slate-700"
                                   : "text-slate-400"
-                              }`}
+                            }`}
                           >
                             {label}
                           </span>
@@ -817,12 +818,13 @@ export default function RentOrderDetailClient({
                     สถานะการชำระเงิน
                   </span>
                   <span
-                    className={`text-xs font-bold ${paidAmount >= totalPaid && totalPaid > 0
+                    className={`text-xs font-bold ${
+                      paidAmount >= totalPaid && totalPaid > 0
                         ? "text-emerald-600"
                         : hasPending
                           ? "text-sky-600"
                           : "text-amber-700"
-                      }`}
+                    }`}
                   >
                     {paymentStatusLabel}
                   </span>
@@ -1120,10 +1122,11 @@ export default function RentOrderDetailClient({
                   เหลืออีก {daysLeft} วันก่อนวันนัดรับ
                 </p>
                 <div
-                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${isNearCase
+                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${
+                    isNearCase
                       ? "bg-rose-50 text-rose-700"
                       : "bg-emerald-50 text-emerald-700"
-                    }`}
+                  }`}
                 >
                   {isNearCase
                     ? "หากยกเลิกตอนนี้ (เหลือ ≤ 2 วัน) คุณจะได้คืนแค่เงินประกัน 100% เท่านั้น ค่าเช่าจะไม่ได้คืนเลย"
