@@ -24,6 +24,7 @@ import {
   Phone,
   Printer,
   QrCode,
+  Star,
   Upload,
   User,
   Wallet,
@@ -561,13 +562,12 @@ export default function RentOrderDetailClient({
                             </span>
                           </div>
                           <span
-                            className={`mt-2 block text-xs ${
-                              isCurrent
+                            className={`mt-2 block text-xs ${isCurrent
                                 ? "font-bold text-[#1b3554]"
                                 : isDone
                                   ? "font-semibold text-slate-700"
                                   : "text-slate-400"
-                            }`}
+                              }`}
                           >
                             {label}
                           </span>
@@ -817,13 +817,12 @@ export default function RentOrderDetailClient({
                     สถานะการชำระเงิน
                   </span>
                   <span
-                    className={`text-xs font-bold ${
-                      paidAmount >= totalPaid && totalPaid > 0
+                    className={`text-xs font-bold ${paidAmount >= totalPaid && totalPaid > 0
                         ? "text-emerald-600"
                         : hasPending
                           ? "text-sky-600"
                           : "text-amber-700"
-                    }`}
+                      }`}
                   >
                     {paymentStatusLabel}
                   </span>
@@ -955,14 +954,23 @@ export default function RentOrderDetailClient({
                     </Link>
                   </div>
                 ) : currentStatus === "completed" ? (
-                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
-                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
-                    </p>
-                    <p className="text-xs text-emerald-700">
-                      ขอบคุณที่ใช้บริการ ChaoChao!
-                    </p>
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
+                      <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        ขอบคุณที่ใช้บริการ ChaoChao!
+                      </p>
+                    </div>
+                    <Link
+                      href={`/rental/${order.order_id}/review`}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
+                    >
+                      <Star className="h-4 w-4" />
+                      <span>รีวิวอุปกรณ์และผู้ให้เช่า</span>
+                    </Link>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
@@ -1112,11 +1120,10 @@ export default function RentOrderDetailClient({
                   เหลืออีก {daysLeft} วันก่อนวันนัดรับ
                 </p>
                 <div
-                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${
-                    isNearCase
+                  className={`mt-3 rounded-xl p-3 text-xs font-semibold ${isNearCase
                       ? "bg-rose-50 text-rose-700"
                       : "bg-emerald-50 text-emerald-700"
-                  }`}
+                    }`}
                 >
                   {isNearCase
                     ? "หากยกเลิกตอนนี้ (เหลือ ≤ 2 วัน) คุณจะได้คืนแค่เงินประกัน 100% เท่านั้น ค่าเช่าจะไม่ได้คืนเลย"
