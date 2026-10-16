@@ -59,8 +59,9 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 `30_secdef_execute_hardening.sql` (ถอนสิทธิ์เรียกฟังก์ชัน SECURITY DEFINER ผ่าน REST และผูก `p_caller_id` ของ `settle_rental_order` / `cancel_rental_order` กับ `auth.uid()`),
 `31_advisor_hardening.sql` (ตั้ง `search_path` ให้ `set_updated_at` และย้าย `btree_gist` ไป schema `extensions`),
 `32_stuck_return_notification.sql` (ให้ cron แจ้งเตือนรายวันแจ้งผู้เช่าและแอดมินเมื่อออเดอร์ `item_sent` เลยกำหนดคืนแล้ว ผู้ให้เช่าอัปโหลดรูปคืนแล้วแต่ผู้เช่ายังไม่ยืนยัน ไม่เปลี่ยนสถานะ),
-`33_settle_outcome_guard.sql` (ผู้ใช้ทั่วไปเรียก `settle_rental_order` ได้เฉพาะ `happy` ที่มีรูปคืนของครบทั้งสองฝ่าย และ `renter_rejected_meetup` โดยผู้เช่า ผลลัพธ์อื่นเฉพาะแอดมิน/cron)
-ไฟล์ย้อนกลับอยู่ใน `down/` เช่นเดียวกัน หมายเหตุ: `full_install.sql` ยังเป็นสภาพหลัง 26 ส่วน 27–33 ให้รันต่อท้ายตามลำดับ
+`33_settle_outcome_guard.sql` (ผู้ใช้ทั่วไปเรียก `settle_rental_order` ได้เฉพาะ `happy` ที่มีรูปคืนของครบทั้งสองฝ่าย และ `renter_rejected_meetup` โดยผู้เช่า ผลลัพธ์อื่นเฉพาะแอดมิน/cron),
+`34_cancel_reason_notification.sql` (แจ้งเตือนผู้เช่าพร้อมเหตุผลเมื่อผู้ให้เช่ายกเลิก)
+ไฟล์ย้อนกลับอยู่ใน `down/` เช่นเดียวกัน หมายเหตุ: `full_install.sql` ยังเป็นสภาพหลัง 26 ส่วน 27–34 ให้รันต่อท้ายตามลำดับ
 
 ## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
 
