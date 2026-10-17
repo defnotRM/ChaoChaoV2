@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบอนุมัติสลิปให้อัตโนมัติ
+    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบปฏิเสธสลิปอัตโนมัติ (ผู้เช่าต้องอัปโหลดใหม่)
     const { data: pendingSlip } = await admin
       .from("payment")
       .select("created_at")
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         await expireOverdueOrders();
         return NextResponse.json(
           {
-            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้อนุมัติสลิปให้อัตโนมัติ กรุณารีเฟรชหน้า`,
+            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้ปฏิเสธสลิปอัตโนมัติ ผู้เช่าจะต้องอัปโหลดสลิปใหม่ กรุณารีเฟรชหน้า`,
           },
           { status: 409 },
         );

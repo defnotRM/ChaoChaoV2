@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบอนุมัติสลิปให้อัตโนมัติ
+    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบปฏิเสธสลิปอัตโนมัติ (ผู้เช่าต้องอัปโหลดใหม่)
     const { data: pendingSlip } = await admin
       .from("payment")
       .select("created_at")
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         await expireOverdueOrders();
         return NextResponse.json(
           {
-            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้อนุมัติสลิปให้อัตโนมัติ กรุณารีเฟรชหน้า`,
+            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้ปฏิเสธสลิปอัตโนมัติ ผู้เช่าจะต้องอัปโหลดสลิปใหม่ กรุณารีเฟรชหน้า`,
           },
           { status: 409 },
         );
@@ -140,13 +140,14 @@ export async function POST(request: Request) {
       .eq("order_id", orderId)
       .eq("status", "awaiting_payment");
 
+    const { paymentHours } = await getOrderTimeouts();
     await admin.from("notification").insert({
       user_id: order.user_id,
       type: "payment_rejected",
       title: "สลิปการชำระเงินถูกปฏิเสธ",
       message: trimmedReason
-        ? `ผู้ให้เช่าปฏิเสธสลิป: ${trimmedReason} กรุณาอัปโหลดสลิปใหม่ภายใน 8 ชั่วโมง`
-        : "ผู้ให้เช่าตรวจสอบแล้วไม่พบยอดเงินตามสลิป กรุณาอัปโหลดสลิปใหม่ภายใน 8 ชั่วโมง",
+        ? `ผู้ให้เช่าปฏิเสธสลิป: ${trimmedReason} กรุณาอัปโหลดสลิปใหม่ภายใน ${paymentHours} ชั่วโมง`
+        : `ผู้ให้เช่าตรวจสอบแล้วไม่พบยอดเงินตามสลิป กรุณาอัปโหลดสลิปใหม่ภายใน ${paymentHours} ชั่วโมง`,
       related_order_id: orderId,
     });
 
