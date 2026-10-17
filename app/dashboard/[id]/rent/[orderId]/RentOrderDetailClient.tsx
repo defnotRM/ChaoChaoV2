@@ -980,7 +980,7 @@ export default function RentOrderDetailClient({
       {/* Modal ชำระเงิน / อัปโหลดสลิป */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <button
               type="button"
               onClick={() => setShowPaymentModal(false)}
