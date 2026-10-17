@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -69,6 +71,15 @@ export default async function ReviewPage({
 
   return (
     <PageShell>
+      <div className="mx-auto mb-4 max-w-xl">
+        <Link
+          href={`/dashboard/${user.id}/rent/${order.order_id}`}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>กลับไปหน้ารายละเอียดการเช่า</span>
+        </Link>
+      </div>
       <ReviewClient
         orderId={order.order_id}
         itemName={item?.item_name ?? "อุปกรณ์เช่า"}
