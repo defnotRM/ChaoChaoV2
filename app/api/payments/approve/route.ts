@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { enforceTransition } from "@/lib/workflow";
+import {
+  expireOverdueOrders,
+  getOrderTimeouts,
+  isPastDeadline,
+} from "@/lib/system-config";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +77,28 @@ export async function POST(request: Request) {
         { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนตรวจสอบการชำระเงิน" },
         { status: 409 },
       );
+    }
+
+    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบอนุมัติสลิปให้อัตโนมัติ
+    const { data: pendingSlip } = await admin
+      .from("payment")
+      .select("created_at")
+      .eq("order_id", orderId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (pendingSlip) {
+      const timeouts = await getOrderTimeouts();
+      if (isPastDeadline(pendingSlip.created_at, timeouts.slipReviewHours)) {
+        await expireOverdueOrders();
+        return NextResponse.json(
+          {
+            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้อนุมัติสลิปให้อัตโนมัติ กรุณารีเฟรชหน้า`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     // อัปเดต payment เป็น paid (ต้องมีสลิปที่รอตรวจจริง)

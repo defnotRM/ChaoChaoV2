@@ -7,6 +7,11 @@ import {
   isBookingConflictError,
 } from "@/lib/api-response";
 import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
+import {
+  expireOverdueOrders,
+  getOrderTimeouts,
+  isPastDeadline,
+} from "@/lib/system-config";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
 import {
   checkTransition,
@@ -100,7 +105,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const { data: current, error: fetchError } = await admin
     .from("rentalorder")
-    .select("order_id, status, item_id, user_id")
+    .select("order_id, status, item_id, user_id, created_at")
     .eq("order_id", id)
     .maybeSingle();
 
@@ -170,6 +175,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       `ไม่สามารถเปลี่ยนสถานะจาก "${current.status}" เป็น "${status}" ได้`,
       409,
     );
+  }
+
+  // อนุมัติได้ภายในเวลาที่แอดมินตั้ง (approval_timeout_hours) เท่านั้น เลยแล้วให้ระบบปฏิเสธคำขอให้ทันที
+  if (status === "awaiting_payment") {
+    const timeouts = await getOrderTimeouts();
+    if (isPastDeadline(current.created_at, timeouts.approvalHours)) {
+      await expireOverdueOrders();
+      return apiError(
+        `คำขอนี้เกินเวลาอนุมัติ (${timeouts.approvalHours} ชั่วโมง) แล้ว ระบบได้ปฏิเสธคำขออัตโนมัติ`,
+        409,
+      );
+    }
   }
 
   // ถ้าผู้ให้เช่ากดยอมรับ/อนุมัติ (awaiting_payment) ตรวจสอบว่าไม่มีออเดอร์อื่นที่อนุมัติซ้อนวันกัน

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadImageToStorage } from "@/lib/supabase/storage";
+import {
+  expireOverdueOrders,
+  getOrderTimeouts,
+  isPastDeadline,
+} from "@/lib/system-config";
 
 export const dynamic = "force-dynamic";
 
@@ -114,7 +119,9 @@ export async function POST(request: Request) {
     // 2) ตรวจออเดอร์ต้องมีจริง
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select("order_id, user_id, status, total_paid, rental_fee, deposit")
+      .select(
+        "order_id, user_id, status, total_paid, rental_fee, deposit, updated_at",
+      )
       .eq("order_id", orderId)
       .maybeSingle();
 
@@ -131,6 +138,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่อยู่ในสถานะรอชำระเงิน" },
         { status: 400 },
+      );
+    }
+
+    // อัปโหลดสลิปได้ภายในเวลาชำระเงินที่แอดมินตั้ง (payment_timeout_hours) นับจากอนุมัติ/ปฏิเสธสลิปครั้งล่าสุด
+    const timeouts = await getOrderTimeouts();
+    if (isPastDeadline(order.updated_at, timeouts.paymentHours)) {
+      await expireOverdueOrders();
+      return NextResponse.json(
+        {
+          message: `เกินเวลาชำระเงิน (${timeouts.paymentHours} ชั่วโมง) แล้ว ออเดอร์นี้ถูกยกเลิกอัตโนมัติ`,
+        },
+        { status: 409 },
       );
     }
 
