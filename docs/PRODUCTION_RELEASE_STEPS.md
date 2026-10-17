@@ -1,4 +1,4 @@
-# ขั้นตอนขึ้น production: แก้ช่องโหว่ + migration 30–33
+# ขั้นตอนขึ้น production: แก้ช่องโหว่ + migration 30–34
 
 สำหรับคนที่ดูแล production (Supabase `awnwvckyjkkuhufmdgas` และตัว deploy ของแอป) อ่านทั้งไฟล์ก่อนเริ่ม ทำทีละขั้น และหยุดทันทีถ้าผลตรวจไม่ตรงที่เขียนไว้
 
@@ -11,6 +11,7 @@
 | migration 31 | ตั้ง `search_path` ของ `set_updated_at` และย้าย `btree_gist` ไป schema `extensions` | ต่ำ (แก้คำเตือน advisors) |
 | migration 32 | cron รายวันแจ้งเตือนออเดอร์ที่ค้างหลังเลยกำหนดคืน | ต่ำ |
 | migration 33 | `settle_rental_order`: ผู้เช่า/ผู้ให้เช่าเรียกได้เฉพาะ `happy` (ต้องมีรูปคืนของครบสองฝ่าย) และ `renter_rejected_meetup` (ผู้เช่า) ผลลัพธ์อื่น (ไม่คืนของ/เสียหาย/ไม่มาตามนัด/ข้อพิพาท) เฉพาะแอดมินหรือ cron ปิดช่องที่ฝ่ายใดฝ่ายหนึ่งเลือกผลลัพธ์ที่ได้มัดจำเอง | สูง ต้องขึ้นพร้อม 30 (รันหลัง 30) |
+| migration 34 | trigger แจ้งเตือนตอนยกเลิก: ผู้เช่าเห็นเหตุผลที่ผู้ให้เช่ากรอก (FR-32) แทนข้อความกลาง | ต่ำ เปลี่ยนข้อความแจ้งเตือนอย่างเดียว |
 
 ทั้ง 4 migration ทดสอบแล้ว: ฐานข้อมูลจำลอง (ทั้ง UP และ DOWN) และ Supabase staging จริง (30, 31 ผ่านชุดทดสอบโจมตี/ใช้งานปกติ, 32 ผ่านกับข้อมูลค้างจำลอง) **ยังไม่เคยรันบน production**
 
@@ -28,7 +29,7 @@
 ## 2. ลำดับที่แนะนำ
 
 1. **deploy แอป** (ปิดช่องโหว่แอดมินก่อน) ใช้วิธี deploy ที่ใช้อยู่ตามเดิม (repo มี `Dockerfile` และ `docker-compose.yml`, build ต้องส่ง `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` ของ production)
-2. รัน migration **30 → 31 → 32 → 33 ตามลำดับ** แต่ละไฟล์ใน SQL Editor ของ production (วางทั้งไฟล์ รันครั้งเดียว) และตรวจผลทุกไฟล์ก่อนไปไฟล์ต่อไป
+2. รัน migration **30 → 31 → 32 → 33 → 34 ตามลำดับ** แต่ละไฟล์ใน SQL Editor ของ production (วางทั้งไฟล์ รันครั้งเดียว) และตรวจผลทุกไฟล์ก่อนไปไฟล์ต่อไป
 
 ลำดับนี้ปลอดภัยทั้งสองทาง: โค้ดแอปเดิมก็ใช้ได้กับฐานข้อมูลหลัง migration 30 (ทุก route ที่เรียก `settle`/`cancel` ส่ง `p_caller_id = user.id` ผ่าน client ฝั่งผู้ใช้อยู่แล้ว) และโค้ดใหม่ก็ใช้ได้กับฐานข้อมูลก่อน migration
 
@@ -67,7 +68,7 @@ SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'no_overlapp
 
 ## 5. ถ้าพัง ย้อนกลับ
 
-- **ฐานข้อมูล:** รันไฟล์ `down/` ย้อนลำดับ: `33_...down.sql` → `32_...down.sql` → `31_...down.sql` → `30_...down.sql` (ไฟล์ 30 down คืนสิทธิ์เดิมและคืนฟังก์ชัน `settle`/`cancel` เป็นของ migration 29 แต่**เปิดช่องโหว่กลับมา** ใช้เฉพาะเมื่อจำเป็นจริง)
+- **ฐานข้อมูล:** รันไฟล์ `down/` ย้อนลำดับ: `34_...down.sql` → `33_...down.sql` → `32_...down.sql` → `31_...down.sql` → `30_...down.sql` (ไฟล์ 30 down คืนสิทธิ์เดิมและคืนฟังก์ชัน `settle`/`cancel` เป็นของ migration 29 แต่**เปิดช่องโหว่กลับมา** ใช้เฉพาะเมื่อจำเป็นจริง)
 - **แอป:** deploy คอมมิตหรือ image เดิมที่จดไว้ในหัวข้อ 1 (หรือกด Revert PR บน GitHub)
 - อาการที่ต้องย้อน: ผู้ใช้กดขั้นตอนเช่า/ยกเลิก/ปิดยอดไม่ได้ และเห็น `permission denied` หรือ `ไม่มีสิทธิ์: p_caller_id` ซ้ำๆ ให้จดชื่อ route แล้วย้อนเฉพาะ migration 30 ก่อน
 
@@ -84,4 +85,4 @@ SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'no_overlapp
 ## 7. ห้ามทำในรอบนี้
 
 - ห้ามเปลี่ยน `workflow_mode` เป็น `dynamic` (production ยังเป็น `shadow` และยังไม่มีข้อมูลการใช้งานจริงพอ)
-- ห้ามแก้ไฟล์ migration 30–33 ที่ทดสอบแล้ว ถ้าต้องแก้ ให้สร้างไฟล์ใหม่ต่อเลขพร้อมไฟล์ `down/`
+- ห้ามแก้ไฟล์ migration 30–34 ที่ทดสอบแล้ว ถ้าต้องแก้ ให้สร้างไฟล์ใหม่ต่อเลขพร้อมไฟล์ `down/`

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  expireOverdueOrders,
+  getOrderTimeouts,
+  isPastDeadline,
+  MAX_SLIP_REJECTIONS,
+} from "@/lib/system-config";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +70,44 @@ export async function POST(request: Request) {
     if (order.status !== "awaiting_payment") {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนตรวจสอบการชำระเงิน" },
+        { status: 409 },
+      );
+    }
+
+    // ตรวจสลิปได้ภายในเวลาที่แอดมินตั้ง (slip_review_timeout_hours) เลยแล้วระบบอนุมัติสลิปให้อัตโนมัติ
+    const { data: pendingSlip } = await admin
+      .from("payment")
+      .select("created_at")
+      .eq("order_id", orderId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (pendingSlip) {
+      const timeouts = await getOrderTimeouts();
+      if (isPastDeadline(pendingSlip.created_at, timeouts.slipReviewHours)) {
+        await expireOverdueOrders();
+        return NextResponse.json(
+          {
+            message: `เกินเวลาตรวจสอบสลิป (${timeouts.slipReviewHours} ชั่วโมง) แล้ว ระบบได้อนุมัติสลิปให้อัตโนมัติ กรุณารีเฟรชหน้า`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // ปฏิเสธสลิปของออเดอร์เดียวกันได้ไม่เกิน MAX_SLIP_REJECTIONS ครั้ง
+    // ครบแล้วทำได้แค่อนุมัติสลิป หรือยกเลิกรายการเช่า (ผู้ให้เช่ายกเลิกก่อนรับเงินได้โดยไม่มีเงื่อนไข)
+    const { count: rejectedCount } = await admin
+      .from("payment")
+      .select("payment_id", { count: "exact", head: true })
+      .eq("order_id", orderId)
+      .eq("status", "rejected");
+    if ((rejectedCount ?? 0) >= MAX_SLIP_REJECTIONS) {
+      return NextResponse.json(
+        {
+          message: `ปฏิเสธสลิปของออเดอร์นี้ครบ ${MAX_SLIP_REJECTIONS} ครั้งแล้ว กรุณาอนุมัติสลิป หรือยกเลิกรายการเช่าแทน`,
+        },
         { status: 409 },
       );
     }

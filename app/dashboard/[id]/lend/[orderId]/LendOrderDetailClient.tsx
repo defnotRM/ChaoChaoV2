@@ -303,6 +303,9 @@ export default function LendOrderDetailClient({
   }, [order.order_id, fetchLatestOrder]);
 
   const hasPending = paymentsList.some((p) => p.status === "pending");
+  // ปฏิเสธสลิปได้ไม่เกิน 3 ครั้งต่อออเดอร์ (ตรงกับ MAX_SLIP_REJECTIONS ใน lib/system-config.ts ที่ API ใช้บังคับ)
+  const slipRejectLimitReached =
+    paymentsList.filter((p) => p.status === "rejected").length >= 3;
   const paidAmount = paymentsList
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -1067,6 +1070,11 @@ export default function LendOrderDetailClient({
                           </button>
                         </div>
                       </div>
+                    ) : slipRejectLimitReached ? (
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+                        ปฏิเสธสลิปครบ 3 ครั้งแล้ว
+                        กรุณาตรวจสอบและยืนยันการชำระเงิน หรือยกเลิกรายการเช่า
+                      </p>
                     ) : (
                       <button
                         type="button"
@@ -1078,6 +1086,16 @@ export default function LendOrderDetailClient({
                         <span>ปฏิเสธสลิป ให้ผู้เช่าอัปโหลดใหม่</span>
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={handleCancelBeforePayment}
+                      disabled={isUpdating}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>ยกเลิกรายการเช่า</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-2.5">
