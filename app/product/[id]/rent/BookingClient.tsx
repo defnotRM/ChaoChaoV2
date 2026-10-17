@@ -24,6 +24,8 @@ import {
 
 import type { BookingDraft, BookingPageData, DateRange } from "./types";
 
+import RentalTermsModal from "./RentalTermsModal";
+
 /* ────────────────────────────── ค่าคงที่ (UI rules) ──────────────────────────────
  * ค่าเหล่านี้เป็นกติกาฝั่ง UI ที่ยังไม่ผูกกับ schema — ปรับได้อิสระ
  */
@@ -311,6 +313,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   const totalPayable = rentalFee + item.deposit;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<{
     id: string;
@@ -382,6 +385,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
       const result = await res.json();
       if (!res.ok) {
+        setShowTermsModal(false);
         setSubmitError(
           result.message || "ส่งคำขอเช่าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         );
@@ -394,6 +398,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
       router.push(`/dashboard/${targetUserId}/rent/${result.orderId}`);
     } catch (err) {
       console.error("Submit booking error:", err);
+      setShowTermsModal(false)
       setSubmitError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsSubmitting(false);
@@ -807,7 +812,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               ) : (
                 <button
                   type="button"
-                  onClick={handleSubmitBooking}
+                  onClick={() => setShowTermsModal(true)}
                   disabled={!canContinue || isSubmitting}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3.5 text-base font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
                 >
@@ -848,6 +853,12 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
           </aside>
         </div>
       </div>
+      <RentalTermsModal
+        open={showTermsModal}
+        submitting={isSubmitting}
+        onCancel={() => setShowTermsModal(false)}
+        onConfirm={handleSubmitBooking}
+      />
     </div>
   );
 }
