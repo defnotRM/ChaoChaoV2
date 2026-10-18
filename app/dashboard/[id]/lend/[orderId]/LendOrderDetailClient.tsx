@@ -918,7 +918,7 @@ export default function LendOrderDetailClient({
                       มีคำขอเช่าใหม่ส่งเข้ามา
                     </p>
                     <p className="text-[11px] text-amber-700 mt-1">
-                      กรุณาตรวจสอบวันและจุดนัดหมาย ภายใน 8 ชั่วโมง
+                      กรุณาตรวจสอบวันและจุดนัดหมาย ภายใน {timeouts.approvalHours} ชั่วโมง
                       จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
                     </p>
                   </div>
@@ -1040,8 +1040,8 @@ export default function LendOrderDetailClient({
                           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-[#3f6593] focus:ring-4 focus:ring-sky-100"
                         />
                         <p className="text-[11px] text-rose-700">
-                          ผู้เช่าจะได้รับแจ้งเตือนให้อัปโหลดสลิปใหม่ภายใน 8
-                          ชั่วโมง รายการเช่ายังไม่ถูกยกเลิก
+                          ผู้เช่าจะได้รับแจ้งเตือนให้อัปโหลดสลิปใหม่ภายใน{" "}
+                          {timeouts.paymentHours} ชั่วโมง รายการเช่ายังไม่ถูกยกเลิก
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <button
