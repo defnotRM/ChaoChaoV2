@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Trash2 } from "lucide-react";
@@ -141,12 +142,16 @@ export default function ReviewClient({
         {imagePreviews.length > 0 && (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {imagePreviews.map((url, i) => (
-              <img
-                key={i}
-                src={url}
-                alt={`รูปที่ ${i + 1}`}
-                className="aspect-square rounded-lg border object-cover"
-              />
+              <div key={i} className="relative aspect-square overflow-hidden rounded-lg border">
+                <Image
+                  src={url}
+                  alt={`รูปรีวิวที่ ${i + 1}`}
+                  fill
+                  sizes="(max-width: 640px) 33vw, 20vw"
+                  className="object-cover"
+                  unoptimized={url.startsWith("data:") || url.startsWith("blob:")}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -224,15 +229,18 @@ export default function ReviewClient({
               key={i}
               className="relative aspect-square overflow-hidden rounded-lg border"
             >
-              <img
+              <Image
                 src={url}
-                alt={`รูปที่ ${i + 1}`}
-                className="h-full w-full object-cover"
+                alt={`รูปรีวิวที่ ${i + 1}`}
+                fill
+                sizes="(max-width: 640px) 33vw, 20vw"
+                className="object-cover"
+                unoptimized={url.startsWith("data:") || url.startsWith("blob:")}
               />
               <button
                 type="button"
                 onClick={() => removeImage(i)}
-                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                className="absolute right-1 top-1 z-10 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
               >
                 <Trash2 className="h-3 w-3" />
               </button>

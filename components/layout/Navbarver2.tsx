@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -22,9 +23,11 @@ function Brand() {
       className="flex shrink-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600"
     >
       <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] shadow-sm">
-        <img
+        <Image
           src="/logo.svg"
           alt="ChaoChao"
+          width={40}
+          height={40}
           className="h-full w-full object-contain"
         />
       </span>
@@ -206,9 +209,12 @@ export default function Navbarver2() {
               >
                 <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]">
                   {user.avatarUrl ? (
-                    <img
+                    <Image
                       src={user.avatarUrl}
                       alt={user.username}
+                      width={36}
+                      height={36}
+                      unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -299,10 +305,13 @@ export default function Navbarver2() {
                 className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]"
               >
                 {user.avatarUrl ? (
-                  <img
+                  <Image
                     src={user.avatarUrl}
-                    alt={user.username}
-                    className="h-full w-full object-cover"
+                    alt={user.username || "อวตารผู้ใช้"}
+                    fill
+                    sizes="40px"
+                    className="object-cover"
+                    unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                   />
                 ) : (
                   <span>{userInitial}</span>
@@ -364,10 +373,13 @@ export default function Navbarver2() {
                   >
                     <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-[#1b3554] ring-2 ring-white/40">
                       {user.avatarUrl ? (
-                        <img
+                        <Image
                           src={user.avatarUrl}
-                          alt={user.username}
-                          className="h-full w-full object-cover"
+                          alt={user.username || "อวตารผู้ใช้"}
+                          fill
+                          sizes="32px"
+                          className="object-cover"
+                          unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                         />
                       ) : (
                         <span>{userInitial}</span>

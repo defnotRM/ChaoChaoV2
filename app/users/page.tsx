@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
@@ -228,10 +229,13 @@ function UsersContent() {
                   <div>
                     <div className="relative h-20 w-full overflow-hidden bg-gradient-to-r from-[#1b3554] to-[#3f6593]">
                       {u.bannerUrl ? (
-                        <img
+                        <Image
                           src={u.bannerUrl}
-                          alt={u.username}
-                          className="h-full w-full object-cover"
+                          alt={u.username ? `ภาพหน้าปกของ ${u.username}` : "ภาพหน้าปก"}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover"
+                          unoptimized={u.bannerUrl.startsWith("data:") || u.bannerUrl.startsWith("blob:")}
                         />
                       ) : (
                         <div className="h-full w-full bg-gradient-to-r from-[#1b3554] to-[#3f6593]" />
@@ -243,10 +247,13 @@ function UsersContent() {
                       <div className="-mt-10 flex items-end justify-between">
                         <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-md ring-4 ring-white">
                           {u.avatarUrl ? (
-                            <img
+                            <Image
                               src={u.avatarUrl}
-                              alt={u.username}
-                              className="h-full w-full object-cover"
+                              alt={u.username || "อวตารผู้ใช้"}
+                              fill
+                              sizes="80px"
+                              className="object-cover"
+                              unoptimized={u.avatarUrl.startsWith("data:") || u.avatarUrl.startsWith("blob:")}
                             />
                           ) : (
                             <span>{userInitial}</span>
