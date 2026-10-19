@@ -1,5 +1,7 @@
-import ProductsPage from "@/app/products/page";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default ProductsPage;
+export default function HireProductListPage() {
+  redirect("/products");
+}
