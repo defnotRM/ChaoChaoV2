@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, MessageSquare, Star } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 
 export interface ReviewReplyData {
   orderId: string;
@@ -28,16 +30,18 @@ const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
 });
 
 export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
+  const { toast } = useToast();
   const [replyText, setReplyText] = useState(data.review?.lenderReply || "");
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedReply, setSavedReply] = useState(
     data.review?.lenderReply || null,
   );
 
   async function handleDeleteReply() {
-    if (!data.review || !window.confirm("ยืนยันลบคำตอบนี้?")) return;
+    if (!data.review) return;
     setDeleting(true);
     setErrorMsg(null);
     try {
@@ -46,13 +50,19 @@ export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrorMsg(payload?.message ?? "ลบคำตอบไม่สำเร็จ");
+        const msg = payload?.message ?? "ลบคำตอบไม่สำเร็จ";
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
       setSavedReply(null);
       setReplyText("");
+      setShowDeleteConfirm(false);
+      toast.success("ลบคำตอบกลับเรียบร้อยแล้ว");
     } catch {
-      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+      const msg = "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -70,12 +80,17 @@ export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrorMsg(payload?.message ?? "บันทึกไม่สำเร็จ");
+        const msg = payload?.message ?? "บันทึกไม่สำเร็จ";
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
       setSavedReply(replyText.trim());
+      toast.success(savedReply ? "แก้ไขคำตอบกลับสำเร็จ" : "ส่งคำตอบกลับสำเร็จ");
     } catch {
-      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+      const msg = "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -170,9 +185,9 @@ export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
                 {savedReply && (
                   <button
                     type="button"
-                    onClick={handleDeleteReply}
+                    onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleting}
-                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
                   >
                     {deleting ? "กำลังลบ..." : "ลบคำตอบ"}
                   </button>
@@ -181,6 +196,18 @@ export default function ReviewReplyClient({ data }: { data: ReviewReplyData }) {
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDeleteReply}
+          title="ยืนยันการลบคำตอบกลับ"
+          description="คุณแน่ใจหรือไม่ว่าต้องการลบคำตอบกลับนี้? การลบไม่สามารถย้อนกลับได้"
+          confirmText="ยืนยันลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          isLoading={deleting}
+        />
       </div>
     </div>
   );

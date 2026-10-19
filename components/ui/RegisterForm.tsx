@@ -20,9 +20,11 @@ import {
   registerSchema,
   type RegisterFormData,
 } from "@/lib/validations/register";
+import { useToast } from "@/components/ui/Toast";
 
 export default function RegisterForm() {
   const router = useRouter();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -59,15 +61,21 @@ export default function RegisterForm() {
       const result = await res.json();
 
       if (!res.ok) {
-        setServerError(result.message ?? "เกิดข้อผิดพลาดในการสมัครสมาชิก");
+        const msg = result.message ?? "เกิดข้อผิดพลาดในการสมัครสมาชิก";
+        setServerError(msg);
+        toast.error(msg);
         return;
       }
 
-      alert("สมัครสมาชิกสำเร็จ! กำลังนำท่านไปยังหน้าเข้าสู่ระบบ");
-      router.push("/login");
+      toast.success("สมัครสมาชิกสำเร็จ! กำลังนำท่านไปยังหน้าเข้าสู่ระบบ");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1000);
     } catch (error) {
       console.error(error);
-      setServerError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+      const msg = "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์";
+      setServerError(msg);
+      toast.error(msg);
     }
   };
 

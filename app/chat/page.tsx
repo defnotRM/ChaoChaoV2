@@ -17,6 +17,7 @@ import {
   Lock,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/Toast";
 
 interface Partner {
   id: string;
@@ -94,6 +95,7 @@ function formatMessageGroupDate(dateString: string) {
 }
 
 function ChatContent() {
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const targetRoomIdParam = searchParams.get("roomId");
 
@@ -319,11 +321,12 @@ function ChatContent() {
         setTimeout(() => scrollToBottom(true), 20);
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        alert("ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง");
+        toast.error("ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง");
       }
     } catch (err) {
       console.error("Error sending message:", err);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      toast.error("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
