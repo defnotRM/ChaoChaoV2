@@ -20,7 +20,7 @@ export async function GET(
     const admin = createAdminClient();
 
     // 1. Fetch user profile
-    const { data: userRow, error: userError } = await admin
+    const { data: userRow } = await admin
       .from("useraccount")
       .select("user_id, username, bio, avatar_url, banner_url, status, updated_at, created_at")
       .eq("user_id", userId)
@@ -31,7 +31,7 @@ export async function GET(
     // Fallback: If not found in useraccount, fetch from auth.users and auto-sync
     if (!user) {
       try {
-        const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
+        const { data: authUser } = await admin.auth.admin.getUserById(userId);
         if (authUser?.user) {
           const au = authUser.user;
           const uName =
@@ -111,7 +111,7 @@ export async function GET(
     });
 
     let roles = (roleAssignments || [])
-      .map((ra: any) => roleTypeById.get(ra.role_id))
+      .map((ra: { role_id: string }) => roleTypeById.get(ra.role_id))
       .filter((r): r is string => Boolean(r));
 
     // If user has listed items, guarantee lender role
@@ -143,7 +143,7 @@ export async function GET(
 
     // 3. Fetch primary images for items
     const itemIds = (items || []).map((it) => it.item_id);
-    let imagesMap = new Map<string, string>();
+    const imagesMap = new Map<string, string>();
 
     if (itemIds.length > 0) {
       const { data: images } = await admin

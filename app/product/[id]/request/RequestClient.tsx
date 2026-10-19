@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -74,12 +73,16 @@ const DAMAGE_TIERS: Array<{ label: string; note?: string }> = [
 
 export default function RequestClient({ data }: { data: RequestPageData }) {
   const { item, ownerName, renter } = data;
-  const router = useRouter();
-
   // draft จาก Step 1 (undefined = กำลังโหลด, null = ไม่มี)
-  const [draft, setDraft] = useState<BookingDraft | null | undefined>(
-    undefined,
-  );
+  const [draft] = useState<BookingDraft | null | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as BookingDraft) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [firstName, setFirstName] = useState(renter.firstName);
   const [lastName, setLastName] = useState(renter.lastName);
@@ -99,15 +102,6 @@ export default function RequestClient({ data }: { data: RequestPageData }) {
     orderId: string;
     warnings: string[];
   } | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
-      setDraft(raw ? (JSON.parse(raw) as BookingDraft) : null);
-    } catch {
-      setDraft(null);
-    }
-  }, []);
 
   const days =
     draft && draft.start_date && draft.end_date

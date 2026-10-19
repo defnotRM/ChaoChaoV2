@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, ShoppingBag, Store, Plus, Search } from 'lucide-react';
+import { ShoppingBag, Store, Plus, Search } from 'lucide-react';
 
 interface DashboardHeaderProps {
   user: {

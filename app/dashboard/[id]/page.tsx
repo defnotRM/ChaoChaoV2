@@ -30,7 +30,10 @@ export default async function UserDashboardPage({
       .select("role ( role_type )")
       .eq("user_id", sessionUser.id);
     const isAdmin = (sessionRoles || []).some(
-      (r: any) => r.role?.role_type === "admin",
+      (r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const item = Array.isArray(r.role) ? r.role[0] : r.role;
+        return item?.role_type === "admin";
+      },
     );
     if (!isAdmin) {
       notFound();
@@ -38,7 +41,7 @@ export default async function UserDashboardPage({
   }
 
   let userProfile = null;
-  const { data: profile, error: profileError } = await admin
+  const { data: profile } = await admin
     .from("useraccount")
     .select(
       "user_id, username, firstname, lastname, email, avatar_url, updated_at, status",
@@ -108,8 +111,11 @@ export default async function UserDashboardPage({
     .eq("user_id", id);
 
   const roles = (userRoles || [])
-    .map((r: any) => r.role?.role_type)
-    .filter(Boolean);
+    .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+      const item = Array.isArray(r.role) ? r.role[0] : r.role;
+      return item?.role_type;
+    })
+    .filter((r): r is string => Boolean(r));
 
   const primaryRole = roles.includes("admin")
     ? "admin"

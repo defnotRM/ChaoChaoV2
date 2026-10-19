@@ -11,15 +11,9 @@ import {
   EyeOff,
   AlertCircle,
   AlertTriangle,
-  ShieldCheck,
-  Sparkles,
-  Camera,
-  CheckCircle2,
-  Zap,
 } from "lucide-react";
 import {
   loginSchema,
-  roleLabels,
   type LoginFormData,
 } from "@/lib/validations/login";
 
@@ -52,7 +46,12 @@ export default function LoginForm() {
         body: JSON.stringify(data),
       });
 
-      let result: any = null;
+      let result: {
+        success?: boolean;
+        error?: string;
+        message?: string;
+        redirectTo?: string;
+      } | null = null;
       const contentType = res.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         result = await res.json().catch(() => null);
@@ -69,7 +68,7 @@ export default function LoginForm() {
       }
 
       const redirectPath =
-        searchParams.get("redirect") || result.redirectTo || "/";
+        searchParams.get("redirect") || result?.redirectTo || "/";
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-state-change"));
       }

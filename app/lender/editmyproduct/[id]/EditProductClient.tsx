@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Calendar,
   Camera,
   CheckCircle2,
   DollarSign,
@@ -422,9 +421,13 @@ export default function EditProductClient({
       setTimeout(() => {
         router.push(`/product/${initialItem.item_id}`);
       }, 1200);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error updating product:", err);
-      setErrorMessage(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }

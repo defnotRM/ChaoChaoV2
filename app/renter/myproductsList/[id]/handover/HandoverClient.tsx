@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
   Camera,
   CheckCircle2,
   Clock3,

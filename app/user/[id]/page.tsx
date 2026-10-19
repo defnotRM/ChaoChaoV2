@@ -4,7 +4,6 @@ import { useEffect, useState, use, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  MessageCircle,
   Flag,
   Package,
   Calendar,

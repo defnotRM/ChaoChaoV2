@@ -5,17 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
-  AlertCircle,
-  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Clock3,
-  CreditCard,
-  Image as ImageIcon,
   Loader2,
   Mail,
   MapPin,
@@ -89,15 +84,6 @@ const dateFmt = new Intl.DateTimeFormat("th-TH", {
   month: "short",
   year: "numeric",
 });
-const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
-  timeZone: "Asia/Bangkok",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 function formatDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)));
@@ -106,10 +92,6 @@ function inclusiveDays(start: string, end: string) {
   const s = new Date(`${start}T00:00:00Z`).getTime();
   const e = new Date(`${end}T00:00:00Z`).getTime();
   return Math.floor((e - s) / 86_400_000) + 1;
-}
-function orderNo(orderId: string, createdAt: string) {
-  const be = new Date(createdAt).getFullYear() + 543;
-  return `#RNT-${be}-${orderId.slice(0, 6).toUpperCase()}`;
 }
 
 const TIMELINE = [
@@ -229,8 +211,12 @@ export default function RentOrderDetailClient({
           filter: `order_id=eq.${order.order_id}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as any).status) {
-            setCurrentStatus((payload.new as any).status);
+          if (
+            payload.new &&
+            typeof payload.new === "object" &&
+            "status" in payload.new
+          ) {
+            setCurrentStatus(String(payload.new.status));
           }
         },
       )
@@ -295,8 +281,6 @@ export default function RentOrderDetailClient({
           ? "สลิปถูกปฏิเสธ"
           : "ยังไม่ชำระเงิน";
   const paymentShownAmount = paidAmount > 0 ? paidAmount : pendingAmount;
-
-  const canHandover = currentStatus === "paid" || currentStatus === "item_sent";
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1189,33 +1173,5 @@ function SummaryRow({
         {value}
       </dd>
     </div>
-  );
-}
-
-function StubButton({
-  label,
-  primary,
-  tone,
-}: {
-  label: string;
-  primary?: boolean;
-  tone?: "rose";
-}) {
-  const base =
-    "inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold opacity-60";
-  const style = primary
-    ? "bg-gradient-to-r from-[#1b3554] to-[#3f6593] text-white"
-    : tone === "rose"
-      ? "border border-rose-200 bg-white text-rose-500"
-      : "border border-slate-200 bg-white text-slate-500";
-  return (
-    <button
-      type="button"
-      disabled
-      title="ฟีเจอร์กำลังพัฒนา"
-      className={`${base} ${style}`}
-    >
-      {label}
-    </button>
   );
 }

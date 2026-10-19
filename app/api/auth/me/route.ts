@@ -77,7 +77,7 @@ export async function GET() {
     });
 
     let roles = (userRoles || [])
-      .map((r: any) => roleTypeById.get(r.role_id))
+      .map((r: { role_id: string }) => roleTypeById.get(r.role_id))
       .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {

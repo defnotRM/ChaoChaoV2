@@ -33,7 +33,10 @@ export default async function LenderOrderDetailPage({
       .select("role ( role_type )")
       .eq("user_id", sessionUser.id);
     isAdmin = (sessionRoles || []).some(
-      (r: any) => r.role?.role_type === "admin",
+      (r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const item = Array.isArray(r.role) ? r.role[0] : r.role;
+        return item?.role_type === "admin";
+      },
     );
     if (!isAdmin) {
       notFound();
@@ -138,8 +141,8 @@ export default async function LenderOrderDetailPage({
     "ผู้เช่า";
 
   const renterPhones = (phoneRes.data || [])
-    .map((p: any) => p.phone)
-    .filter(Boolean);
+    .map((p: { phone?: string }) => p.phone)
+    .filter((p): p is string => Boolean(p));
 
   const avatarUrl = renter?.avatar_url || null;
 

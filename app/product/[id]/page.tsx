@@ -2,13 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
-  BadgeCheck,
   CalendarDays,
-  CheckCircle2,
   ClipboardCheck,
   Clock3,
   MapPin,
-  MessageCircle,
   Star,
   Tag,
   WalletCards,

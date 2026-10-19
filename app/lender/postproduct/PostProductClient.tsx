@@ -49,28 +49,6 @@ export default function PostProductClient({
 }: PostProductClientProps) {
   const router = useRouter();
 
-  // Current logged in user
-  const [currentUser, setCurrentUser] = useState<{
-    id: string;
-    role: string;
-    roles: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          setCurrentUser(data.user || null);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    loadUser();
-  }, []);
-
   // Form states
   const [itemName, setItemName] = useState("");
   const [categoryId, setCategoryId] = useState(
@@ -351,9 +329,13 @@ export default function PostProductClient({
           router.push("/");
         }
       }, 1200);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error posting product:", err);
-      setErrorMessage(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
