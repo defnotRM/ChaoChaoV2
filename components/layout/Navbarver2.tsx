@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import {
   Menu,
   MessageCircle,
   X,
-  User as UserIcon,
   LogOut,
   LayoutDashboard,
   Globe,
@@ -22,9 +22,11 @@ function Brand() {
       className="flex shrink-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600"
     >
       <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] shadow-sm">
-        <img
+        <Image
           src="/logo.svg"
           alt="ChaoChao"
+          width={40}
+          height={40}
           className="h-full w-full object-contain"
         />
       </span>
@@ -78,7 +80,7 @@ export default function Navbarver2() {
       if (res.ok) {
         const data = await res.json();
         const totalUnread = (data.rooms || []).reduce(
-          (sum: number, r: any) => sum + (r.unreadCount || 0),
+          (sum: number, r: { unreadCount?: number }) => sum + (r.unreadCount || 0),
           0,
         );
         setUnreadCount(totalUnread);
@@ -89,12 +91,17 @@ export default function Navbarver2() {
   }, [user]);
 
   useEffect(() => {
-    // 1. Fetch user from server endpoint
-    fetchAuthUser();
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await fetchAuthUser();
+      }
+    };
+    void run();
 
     // 2. Listen to custom auth events
     const handleAuthChange = () => {
-      fetchAuthUser();
+      void fetchAuthUser();
     };
 
     window.addEventListener("auth-state-change", handleAuthChange);
@@ -105,10 +112,11 @@ export default function Navbarver2() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      fetchAuthUser();
+      void fetchAuthUser();
     });
 
     return () => {
+      cancelled = true;
       window.removeEventListener("auth-state-change", handleAuthChange);
       window.removeEventListener("focus", handleAuthChange);
       subscription.unsubscribe();
@@ -117,11 +125,18 @@ export default function Navbarver2() {
 
   useEffect(() => {
     if (user && pathname !== "/chat") {
-      fetchUnreadCount();
+      let cancelled = false;
+      const run = async () => {
+        if (!cancelled) {
+          await fetchUnreadCount();
+        }
+      };
+      void run();
       const interval = setInterval(fetchUnreadCount, 30000);
-      return () => clearInterval(interval);
-    } else if (pathname === "/chat") {
-      setUnreadCount(0);
+      return () => {
+        cancelled = true;
+        clearInterval(interval);
+      };
     }
   }, [user, fetchUnreadCount, pathname]);
 
@@ -206,9 +221,12 @@ export default function Navbarver2() {
               >
                 <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]">
                   {user.avatarUrl ? (
-                    <img
+                    <Image
                       src={user.avatarUrl}
                       alt={user.username}
+                      width={36}
+                      height={36}
+                      unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -299,10 +317,13 @@ export default function Navbarver2() {
                 className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]"
               >
                 {user.avatarUrl ? (
-                  <img
+                  <Image
                     src={user.avatarUrl}
-                    alt={user.username}
-                    className="h-full w-full object-cover"
+                    alt={user.username || "อวตารผู้ใช้"}
+                    fill
+                    sizes="40px"
+                    className="object-cover"
+                    unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                   />
                 ) : (
                   <span>{userInitial}</span>
@@ -364,10 +385,13 @@ export default function Navbarver2() {
                   >
                     <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-[#1b3554] ring-2 ring-white/40">
                       {user.avatarUrl ? (
-                        <img
+                        <Image
                           src={user.avatarUrl}
-                          alt={user.username}
-                          className="h-full w-full object-cover"
+                          alt={user.username || "อวตารผู้ใช้"}
+                          fill
+                          sizes="32px"
+                          className="object-cover"
+                          unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                         />
                       ) : (
                         <span>{userInitial}</span>

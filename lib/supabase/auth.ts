@@ -43,7 +43,10 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
       .eq("user_id", user.id);
 
     let roles: UserRole[] = (roleAssignments || [])
-      .map((item: any) => item.role?.role_type)
+      .map((item: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        if (Array.isArray(item.role)) return item.role[0]?.role_type;
+        return item.role?.role_type;
+      })
       .filter(Boolean) as UserRole[];
 
     if (roles.length === 0) {

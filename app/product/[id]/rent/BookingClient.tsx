@@ -1,18 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
   BadgeCheck,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Info,
   Loader2,
   MapPin,
   MessageCircle,
@@ -25,13 +24,6 @@ import {
 import type { BookingDraft, BookingPageData, DateRange } from "./types";
 
 import RentalTermsModal from "./RentalTermsModal";
-
-/* ────────────────────────────── ค่าคงที่ (UI rules) ──────────────────────────────
- * ค่าเหล่านี้เป็นกติกาฝั่ง UI ที่ยังไม่ผูกกับ schema — ปรับได้อิสระ
- */
-const PLATFORM_FEE_RATE = 0; // ค่าธรรมเนียมแพลตฟอร์ม (ยังไม่กำหนดใน DB → 0)
-
-const DRAFT_STORAGE_KEY = "chaochao:bookingDraft";
 
 const WEEKDAY_LABELS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -215,15 +207,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   }, [availability]);
 
   const [viewMonth, setViewMonth] = useState(initialMonth);
-
-  // เมื่อเปิดหน้าหรือ initialMonth / item เปลี่ยน ให้ตั้ง viewMonth เป็น initialMonth ทันที
-  useEffect(() => {
-    setViewMonth(initialMonth);
-    setStartKey(null);
-    setEndKey(null);
-    setDraft(null);
-  }, [initialMonth, item.id]);
-
   const [startKey, setStartKey] = useState<string | null>(null);
   const [endKey, setEndKey] = useState<string | null>(null);
   const meetupOptions = locations.filter(
@@ -240,6 +223,15 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     returnOptions.length === 1 ? returnOptions[0].id : null,
   );
   const [draft, setDraft] = useState<BookingDraft | null>(null);
+
+  const [prevItemId, setPrevItemId] = useState(item.id);
+  if (prevItemId !== item.id) {
+    setPrevItemId(item.id);
+    setViewMonth(initialMonth);
+    setStartKey(null);
+    setEndKey(null);
+    setDraft(null);
+  }
 
   const viewYear = Math.floor(viewMonth / 12);
   const viewMonthIndex = viewMonth % 12;
@@ -308,8 +300,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   /* ── pricing ── */
   const days = startKey && endKey ? inclusiveDays(startKey, endKey) : 0;
   const rentalFee = days * item.rentalFeePerDay;
-  const platformFee = Math.round(rentalFee * PLATFORM_FEE_RATE);
-  const netIncome = rentalFee - platformFee;
   const totalPayable = rentalFee + item.deposit;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -699,10 +689,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
                 <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                      unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                     />
                   ) : (
                     <Package className="h-7 w-7 text-slate-400" />
@@ -721,10 +714,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               {/* ข้อมูลผู้ให้เช่า */}
               <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-slate-50 p-3">
                 {owner.avatarUrl ? (
-                  <img
+                  <Image
                     src={owner.avatarUrl}
                     alt={owner.displayName}
+                    width={36}
+                    height={36}
                     className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm"
+                    unoptimized={owner.avatarUrl.startsWith("data:") || owner.avatarUrl.startsWith("blob:")}
                   />
                 ) : (
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">

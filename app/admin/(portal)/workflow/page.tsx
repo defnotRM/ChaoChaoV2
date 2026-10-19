@@ -192,16 +192,20 @@ export default function AdminWorkflowPage() {
       setShowDynamicConfirmModal(true);
       return;
     }
-    await executeModeChange(targetMode);
+    await executeModeChange(targetMode, false);
   };
 
-  const executeModeChange = async (targetMode: string) => {
+  const executeModeChange = async (targetMode: string, confirmDynamic = false) => {
     setModeChanging(true);
     try {
+      const payload: { mode: string; confirmDynamic?: boolean } = { mode: targetMode };
+      if (targetMode === "dynamic" || confirmDynamic) {
+        payload.confirmDynamic = true;
+      }
       const res = await fetch("/api/admin/workflow/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: targetMode }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok && data.success) {

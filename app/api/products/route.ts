@@ -138,8 +138,11 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id);
 
     let roles = (userRoles || [])
-      .map((item: any) => item.role?.role_type)
-      .filter(Boolean);
+      .map((item: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const r = Array.isArray(item.role) ? item.role[0] : item.role;
+        return r?.role_type;
+      })
+      .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {
       roles = rolesFromMetadata(user.user_metadata);

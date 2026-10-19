@@ -49,19 +49,19 @@ export async function GET(request: NextRequest) {
         : { data: [] },
     ]);
 
-    const itemMap = new Map<string, any>((rawItems || []).map((i) => [i.item_id, i]));
+    const itemMap = new Map((rawItems || []).map((i) => [i.item_id, i]));
     const lenderUserIds = Array.from(new Set((rawItems || []).map((i) => i.user_id).filter(Boolean)));
 
     const { data: lenders } = lenderUserIds.length > 0
       ? await admin.from("useraccount").select("user_id, username, avatar_url").in("user_id", lenderUserIds)
       : { data: [] };
 
-    const lenderMap = new Map<string, any>((lenders || []).map((l) => [l.user_id, l]));
+    const lenderMap = new Map((lenders || []).map((l) => [l.user_id, l]));
     const pendingPaymentOrderIds = new Set(
       (rawPayments || []).filter((p) => p.status === "pending").map((p) => p.order_id)
     );
 
-    const formattedOrders = orderList.map((o: any) => {
+    const formattedOrders = orderList.map((o) => {
       const it = itemMap.get(o.item_id);
       const lender = it?.user_id ? lenderMap.get(it.user_id) : null;
 

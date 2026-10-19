@@ -1,21 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
-  AlertCircle,
-  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Clock3,
-  CreditCard,
-  Image as ImageIcon,
   Loader2,
   Mail,
   MapPin,
@@ -89,15 +85,6 @@ const dateFmt = new Intl.DateTimeFormat("th-TH", {
   month: "short",
   year: "numeric",
 });
-const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
-  timeZone: "Asia/Bangkok",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 function formatDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)));
@@ -106,10 +93,6 @@ function inclusiveDays(start: string, end: string) {
   const s = new Date(`${start}T00:00:00Z`).getTime();
   const e = new Date(`${end}T00:00:00Z`).getTime();
   return Math.floor((e - s) / 86_400_000) + 1;
-}
-function orderNo(orderId: string, createdAt: string) {
-  const be = new Date(createdAt).getFullYear() + 543;
-  return `#RNT-${be}-${orderId.slice(0, 6).toUpperCase()}`;
 }
 
 const TIMELINE = [
@@ -229,8 +212,12 @@ export default function RentOrderDetailClient({
           filter: `order_id=eq.${order.order_id}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as any).status) {
-            setCurrentStatus((payload.new as any).status);
+          if (
+            payload.new &&
+            typeof payload.new === "object" &&
+            "status" in payload.new
+          ) {
+            setCurrentStatus(String(payload.new.status));
           }
         },
       )
@@ -295,8 +282,6 @@ export default function RentOrderDetailClient({
           ? "สลิปถูกปฏิเสธ"
           : "ยังไม่ชำระเงิน";
   const paymentShownAmount = paidAmount > 0 ? paidAmount : pendingAmount;
-
-  const canHandover = currentStatus === "paid" || currentStatus === "item_sent";
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -602,12 +587,15 @@ export default function RentOrderDetailClient({
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm overflow-hidden">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm overflow-hidden">
                   {owner.avatarUrl ? (
-                    <img
+                    <Image
                       src={owner.avatarUrl}
-                      alt={owner.username}
-                      className="h-full w-full object-cover"
+                      alt={owner.username || owner.fullName || "อวตารผู้ให้เช่า"}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                      unoptimized={owner.avatarUrl.startsWith("data:") || owner.avatarUrl.startsWith("blob:")}
                     />
                   ) : (
                     <span>
@@ -673,10 +661,13 @@ export default function RentOrderDetailClient({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="(max-width: 640px) 96px, 112px"
+                      className="object-cover"
+                      unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                     />
                   ) : (
                     <Package className="h-10 w-10 text-slate-300" />
@@ -1037,10 +1028,13 @@ export default function RentOrderDetailClient({
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
                   {slipPreview ? (
                     <div className="space-y-2">
-                      <img
+                      <Image
                         src={slipPreview}
                         alt="สลิปโอนเงิน"
-                        className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                        width={300}
+                        height={400}
+                        className="max-h-48 w-auto rounded-xl object-contain mx-auto shadow-sm"
+                        unoptimized
                       />
                       <p className="text-xs text-slate-500">
                         {slipFile?.name || "สลิปที่เลือก"}
@@ -1189,33 +1183,5 @@ function SummaryRow({
         {value}
       </dd>
     </div>
-  );
-}
-
-function StubButton({
-  label,
-  primary,
-  tone,
-}: {
-  label: string;
-  primary?: boolean;
-  tone?: "rose";
-}) {
-  const base =
-    "inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold opacity-60";
-  const style = primary
-    ? "bg-gradient-to-r from-[#1b3554] to-[#3f6593] text-white"
-    : tone === "rose"
-      ? "border border-rose-200 bg-white text-rose-500"
-      : "border border-slate-200 bg-white text-slate-500";
-  return (
-    <button
-      type="button"
-      disabled
-      title="ฟีเจอร์กำลังพัฒนา"
-      className={`${base} ${style}`}
-    >
-      {label}
-    </button>
   );
 }

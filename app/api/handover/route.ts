@@ -55,11 +55,14 @@ export async function POST(request: Request) {
           filenamePrefix: `handover_${requestedPhase}`,
         });
       } catch (uploadErr) {
-        console.warn(
-          "Storage upload failed for handover (JSON), fallback:",
+        console.error(
+          "Storage upload failed for handover (JSON):",
           uploadErr,
         );
-        imageUrls = rawUrls;
+        return NextResponse.json(
+          { message: "อัปโหลดรูปหลักฐานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
+          { status: 502 },
+        );
       }
       // หมายเหตุ: ไม่อ่าน json.userId แล้ว — ใช้ user.id จาก session เท่านั้น
     } else {
@@ -102,15 +105,14 @@ export async function POST(request: Request) {
           filenamePrefix: `handover_${requestedPhase}`,
         });
       } catch (uploadErr) {
-        console.warn(
-          "Storage upload failed for handover (files), fallback to base64:",
+        console.error(
+          "Storage upload failed for handover (files):",
           uploadErr,
         );
-        for (const f of files) {
-          const buffer = Buffer.from(await f.arrayBuffer());
-          const mime = f.type || "image/png";
-          imageUrls.push(`data:${mime};base64,${buffer.toString("base64")}`);
-        }
+        return NextResponse.json(
+          { message: "อัปโหลดรูปหลักฐานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
+          { status: 502 },
+        );
       }
     }
 
@@ -125,6 +127,13 @@ export async function POST(request: Request) {
     if (imageUrls.length === 0) {
       return NextResponse.json(
         { message: "กรุณาแนบรูปหลักฐานอย่างน้อย 1 รูป" },
+        { status: 400 },
+      );
+    }
+
+    if (imageUrls.some((u) => u.startsWith("data:"))) {
+      return NextResponse.json(
+        { message: "ไม่อนุญาตให้อัปโหลดรูปภาพในรูปแบบ Base64" },
         { status: 400 },
       );
     }
