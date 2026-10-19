@@ -1,5 +1,12 @@
-import ProductRentPage from "@/app/product/[id]/rent/page";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default ProductRentPage;
+export default async function HireProductBookingPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/product/${id}/rent`);
+}

@@ -1,5 +1,12 @@
-import ProductDetailPage from "@/app/product/[id]/page";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default ProductDetailPage;
+export default async function HireProductDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/product/${id}`);
+}
