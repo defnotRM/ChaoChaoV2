@@ -68,8 +68,11 @@ export async function POST(request: Request) {
         .eq("user_id", user.id);
 
       const roles = (userRoles || [])
-        .map((r: any) => r.role?.role_type)
-        .filter(Boolean);
+        .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+          const item = Array.isArray(r.role) ? r.role[0] : r.role;
+          return item?.role_type;
+        })
+        .filter((r): r is string => Boolean(r));
 
       const isLenderOnly =
         roles.includes("lender") &&
@@ -159,7 +162,7 @@ export async function POST(request: Request) {
       const phone = renter?.phone?.trim() ?? "";
       const nationalId = renter?.nationalId?.trim() ?? "";
 
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string> = {};
       if (firstName) updatePayload.firstname = firstName;
       if (lastName) updatePayload.lastname = lastName;
       if (nationalId && NATIONAL_ID_RE.test(nationalId))

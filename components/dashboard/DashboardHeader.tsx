@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { LayoutDashboard, ShoppingBag, Store, Plus, Search } from 'lucide-react';
+import { ShoppingBag, Store, Plus, Search } from 'lucide-react';
 
 interface DashboardHeaderProps {
   user: {

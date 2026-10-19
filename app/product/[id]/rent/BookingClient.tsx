@@ -6,14 +6,12 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
   BadgeCheck,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Info,
   Loader2,
   MapPin,
   MessageCircle,
@@ -26,13 +24,6 @@ import {
 import type { BookingDraft, BookingPageData, DateRange } from "./types";
 
 import RentalTermsModal from "./RentalTermsModal";
-
-/* ────────────────────────────── ค่าคงที่ (UI rules) ──────────────────────────────
- * ค่าเหล่านี้เป็นกติกาฝั่ง UI ที่ยังไม่ผูกกับ schema — ปรับได้อิสระ
- */
-const PLATFORM_FEE_RATE = 0; // ค่าธรรมเนียมแพลตฟอร์ม (ยังไม่กำหนดใน DB → 0)
-
-const DRAFT_STORAGE_KEY = "chaochao:bookingDraft";
 
 const WEEKDAY_LABELS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -216,15 +207,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   }, [availability]);
 
   const [viewMonth, setViewMonth] = useState(initialMonth);
-
-  // เมื่อเปิดหน้าหรือ initialMonth / item เปลี่ยน ให้ตั้ง viewMonth เป็น initialMonth ทันที
-  useEffect(() => {
-    setViewMonth(initialMonth);
-    setStartKey(null);
-    setEndKey(null);
-    setDraft(null);
-  }, [initialMonth, item.id]);
-
   const [startKey, setStartKey] = useState<string | null>(null);
   const [endKey, setEndKey] = useState<string | null>(null);
   const meetupOptions = locations.filter(
@@ -241,6 +223,15 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     returnOptions.length === 1 ? returnOptions[0].id : null,
   );
   const [draft, setDraft] = useState<BookingDraft | null>(null);
+
+  const [prevItemId, setPrevItemId] = useState(item.id);
+  if (prevItemId !== item.id) {
+    setPrevItemId(item.id);
+    setViewMonth(initialMonth);
+    setStartKey(null);
+    setEndKey(null);
+    setDraft(null);
+  }
 
   const viewYear = Math.floor(viewMonth / 12);
   const viewMonthIndex = viewMonth % 12;
@@ -309,8 +300,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   /* ── pricing ── */
   const days = startKey && endKey ? inclusiveDays(startKey, endKey) : 0;
   const rentalFee = days * item.rentalFeePerDay;
-  const platformFee = Math.round(rentalFee * PLATFORM_FEE_RATE);
-  const netIncome = rentalFee - platformFee;
   const totalPayable = rentalFee + item.deposit;
 
   const [isSubmitting, setIsSubmitting] = useState(false);

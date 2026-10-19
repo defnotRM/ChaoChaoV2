@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { RenterDashboardView } from '@/components/dashboard/RenterDashboardView';
 import { LenderDashboardView } from '@/components/dashboard/LenderDashboardView';
-import { Loader2 } from 'lucide-react';
 
 interface AuthUser {
   id: string;
@@ -20,7 +19,6 @@ export default function DashboardUserClient({
   targetUser: AuthUser;
 }) {
   const [currentUser, setCurrentUser] = useState<AuthUser>(targetUser);
-  const [loading, setLoading] = useState(false);
   const [activeRole, setActiveRole] = useState<'renter' | 'lender'>(
     targetUser.role === 'lender' ? 'lender' : 'renter'
   );
@@ -48,15 +46,6 @@ export default function DashboardUserClient({
   const hasBothRoles =
     roles.includes('renter') &&
     (roles.includes('lender') || roles.includes('admin') || roles.length > 1);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center py-24 px-4">
-        <Loader2 className="h-10 w-10 animate-spin text-[#1b3554] mb-3" />
-        <p className="text-sm font-semibold text-slate-600">กำลังเตรียมข้อมูลแดชบอร์ด...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">

@@ -13,16 +13,11 @@ import {
   CreditCard,
   AlertCircle,
   AlertTriangle,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-  CheckCircle2,
   Phone,
   Mail,
 } from "lucide-react";
 import {
   registerSchema,
-  roleLabels,
   type RegisterFormData,
 } from "@/lib/validations/register";
 

@@ -11,7 +11,6 @@ import {
   Store,
 } from "lucide-react";
 
-import { ProductCard } from "@/components/products/ProductCard";
 import {
   CategoryIcon,
   SectionHeading,
@@ -61,7 +60,7 @@ const gettingStartedOptions = [
 export const dynamic = "force-dynamic";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Product } from "@/lib/types/product";
+import type { Product, ItemStatus } from "@/lib/types/product";
 
 async function getFeaturedProducts(): Promise<Product[]> {
   try {
@@ -95,7 +94,20 @@ async function getFeaturedProducts(): Promise<Product[]> {
       return [];
     }
 
-    return dbItems.map((item: any) => ({
+    interface RawDbItem {
+      item_id: string;
+      item_name: string;
+      description?: string | null;
+      original_price?: number | null;
+      rental_fee_per_day?: number | null;
+      deposit?: number | null;
+      status?: string | null;
+      created_at?: string | null;
+      category?: { category_id?: string | number; category_name?: string } | null;
+      owner?: { user_id?: string; username?: string } | null;
+    }
+
+    return (dbItems as unknown as RawDbItem[]).map((item) => ({
       id: item.item_id,
       title: item.item_name,
       categoryId: String(item.category?.category_id || "1"),
@@ -133,7 +145,7 @@ async function getFeaturedProducts(): Promise<Product[]> {
       },
       rentalTerms: ["ตรวจเช็กสภาพก่อนรับมอบ", "ส่งคืนตรงเวลา"],
       reviews: [],
-      status: item.status as any,
+      status: (item.status as ItemStatus) || "available",
       availability: [],
       createdAt: item.created_at || new Date().toISOString(),
     }));
@@ -155,9 +167,9 @@ async function getPopularCategories() {
       .select("category_id");
 
     const categoryItemCounts: Record<string, number> = {};
-    (dbItems || []).forEach((it: any) => {
+    (dbItems || []).forEach((it: { category_id?: string | number | null }) => {
       if (it.category_id) {
-        categoryItemCounts[it.category_id] = (categoryItemCounts[it.category_id] || 0) + 1;
+        categoryItemCounts[String(it.category_id)] = (categoryItemCounts[String(it.category_id)] || 0) + 1;
       }
     });
 

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   MessageCircle,
@@ -98,7 +98,16 @@ function ChatContent() {
   const targetRoomIdParam = searchParams.get("roomId");
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(
+    targetRoomIdParam,
+  );
+  const [prevTargetRoomId, setPrevTargetRoomId] = useState(targetRoomIdParam);
+  if (targetRoomIdParam !== prevTargetRoomId) {
+    setPrevTargetRoomId(targetRoomIdParam);
+    if (targetRoomIdParam) {
+      setSelectedRoomId(targetRoomIdParam);
+    }
+  }
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -187,24 +196,35 @@ function ChatContent() {
     [scrollToBottom],
   );
 
-  // เปิดห้องแชทตรงจาก URL (?roomId=...) — ห้องถูกสร้างไว้แล้วตั้งแต่ตอนกดจากหน้า order
   useEffect(() => {
-    if (targetRoomIdParam) {
-      setSelectedRoomId(targetRoomIdParam);
-    }
-  }, [targetRoomIdParam]);
-
-  useEffect(() => {
-    fetchRooms();
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await fetchRooms();
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [fetchRooms]);
 
   useEffect(() => {
-    if (selectedRoomId) {
-      fetchMessages(selectedRoomId, false, true);
-      inputRef.current?.focus();
-    } else {
-      setMessages([]);
-    }
+    let cancelled = false;
+    const run = async () => {
+      if (selectedRoomId) {
+        if (!cancelled) {
+          await fetchMessages(selectedRoomId, false, true);
+        }
+        inputRef.current?.focus();
+      } else {
+        setMessages([]);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedRoomId, fetchMessages]);
 
   useEffect(() => {
@@ -215,12 +235,12 @@ function ChatContent() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "message" },
-        (payload: any) => {
-          const newMsg = payload.new;
+        (payload: { new: Record<string, unknown> }) => {
+          const newMsg = payload.new as unknown as { chat_room_id?: string };
           if (selectedRoomId && newMsg.chat_room_id === selectedRoomId) {
-            fetchMessages(selectedRoomId, true, true);
+            void fetchMessages(selectedRoomId, true, true);
           }
-          fetchRooms();
+          void fetchRooms();
         },
       )
       .on(

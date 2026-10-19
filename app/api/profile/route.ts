@@ -111,7 +111,7 @@ export async function GET() {
     });
 
     let roles = (roleAssignmentsRes.data || [])
-      .map((ra: any) => roleTypeById.get(ra.role_id))
+      .map((ra: { role_id: string }) => roleTypeById.get(ra.role_id))
       .filter((r): r is string => Boolean(r));
 
     if (roles.length === 0) {
@@ -119,10 +119,6 @@ export async function GET() {
     }
 
     const phones = profile.phone ? [profile.phone] : [];
-
-    const v = profile.updated_at
-      ? new Date(profile.updated_at).getTime()
-      : Date.now();
 
     const avatarUrl = profile.avatar_url || "";
     const bannerUrl = profile.banner_url || "";
@@ -197,7 +193,7 @@ export async function PATCH(request: Request) {
     const newEmail = `${username.toLowerCase().trim()}@chaochao.local`;
 
     // 2. Update useraccount (username & email & bio & avatar_url & banner_url)
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       username,
       email: newEmail,
       bio: bio ?? "",
@@ -267,7 +263,9 @@ export async function PATCH(request: Request) {
             : user.user_metadata?.avatar_url,
     };
 
-    const authUpdatePayload: any = {
+    const authUpdatePayload: Parameters<
+      typeof admin.auth.admin.updateUserById
+    >[1] = {
       email: newEmail,
       email_confirm: true,
       user_metadata: userMetadata,
@@ -286,7 +284,6 @@ export async function PATCH(request: Request) {
       console.error("Auth update error:", authUpdateError);
     }
 
-    const now = Date.now();
     return NextResponse.json({
       message: "บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว",
       user: {

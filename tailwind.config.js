@@ -1,8 +1,8 @@
-// tailwind.config.ts
-export default {
+const config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}", // ← บรรทัดนี้มีไหม
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  // ...
 };
+
+export default config;

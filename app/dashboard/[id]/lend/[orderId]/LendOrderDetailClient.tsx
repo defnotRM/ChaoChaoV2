@@ -9,17 +9,12 @@ import CountdownBanner from "./CountdownBanner";
 import type { OrderTimeouts } from "@/lib/system-config";
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowLeft,
-  Calendar,
   CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Clock,
   Clock3,
-  CreditCard,
-  DollarSign,
   Image as ImageIcon,
   Loader2,
   Mail,
@@ -28,8 +23,6 @@ import {
   Package,
   Phone,
   Printer,
-  ShieldAlert,
-  ShieldCheck,
   ThumbsDown,
   ThumbsUp,
   Upload,
@@ -92,15 +85,6 @@ const dateFmt = new Intl.DateTimeFormat("th-TH", {
   month: "short",
   year: "numeric",
 });
-const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
-  timeZone: "Asia/Bangkok",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 function formatDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)));
@@ -109,10 +93,6 @@ function inclusiveDays(start: string, end: string) {
   const s = new Date(`${start}T00:00:00Z`).getTime();
   const e = new Date(`${end}T00:00:00Z`).getTime();
   return Math.floor((e - s) / 86_400_000) + 1;
-}
-function orderNo(orderId: string, createdAt: string) {
-  const be = new Date(createdAt).getFullYear() + 543;
-  return `#RNT-${be}-${orderId.slice(0, 6).toUpperCase()}`;
 }
 
 const TIMELINE = [
@@ -226,8 +206,9 @@ export default function LendOrderDetailClient({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportSuccess, setReportSuccess] = useState<string | null>(null);
 
+  const [now] = useState(() => Date.now());
   const isOverdue =
-    new Date(`${order.end_date}T00:00:00Z`).getTime() < Date.now();
+    new Date(`${order.end_date}T00:00:00Z`).getTime() < now;
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -276,8 +257,12 @@ export default function LendOrderDetailClient({
           filter: `order_id=eq.${order.order_id}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as any).status) {
-            setCurrentStatus((payload.new as any).status);
+          if (
+            payload.new &&
+            typeof payload.new === "object" &&
+            "status" in payload.new
+          ) {
+            setCurrentStatus(String(payload.new.status));
           }
         },
       )
@@ -307,9 +292,6 @@ export default function LendOrderDetailClient({
   // ปฏิเสธสลิปได้ไม่เกิน 3 ครั้งต่อออเดอร์ (ตรงกับ MAX_SLIP_REJECTIONS ใน lib/system-config.ts ที่ API ใช้บังคับ)
   const slipRejectLimitReached =
     paymentsList.filter((p) => p.status === "rejected").length >= 3;
-  const paidAmount = paymentsList
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   const days = inclusiveDays(order.start_date, order.end_date);
   const rentPerDay = Number(item.rentalFeePerDay) || 0;

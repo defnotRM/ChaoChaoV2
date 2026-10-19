@@ -8,7 +8,6 @@ import {
   Menu,
   MessageCircle,
   X,
-  User as UserIcon,
   LogOut,
   LayoutDashboard,
   Globe,
@@ -81,7 +80,7 @@ export default function Navbarver2() {
       if (res.ok) {
         const data = await res.json();
         const totalUnread = (data.rooms || []).reduce(
-          (sum: number, r: any) => sum + (r.unreadCount || 0),
+          (sum: number, r: { unreadCount?: number }) => sum + (r.unreadCount || 0),
           0,
         );
         setUnreadCount(totalUnread);
@@ -92,12 +91,17 @@ export default function Navbarver2() {
   }, [user]);
 
   useEffect(() => {
-    // 1. Fetch user from server endpoint
-    fetchAuthUser();
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await fetchAuthUser();
+      }
+    };
+    void run();
 
     // 2. Listen to custom auth events
     const handleAuthChange = () => {
-      fetchAuthUser();
+      void fetchAuthUser();
     };
 
     window.addEventListener("auth-state-change", handleAuthChange);
@@ -108,10 +112,11 @@ export default function Navbarver2() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      fetchAuthUser();
+      void fetchAuthUser();
     });
 
     return () => {
+      cancelled = true;
       window.removeEventListener("auth-state-change", handleAuthChange);
       window.removeEventListener("focus", handleAuthChange);
       subscription.unsubscribe();
@@ -120,11 +125,18 @@ export default function Navbarver2() {
 
   useEffect(() => {
     if (user && pathname !== "/chat") {
-      fetchUnreadCount();
+      let cancelled = false;
+      const run = async () => {
+        if (!cancelled) {
+          await fetchUnreadCount();
+        }
+      };
+      void run();
       const interval = setInterval(fetchUnreadCount, 30000);
-      return () => clearInterval(interval);
-    } else if (pathname === "/chat") {
-      setUnreadCount(0);
+      return () => {
+        cancelled = true;
+        clearInterval(interval);
+      };
     }
   }, [user, fetchUnreadCount, pathname]);
 

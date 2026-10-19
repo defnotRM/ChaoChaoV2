@@ -114,8 +114,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       .eq("user_id", user.id);
 
     const roles = (userRoles || [])
-      .map((r: any) => r.role?.role_type)
-      .filter(Boolean);
+      .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const item = Array.isArray(r.role) ? r.role[0] : r.role;
+        return item?.role_type;
+      })
+      .filter((r): r is string => Boolean(r));
     const isAdmin = roles.includes("admin");
 
     if (existingItem.user_id !== user.id && !isAdmin) {
@@ -257,8 +260,11 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
       .eq("user_id", user.id);
 
     const roles = (userRoles || [])
-      .map((r: any) => r.role?.role_type)
-      .filter(Boolean);
+      .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const item = Array.isArray(r.role) ? r.role[0] : r.role;
+        return item?.role_type;
+      })
+      .filter((r): r is string => Boolean(r));
     const isAdmin = roles.includes("admin");
 
     if (existingItem.user_id !== user.id && !isAdmin) {

@@ -21,7 +21,6 @@ import {
   Phone,
   UserPlus,
   Power,
-  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -506,12 +505,6 @@ export default function ProfilePage() {
     } finally {
       setSavingPassword(false);
     }
-  };
-
-  const roleLabels: Record<string, string> = {
-    renter: "ผู้เช่า",
-    lender: "ผู้ให้เช่า",
-    admin: "ผู้ดูแลระบบ",
   };
 
   if (loading) {
