@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   MessageCircle,
@@ -16,6 +16,7 @@ import {
   Lock,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/Toast";
 
 interface Partner {
   id: string;
@@ -93,6 +94,7 @@ function formatMessageGroupDate(dateString: string) {
 }
 
 function ChatContent() {
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const targetRoomIdParam = searchParams.get("roomId");
 
@@ -189,16 +191,19 @@ function ChatContent() {
   // เปิดห้องแชทตรงจาก URL (?roomId=...) — ห้องถูกสร้างไว้แล้วตั้งแต่ตอนกดจากหน้า order
   useEffect(() => {
     if (targetRoomIdParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedRoomId(targetRoomIdParam);
     }
   }, [targetRoomIdParam]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRooms();
   }, [fetchRooms]);
 
   useEffect(() => {
     if (selectedRoomId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchMessages(selectedRoomId, false, true);
       inputRef.current?.focus();
     } else {
@@ -214,8 +219,8 @@ function ChatContent() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "message" },
-        (payload: any) => {
-          const newMsg = payload.new;
+        (payload: { new: Record<string, unknown> }) => {
+          const newMsg = payload.new as { chat_room_id?: string };
           if (selectedRoomId && newMsg.chat_room_id === selectedRoomId) {
             fetchMessages(selectedRoomId, true, true);
           }
@@ -298,11 +303,12 @@ function ChatContent() {
         setTimeout(() => scrollToBottom(true), 20);
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        alert("ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง");
+        toast.error("ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง");
       }
     } catch (err) {
       console.error("Error sending message:", err);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      toast.error("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsSending(false);
       inputRef.current?.focus();

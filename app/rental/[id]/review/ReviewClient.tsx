@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 
 interface ExistingReview {
   rating: number;
@@ -20,8 +22,10 @@ export default function ReviewClient({
   existingReview: ExistingReview | null;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(!existingReview);
   const [wasDeleted, setWasDeleted] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [rating, setRating] = useState(existingReview?.rating ?? 5);
   const [comment, setComment] = useState(existingReview?.comment ?? "");
@@ -64,21 +68,25 @@ export default function ReviewClient({
       });
       const result = await res.json();
       if (!res.ok) {
-        setErrorMsg(result.message || "บันทึกรีวิวไม่สำเร็จ");
+        const msg = result.message || "บันทึกรีวิวไม่สำเร็จ";
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
       setIsEditing(false);
       setJustSaved(true);
+      toast.success(existingReview ? "แก้ไขรีวิวสำเร็จ" : "โพสต์รีวิวสำเร็จ");
       router.refresh();
     } catch {
-      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+      const msg = "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDelete() {
-    if (!window.confirm("ยืนยันลบรีวิวนี้? การลบไม่สามารถย้อนกลับได้")) return;
     setDeleting(true);
     setErrorMsg(null);
     try {
@@ -87,13 +95,19 @@ export default function ReviewClient({
       });
       const result = await res.json();
       if (!res.ok) {
-        setErrorMsg(result.message || "ลบรีวิวไม่สำเร็จ");
+        const msg = result.message || "ลบรีวิวไม่สำเร็จ";
+        setErrorMsg(msg);
+        toast.error(msg);
         return;
       }
       setWasDeleted(true);
+      setShowDeleteConfirm(false);
+      toast.success("ลบรีวิวเรียบร้อยแล้ว");
       router.refresh();
     } catch {
-      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+      const msg = "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -159,19 +173,31 @@ export default function ReviewClient({
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="flex-1 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="flex-1 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             แก้ไขรีวิว
           </button>
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => setShowDeleteConfirm(true)}
             disabled={deleting}
-            className="flex-1 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
           >
             {deleting ? "กำลังลบ..." : "ลบรีวิว"}
           </button>
         </div>
+
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDelete}
+          title="ยืนยันการลบรีวิว"
+          description="คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้? การลบไม่สามารถย้อนกลับได้"
+          confirmText="ยืนยันลบ"
+          cancelText="ยกเลิก"
+          variant="danger"
+          isLoading={deleting}
+        />
       </div>
     );
   }
