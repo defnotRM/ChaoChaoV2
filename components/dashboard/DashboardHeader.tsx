@@ -2,7 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, ShoppingBag, Store, Plus, Search } from 'lucide-react';
+import Image from 'next/image';
+import { ShoppingBag, Store, Plus, Search } from 'lucide-react';
 
 interface DashboardHeaderProps {
   user: {
@@ -36,7 +37,14 @@ export function DashboardHeader({
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-2xl font-bold text-white shadow-md ring-4 ring-slate-50">
             {avatarUrl ? (
-              <img src={avatarUrl} alt={username} className="h-full w-full object-cover" />
+              <Image
+                src={avatarUrl}
+                alt={username}
+                width={64}
+                height={64}
+                unoptimized={avatarUrl.startsWith("data:") || avatarUrl.startsWith("blob:")}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <span>{userInitial}</span>
             )}

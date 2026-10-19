@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
@@ -8,17 +9,12 @@ import CountdownBanner from "./CountdownBanner";
 import type { OrderTimeouts } from "@/lib/system-config";
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowLeft,
-  Calendar,
   CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Clock,
   Clock3,
-  CreditCard,
-  DollarSign,
   Image as ImageIcon,
   Loader2,
   Mail,
@@ -27,8 +23,6 @@ import {
   Package,
   Phone,
   Printer,
-  ShieldAlert,
-  ShieldCheck,
   ThumbsDown,
   ThumbsUp,
   Upload,
@@ -91,15 +85,6 @@ const dateFmt = new Intl.DateTimeFormat("th-TH", {
   month: "short",
   year: "numeric",
 });
-const dateTimeFmt = new Intl.DateTimeFormat("th-TH", {
-  timeZone: "Asia/Bangkok",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 function formatDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)));
@@ -108,10 +93,6 @@ function inclusiveDays(start: string, end: string) {
   const s = new Date(`${start}T00:00:00Z`).getTime();
   const e = new Date(`${end}T00:00:00Z`).getTime();
   return Math.floor((e - s) / 86_400_000) + 1;
-}
-function orderNo(orderId: string, createdAt: string) {
-  const be = new Date(createdAt).getFullYear() + 543;
-  return `#RNT-${be}-${orderId.slice(0, 6).toUpperCase()}`;
 }
 
 const TIMELINE = [
@@ -225,8 +206,9 @@ export default function LendOrderDetailClient({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportSuccess, setReportSuccess] = useState<string | null>(null);
 
+  const [now] = useState(() => Date.now());
   const isOverdue =
-    new Date(`${order.end_date}T00:00:00Z`).getTime() < Date.now();
+    new Date(`${order.end_date}T00:00:00Z`).getTime() < now;
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -275,8 +257,12 @@ export default function LendOrderDetailClient({
           filter: `order_id=eq.${order.order_id}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as any).status) {
-            setCurrentStatus((payload.new as any).status);
+          if (
+            payload.new &&
+            typeof payload.new === "object" &&
+            "status" in payload.new
+          ) {
+            setCurrentStatus(String(payload.new.status));
           }
         },
       )
@@ -306,9 +292,6 @@ export default function LendOrderDetailClient({
   // ปฏิเสธสลิปได้ไม่เกิน 3 ครั้งต่อออเดอร์ (ตรงกับ MAX_SLIP_REJECTIONS ใน lib/system-config.ts ที่ API ใช้บังคับ)
   const slipRejectLimitReached =
     paymentsList.filter((p) => p.status === "rejected").length >= 3;
-  const paidAmount = paymentsList
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   const days = inclusiveDays(order.start_date, order.end_date);
   const rentPerDay = Number(item.rentalFeePerDay) || 0;
@@ -745,12 +728,15 @@ export default function LendOrderDetailClient({
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm">
                   {renter.avatarUrl ? (
-                    <img
+                    <Image
                       src={renter.avatarUrl}
-                      alt={renter.username}
-                      className="h-full w-full rounded-2xl object-cover"
+                      alt={renter.username || renter.fullName || "อวตารผู้เช่า"}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                      unoptimized={renter.avatarUrl.startsWith("data:") || renter.avatarUrl.startsWith("blob:")}
                     />
                   ) : (
                     <span>{renter.username.charAt(0).toUpperCase()}</span>
@@ -803,10 +789,13 @@ export default function LendOrderDetailClient({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="(max-width: 640px) 96px, 112px"
+                      className="object-cover"
+                      unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                     />
                   ) : (
                     <Package className="h-10 w-10 text-slate-300" />
@@ -988,13 +977,23 @@ export default function LendOrderDetailClient({
                             className="group relative block cursor-zoom-in overflow-hidden rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
                             aria-label="ดูสลิปโอนเงินขนาดเต็ม"
                           >
-                            <img
+                            <Image
                               src={
                                 paymentsList.find((p) => p.status === "pending")
                                   ?.slip_image_url || ""
                               }
                               alt="สลิปโอนเงิน"
-                              className="max-h-64 rounded-xl border border-amber-200 object-contain shadow-sm transition group-hover:opacity-90"
+                              width={320}
+                              height={400}
+                              className="max-h-64 w-auto rounded-xl border border-amber-200 object-contain shadow-sm transition group-hover:opacity-90"
+                              unoptimized={
+                                paymentsList
+                                  .find((p) => p.status === "pending")
+                                  ?.slip_image_url?.startsWith("data:") ||
+                                paymentsList
+                                  .find((p) => p.status === "pending")
+                                  ?.slip_image_url?.startsWith("blob:")
+                              }
                             />
                             <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
                               <ZoomIn className="h-3.5 w-3.5" />
@@ -1295,11 +1294,14 @@ export default function LendOrderDetailClient({
                   {afterPreviews.length > 0 ? (
                     <div className="grid w-full grid-cols-3 gap-2">
                       {afterPreviews.map((src, i) => (
-                        <div key={src} className="relative">
-                          <img
+                        <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
+                          <Image
                             src={src}
                             alt={`สภาพหลังใช้งาน ${i + 1}`}
-                            className="h-24 w-full rounded-xl object-cover shadow-sm"
+                            fill
+                            sizes="(max-width: 640px) 33vw, 150px"
+                            className="object-cover shadow-sm"
+                            unoptimized={src.startsWith("data:") || src.startsWith("blob:")}
                           />
                           <button
                             type="button"
@@ -1310,7 +1312,7 @@ export default function LendOrderDetailClient({
                                 p.filter((_, x) => x !== i),
                               );
                             }}
-                            className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 p-1 text-white shadow"
+                            className="absolute -right-1 -top-1 z-10 rounded-full bg-rose-500 p-1 text-white shadow"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -1427,11 +1429,16 @@ export default function LendOrderDetailClient({
                 </button>
               </div>
             </div>
-            <img
-              src={slipLightboxUrl}
-              alt="สลิปโอนเงินขนาดเต็ม"
-              className="max-h-[80vh] w-full rounded-2xl bg-white object-contain"
-            />
+            <div className="relative flex max-h-[80vh] w-full items-center justify-center">
+              <Image
+                src={slipLightboxUrl}
+                alt="สลิปโอนเงินขนาดเต็ม"
+                width={800}
+                height={1000}
+                className="max-h-[80vh] w-auto rounded-2xl bg-white object-contain"
+                unoptimized={slipLightboxUrl.startsWith("data:") || slipLightboxUrl.startsWith("blob:")}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1468,10 +1475,13 @@ export default function LendOrderDetailClient({
                 </label>
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
                   {cancelImagePreview ? (
-                    <img
+                    <Image
                       src={cancelImagePreview}
                       alt="หลักฐานยกเลิก"
-                      className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                      width={300}
+                      height={200}
+                      className="max-h-48 w-auto rounded-xl object-contain mx-auto shadow-sm"
+                      unoptimized
                     />
                   ) : (
                     <div className="space-y-2">
@@ -1575,10 +1585,13 @@ export default function LendOrderDetailClient({
                   className="block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
                 />
                 {reportImagePreview && (
-                  <img
+                  <Image
                     src={reportImagePreview}
-                    alt="หลักฐาน"
-                    className="mt-2 max-h-40 rounded-xl object-contain"
+                    alt="หลักฐานรายงานปัญหา"
+                    width={300}
+                    height={200}
+                    className="mt-2 max-h-40 w-auto rounded-xl object-contain"
+                    unoptimized
                   />
                 )}
               </div>

@@ -96,15 +96,23 @@ export async function POST(request: Request) {
             filenamePrefix: "slip",
           });
         } catch (uploadErr) {
-          console.warn(
-            "Storage upload failed for form slip, fallback to base64:",
+          console.error(
+            "Storage upload failed for form slip:",
             uploadErr,
           );
-          const buffer = Buffer.from(await slip.arrayBuffer());
-          const mimeType = slip.type || "image/png";
-          slipDataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
+          return NextResponse.json(
+            { message: "อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
+            { status: 502 },
+          );
         }
       }
+    }
+
+    if (slipDataUri?.startsWith("data:")) {
+      return NextResponse.json(
+        { message: "ไม่อนุญาตให้อัปโหลดหรือบันทึกสลิปในรูปแบบ Base64" },
+        { status: 400 },
+      );
     }
 
     if (!orderId) {

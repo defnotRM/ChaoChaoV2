@@ -55,7 +55,6 @@ export async function POST(request: Request) {
     const mimeType = file.type || "image/jpeg";
 
     // Try uploading to Supabase Storage (bucket: banners)
-    let savedBannerUrl: string;
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const filePath = `${user.id}/banner.${fileExt}`;
 
@@ -66,16 +65,18 @@ export async function POST(request: Request) {
         upsert: true,
       });
 
-    if (!uploadError) {
-      const {
-        data: { publicUrl },
-      } = admin.storage.from("banners").getPublicUrl(filePath);
-      savedBannerUrl = `${publicUrl}?t=${Date.now()}`;
-    } else {
-      // Fallback to base64 if bucket is not created yet
-      console.warn("Storage upload failed, fallback to base64:", uploadError.message);
-      savedBannerUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
+    if (uploadError) {
+      console.error("Storage upload failed for banner:", uploadError.message);
+      return NextResponse.json(
+        { message: "ไม่สามารถอัปโหลดรูปภาพแบนเนอร์ไปยังพื้นที่จัดเก็บได้ กรุณาลองใหม่อีกครั้ง" },
+        { status: 502 }
+      );
     }
+
+    const {
+      data: { publicUrl },
+    } = admin.storage.from("banners").getPublicUrl(filePath);
+    const savedBannerUrl = `${publicUrl}?t=${Date.now()}`;
 
     // 1. Check if useraccount already exists for this user
     const { data: existingUser } = await admin

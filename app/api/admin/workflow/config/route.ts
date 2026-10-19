@@ -97,6 +97,16 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
+      if (mode === "dynamic" && body.confirmDynamic !== true) {
+        return NextResponse.json(
+          {
+            message:
+              "การเปลี่ยนเป็น dynamic mode ต้องยืนยันผ่าน confirmDynamic: true",
+          },
+          { status: 400 }
+        );
+      }
+
       const { error: updateError } = await admin
         .from("system_config")
         .update({

@@ -22,6 +22,9 @@ export default async function HiredProductDetailPage({
     notFound();
   }
 
-  const ownerId = (order.item as any)?.user_id || "b5041d3d-ba07-4230-96fa-3fbfb4411439";
+  const item = Array.isArray(order.item) ? order.item[0] : order.item;
+  const ownerId =
+    (item as { user_id?: string } | null)?.user_id ||
+    "b5041d3d-ba07-4230-96fa-3fbfb4411439";
   redirect(`/dashboard/${ownerId}/lend/${order.order_id}`);
 }

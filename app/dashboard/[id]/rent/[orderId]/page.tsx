@@ -33,7 +33,10 @@ export default async function UserRentalOrderDetailPage({
       .select("role ( role_type )")
       .eq("user_id", sessionUser.id);
     isAdmin = (sessionRoles || []).some(
-      (r: any) => r.role?.role_type === "admin",
+      (r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const item = Array.isArray(r.role) ? r.role[0] : r.role;
+        return item?.role_type === "admin";
+      },
     );
     if (!isAdmin) {
       notFound();
@@ -105,9 +108,11 @@ export default async function UserRentalOrderDetailPage({
   const owner = ownerRes.data;
   const ownerFullName = owner?.username || "ผู้ให้เช่า";
 
-  const ownerPhones = ((ownerPhoneRes as any).data || [])
-    .map((p: any) => p.phone)
-    .filter(Boolean);
+  const ownerPhoneData =
+    (ownerPhoneRes as { data?: { phone?: string }[] | null })?.data || [];
+  const ownerPhones = ownerPhoneData
+    .map((p) => p.phone)
+    .filter((p): p is string => Boolean(p));
 
   const avatarUrl = owner?.avatar_url || null;
 

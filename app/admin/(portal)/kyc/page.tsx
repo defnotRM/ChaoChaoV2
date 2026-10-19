@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useCallback } from "react";
 import {
   CreditCard,
@@ -379,12 +380,15 @@ export default function AdminKycPage() {
                                 }
                                 className="group relative aspect-video cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 transition hover:border-[#3f6593]"
                               >
-                                <img
+                                <Image
                                   src={u.id_card_url}
-                                  alt="ID Card"
-                                  className="h-full w-full object-cover transition group-hover:scale-105"
+                                  alt={`บัตรประชาชนของ ${u.username}`}
+                                  fill
+                                  sizes="(max-width: 640px) 100vw, 300px"
+                                  className="object-cover transition group-hover:scale-105"
+                                  unoptimized={u.id_card_url.startsWith("data:") || u.id_card_url.startsWith("blob:")}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                                   <Eye className="h-5 w-5 text-white" />
                                 </div>
                               </div>
@@ -410,12 +414,15 @@ export default function AdminKycPage() {
                                 }
                                 className="group relative aspect-video cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 transition hover:border-[#3f6593]"
                               >
-                                <img
+                                <Image
                                   src={u.id_card_selfie_url}
-                                  alt="Selfie with ID"
-                                  className="h-full w-full object-cover transition group-hover:scale-105"
+                                  alt={`เซลฟี่คู่บัตรของ ${u.username}`}
+                                  fill
+                                  sizes="(max-width: 640px) 100vw, 300px"
+                                  className="object-cover transition group-hover:scale-105"
+                                  unoptimized={u.id_card_selfie_url.startsWith("data:") || u.id_card_selfie_url.startsWith("blob:")}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                                   <Eye className="h-5 w-5 text-white" />
                                 </div>
                               </div>
@@ -658,11 +665,14 @@ export default function AdminKycPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-3 flex max-h-[75vh] items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
-              <img
+            <div className="relative mt-3 flex min-h-[300px] max-h-[75vh] w-full items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
+              <Image
                 src={previewImage.url}
-                alt={previewImage.title}
+                alt={previewImage.title || "ภาพหลักฐานยืนยันตัวตน"}
+                width={800}
+                height={600}
                 className="max-h-[70vh] w-auto rounded-xl object-contain"
+                unoptimized={previewImage.url.startsWith("data:") || previewImage.url.startsWith("blob:")}
               />
             </div>
             <div className="mt-3 flex justify-end">

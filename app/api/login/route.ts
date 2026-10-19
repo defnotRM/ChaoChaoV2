@@ -96,8 +96,11 @@ export async function POST(request: Request) {
     }
 
     let assignedRoles = (userRoles || [])
-      .map((item: any) => item.role?.role_type)
-      .filter(Boolean);
+      .map((item: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const r = Array.isArray(item.role) ? item.role[0] : item.role;
+        return r?.role_type;
+      })
+      .filter((r): r is string => Boolean(r));
 
     if (assignedRoles.length === 0) {
       // Fallback: assign renter role if missing

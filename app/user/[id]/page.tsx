@@ -1,10 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, use, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  MessageCircle,
   Flag,
   Package,
   Calendar,
@@ -157,10 +157,13 @@ function UserProfileContent({ userId }: { userId: string }) {
           {/* Cover Banner */}
           <div className="relative h-28 sm:h-36 w-full overflow-hidden bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]">
             {user.bannerUrl ? (
-              <img
+              <Image
                 src={user.bannerUrl}
-                alt="Cover Banner"
-                className="h-full w-full object-cover"
+                alt="ภาพหน้าปกโปรไฟล์"
+                fill
+                sizes="100vw"
+                className="object-cover"
+                unoptimized={user.bannerUrl.startsWith("data:") || user.bannerUrl.startsWith("blob:")}
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]" />
@@ -174,10 +177,13 @@ function UserProfileContent({ userId }: { userId: string }) {
               <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
                 <div className="relative -mt-12 sm:-mt-16 flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-2xl sm:text-3xl font-bold text-white shadow-xl ring-4 ring-white">
                   {user.avatarUrl ? (
-                    <img
+                    <Image
                       src={user.avatarUrl}
-                      alt={user.username}
-                      className="h-full w-full object-cover"
+                      alt={user.username || "อวตารผู้ใช้"}
+                      fill
+                      sizes="(max-width: 640px) 96px, 112px"
+                      className="object-cover"
+                      unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                     />
                   ) : (
                     <span>{userInitial}</span>
@@ -266,10 +272,13 @@ function UserProfileContent({ userId }: { userId: string }) {
                   {/* Image */}
                   <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
                     {item.imageUrl ? (
-                      <img
+                      <Image
                         src={item.imageUrl}
                         alt={item.name}
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover transition duration-300 group-hover:scale-105"
+                        unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-slate-300">

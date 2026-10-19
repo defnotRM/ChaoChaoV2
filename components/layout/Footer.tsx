@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Mail, Phone, MapPin } from "lucide-react";
 
@@ -46,9 +47,11 @@ export default function Footer() {
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-white/10">
-                <img
+                <Image
                   src="/logo.svg"
                   alt="ChaoChao"
+                  width={36}
+                  height={36}
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -88,7 +91,7 @@ export default function Footer() {
               <li className="flex items-start gap-2 text-sm text-[#c0e6fd]">
                 <MapPin className="h-4 w-4 shrink-0 text-sky-300" />
                 <span>
-                  King Mongkut's Institute of Technology Ladkrabang, Bangkok,
+                  King Mongkut&apos;s Institute of Technology Ladkrabang, Bangkok,
                   Thailand
                 </span>
               </li>

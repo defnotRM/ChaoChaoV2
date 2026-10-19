@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,21 +13,18 @@ import {
   CreditCard,
   AlertCircle,
   AlertTriangle,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-  CheckCircle2,
   Phone,
   Mail,
 } from "lucide-react";
 import {
   registerSchema,
-  roleLabels,
   type RegisterFormData,
 } from "@/lib/validations/register";
+import { useToast } from "@/components/ui/Toast";
 
 export default function RegisterForm() {
   const router = useRouter();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -63,15 +61,21 @@ export default function RegisterForm() {
       const result = await res.json();
 
       if (!res.ok) {
-        setServerError(result.message ?? "เกิดข้อผิดพลาดในการสมัครสมาชิก");
+        const msg = result.message ?? "เกิดข้อผิดพลาดในการสมัครสมาชิก";
+        setServerError(msg);
+        toast.error(msg);
         return;
       }
 
-      alert("สมัครสมาชิกสำเร็จ! กำลังนำท่านไปยังหน้าเข้าสู่ระบบ");
-      router.push("/login");
+      toast.success("สมัครสมาชิกสำเร็จ! กำลังนำท่านไปยังหน้าเข้าสู่ระบบ");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1000);
     } catch (error) {
       console.error(error);
-      setServerError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+      const msg = "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์";
+      setServerError(msg);
+      toast.error(msg);
     }
   };
 
@@ -81,9 +85,11 @@ export default function RegisterForm() {
       <div className="relative hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[#000f22] via-[#3f6593] to-[#1b3554] p-12 text-white lg:flex">
         <div className="max-w-md text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm">
-            <img
+            <Image
               src="/logo.svg"
-              alt="ChaoChao"
+              alt="โลโก้ ChaoChao"
+              width={64}
+              height={64}
               className="h-full w-full rounded-2xl object-cover"
             />
           </div>
@@ -100,9 +106,11 @@ export default function RegisterForm() {
           {/* โลโก้ (แสดงเฉพาะจอมือถือ) */}
           <div className="mb-8 flex flex-col items-center gap-3 lg:items-start">
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] lg:hidden">
-              <img
+              <Image
                 src="/logo.svg"
-                alt="ChaoChao"
+                alt="โลโก้ ChaoChao"
+                width={48}
+                height={48}
                 className="h-full w-full object-contain"
               />
             </div>
@@ -415,10 +423,13 @@ export default function RegisterForm() {
                     className="block w-full text-xs text-[#5b86b6] file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
                   />
                   {idCardPreview && (
-                    <img
+                    <Image
                       src={idCardPreview}
-                      alt="บัตรประชาชน"
-                      className="mt-2 max-h-28 rounded-lg object-contain"
+                      alt="ตัวอย่างรูปถ่ายบัตรประชาชน"
+                      width={200}
+                      height={112}
+                      className="mt-2 max-h-28 w-auto rounded-lg object-contain"
+                      unoptimized
                     />
                   )}
                   {errors.idCardUrl && (
@@ -446,10 +457,13 @@ export default function RegisterForm() {
                     className="block w-full text-xs text-[#5b86b6] file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
                   />
                   {selfiePreview && (
-                    <img
+                    <Image
                       src={selfiePreview}
-                      alt="รูปคู่บัตร"
-                      className="mt-2 max-h-28 rounded-lg object-contain"
+                      alt="ตัวอย่างรูปถ่ายคู่บัตรประชาชน"
+                      width={200}
+                      height={112}
+                      className="mt-2 max-h-28 w-auto rounded-lg object-contain"
+                      unoptimized
                     />
                   )}
                   {errors.idCardSelfieUrl && (
