@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -180,10 +181,13 @@ export default function BookingWidget({
       {/* การ์ดผู้ปล่อยเช่า */}
       <div className="mt-5 flex items-center gap-3 rounded-2xl border border-slate-200 p-3">
         {ownerAvatarUrl ? (
-          <img
+          <Image
             src={ownerAvatarUrl}
             alt={ownerName}
+            width={44}
+            height={44}
             className="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm"
+            unoptimized={ownerAvatarUrl.startsWith("data:") || ownerAvatarUrl.startsWith("blob:")}
           />
         ) : (
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-base font-bold text-white">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -86,9 +87,11 @@ export default function LoginForm() {
       <div className="relative hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[#000f22] via-[#3f6593] to-[#1b3554] p-12 text-white lg:flex">
         <div className="max-w-md text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm">
-            <img
+            <Image
               src="/logo.svg"
-              alt="ChaoChao"
+              alt="โลโก้ ChaoChao"
+              width={64}
+              height={64}
               className="h-full w-full rounded-2xl object-cover"
             />
           </div>
@@ -105,9 +108,11 @@ export default function LoginForm() {
           {/* โลโก้ (แสดงเฉพาะจอมือถือ เพราะจอ Desktop มีฝั่งซ้ายอยู่แล้ว) */}
           <div className="mb-8 flex flex-col items-center gap-3 lg:items-start">
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] lg:hidden">
-              <img
+              <Image
                 src="/logo.svg"
-                alt="ChaoChao"
+                alt="โลโก้ ChaoChao"
+                width={48}
+                height={48}
                 className="h-full w-full object-contain"
               />
             </div>

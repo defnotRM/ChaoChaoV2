@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -308,11 +309,13 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                         rel="noopener noreferrer"
                         className="group relative block aspect-square overflow-hidden rounded-2xl ring-1 ring-emerald-200"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={url}
                           alt={`รูปหลักฐานที่ ${index + 1}`}
-                          className="h-full w-full object-cover transition group-hover:scale-105"
+                          fill
+                          sizes="(max-width: 640px) 33vw, 20vw"
+                          className="object-cover transition group-hover:scale-105"
+                          unoptimized={url.startsWith("data:") || url.startsWith("blob:")}
                         />
                         <span className="absolute inset-x-1.5 bottom-1.5 inline-flex items-center justify-center gap-1 truncate rounded-md bg-emerald-600/85 px-1.5 py-0.5 text-[10px] font-medium text-white">
                           <CheckCircle2 className="h-3 w-3 shrink-0" />
@@ -321,18 +324,20 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                       </a>
                     ))
                   : photos.map((photo, index) => (
-                      <div key={photo.id} className="relative aspect-square">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                      <div key={photo.id} className="relative aspect-square overflow-hidden rounded-2xl ring-1 ring-slate-200">
+                        <Image
                           src={photo.url}
                           alt={`รูปหลักฐานที่ ${index + 1}`}
-                          className="h-full w-full rounded-2xl object-cover ring-1 ring-slate-200"
+                          fill
+                          sizes="(max-width: 640px) 33vw, 20vw"
+                          className="object-cover"
+                          unoptimized={photo.url.startsWith("data:") || photo.url.startsWith("blob:")}
                         />
                         <button
                           type="button"
                           onClick={() => removePhoto(photo.id)}
                           disabled={submitting}
-                          className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-rose-600 shadow-sm transition hover:bg-white disabled:opacity-50"
+                          className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-rose-600 shadow-sm transition hover:bg-white disabled:opacity-50"
                           aria-label={`ลบรูปที่ ${index + 1}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -411,11 +416,13 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
                         rel="noopener noreferrer"
                         className="group relative block aspect-square overflow-hidden rounded-xl ring-1 ring-slate-200"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={url}
                           alt={`รูปหลักฐานของ${otherRoleLabel} ${index + 1}`}
-                          className="h-full w-full object-cover transition group-hover:scale-105"
+                          fill
+                          sizes="(max-width: 640px) 33vw, 20vw"
+                          className="object-cover transition group-hover:scale-105"
+                          unoptimized={url.startsWith("data:") || url.startsWith("blob:")}
                         />
                       </a>
                     ))}

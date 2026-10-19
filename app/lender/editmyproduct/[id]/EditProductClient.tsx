@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -690,10 +691,13 @@ export default function EditProductClient({
                   key={img.id}
                   className="relative aspect-square overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100"
                 >
-                  <img
+                  <Image
                     src={img.preview}
                     alt={`รูปอุปกรณ์ ${idx + 1}`}
-                    className="h-full w-full object-cover"
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                    className="object-cover"
+                    unoptimized={img.preview.startsWith("data:") || img.preview.startsWith("blob:")}
                   />
                   {idx === 0 && (
                     <span className="absolute left-2 top-2 rounded-full bg-[#1b3554] px-2 py-0.5 text-[10px] font-semibold text-white shadow">

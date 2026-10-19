@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -540,10 +541,13 @@ export default function ProfilePage() {
           {/* Narrow Banner with Upload Button */}
           <div className="group relative h-28 sm:h-36 w-full overflow-hidden bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]">
             {bannerUrl ? (
-              <img
+              <Image
                 src={bannerUrl}
-                alt="Cover Banner"
-                className="h-full w-full object-cover"
+                alt="ภาพหน้าปกโปรไฟล์"
+                fill
+                sizes="100vw"
+                className="object-cover"
+                unoptimized={bannerUrl.startsWith("data:") || bannerUrl.startsWith("blob:")}
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]" />
@@ -592,10 +596,13 @@ export default function ProfilePage() {
                 {/* Avatar with Camera Trigger */}
                 <div className="group relative -mt-12 sm:-mt-16 flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-2xl sm:text-3xl font-bold text-white shadow-xl ring-4 ring-white">
                   {avatarUrl ? (
-                    <img
+                    <Image
                       src={avatarUrl}
-                      alt={username}
-                      className="h-full w-full object-cover"
+                      alt={username || "อวตารผู้ใช้"}
+                      fill
+                      sizes="(max-width: 640px) 96px, 112px"
+                      className="object-cover"
+                      unoptimized={avatarUrl.startsWith("data:") || avatarUrl.startsWith("blob:")}
                     />
                   ) : (
                     <span>{initialLetter}</span>

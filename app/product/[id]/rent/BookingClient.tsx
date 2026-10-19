@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
@@ -688,10 +689,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
                 <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                      unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                     />
                   ) : (
                     <Package className="h-7 w-7 text-slate-400" />
@@ -710,10 +714,13 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               {/* ข้อมูลผู้ให้เช่า */}
               <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-slate-50 p-3">
                 {owner.avatarUrl ? (
-                  <img
+                  <Image
                     src={owner.avatarUrl}
                     alt={owner.displayName}
+                    width={36}
+                    height={36}
                     className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm"
+                    unoptimized={owner.avatarUrl.startsWith("data:") || owner.avatarUrl.startsWith("blob:")}
                   />
                 ) : (
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">

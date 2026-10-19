@@ -16,8 +16,6 @@ import {
   SectionHeading,
 } from "@/components/products/designSystem";
 import FeaturedProductsRealtime from "@/components/home/FeaturedProductsRealtime";
-import { getMockItemCategories } from "@/lib/mock/product";
-import type { ItemStatus } from "@/lib/types/product";
 
 const popularCategoryIcons = ["camera", "speaker", "tent", "wrench"];
 
@@ -62,7 +60,7 @@ const gettingStartedOptions = [
 export const dynamic = "force-dynamic";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Product } from "@/lib/types/product";
+import type { Product, ItemStatus } from "@/lib/types/product";
 
 async function getFeaturedProducts(): Promise<Product[]> {
   try {
@@ -176,11 +174,7 @@ async function getPopularCategories() {
     });
 
     if (!dbCategories || dbCategories.length === 0) {
-      return getMockItemCategories().slice(0, 4).map((c) => ({
-        category_id: c.category_id,
-        category_name: c.category_name,
-        itemCount: 0,
-      }));
+      return [];
     }
 
     // Sort to match standard icon order (กล้อง, เครื่องเสียง, แคมป์ปิ้ง, เครื่องมือช่าง)
@@ -198,11 +192,7 @@ async function getPopularCategories() {
     }));
   } catch (err) {
     console.error("Error loading popular categories:", err);
-    return getMockItemCategories().slice(0, 4).map((c) => ({
-      category_id: c.category_id,
-      category_name: c.category_name,
-      itemCount: 0,
-    }));
+    return [];
   }
 }
 

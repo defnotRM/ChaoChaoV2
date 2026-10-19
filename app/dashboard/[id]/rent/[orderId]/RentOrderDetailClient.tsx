@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
@@ -586,12 +587,15 @@ export default function RentOrderDetailClient({
               </div>
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm overflow-hidden">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xl font-bold text-white shadow-sm overflow-hidden">
                   {owner.avatarUrl ? (
-                    <img
+                    <Image
                       src={owner.avatarUrl}
-                      alt={owner.username}
-                      className="h-full w-full object-cover"
+                      alt={owner.username || owner.fullName || "อวตารผู้ให้เช่า"}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                      unoptimized={owner.avatarUrl.startsWith("data:") || owner.avatarUrl.startsWith("blob:")}
                     />
                   ) : (
                     <span>
@@ -657,10 +661,13 @@ export default function RentOrderDetailClient({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
                   {item.imageUrl ? (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full object-cover"
+                      fill
+                      sizes="(max-width: 640px) 96px, 112px"
+                      className="object-cover"
+                      unoptimized={item.imageUrl.startsWith("data:") || item.imageUrl.startsWith("blob:")}
                     />
                   ) : (
                     <Package className="h-10 w-10 text-slate-300" />
@@ -1021,10 +1028,13 @@ export default function RentOrderDetailClient({
                 <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
                   {slipPreview ? (
                     <div className="space-y-2">
-                      <img
+                      <Image
                         src={slipPreview}
                         alt="สลิปโอนเงิน"
-                        className="max-h-48 rounded-xl object-contain mx-auto shadow-sm"
+                        width={300}
+                        height={400}
+                        className="max-h-48 w-auto rounded-xl object-contain mx-auto shadow-sm"
+                        unoptimized
                       />
                       <p className="text-xs text-slate-500">
                         {slipFile?.name || "สลิปที่เลือก"}

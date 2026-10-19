@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ImageIcon } from "lucide-react";
 
 function joinClassNames(...classNames: Array<string | undefined | false>) {
@@ -42,11 +43,12 @@ export function PlaceholderImage({
           className,
         )}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- รูปจาก Storage หลายโดเมน ไม่ผ่าน next/image */}
-        <img
+        <Image
           src={seed}
           alt={alt ?? "รูปสินค้า"}
-          loading="lazy"
+          width={400}
+          height={400}
+          unoptimized={seed.startsWith("data:") || seed.startsWith("blob:")}
           onError={() => setFailedSrc(seed)}
           className={joinClassNames(
             "h-full w-full",
