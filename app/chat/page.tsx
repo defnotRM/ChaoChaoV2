@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -388,12 +389,15 @@ function ChatContent() {
                     }`}
                   >
                     <div className="relative shrink-0">
-                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-white">
+                      <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-white">
                         {room.partner.avatarUrl ? (
-                          <img
+                          <Image
                             src={room.partner.avatarUrl}
-                            alt={room.partner.username}
-                            className="h-full w-full object-cover"
+                            alt={room.partner.username || "อวตารผู้สนทนา"}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                            unoptimized={room.partner.avatarUrl.startsWith("data:") || room.partner.avatarUrl.startsWith("blob:")}
                           />
                         ) : (
                           <span>{partnerInitial}</span>
@@ -458,10 +462,13 @@ function ChatContent() {
                     className="group relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-transparent transition hover:ring-[#3f6593]"
                   >
                     {activeRoom.partner.avatarUrl ? (
-                      <img
+                      <Image
                         src={activeRoom.partner.avatarUrl}
-                        alt={activeRoom.partner.username}
-                        className="h-full w-full object-cover"
+                        alt={activeRoom.partner.username || "อวตารผู้สนทนา"}
+                        fill
+                        sizes="40px"
+                        className="object-cover"
+                        unoptimized={activeRoom.partner.avatarUrl.startsWith("data:") || activeRoom.partner.avatarUrl.startsWith("blob:")}
                       />
                     ) : (
                       <span>
@@ -549,12 +556,15 @@ function ChatContent() {
                           className={`flex items-end gap-2 ${msg.isMe ? "justify-end" : "justify-start"}`}
                         >
                           {!msg.isMe && (
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-300 text-[10px] font-bold text-slate-700">
+                            <div className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-300 text-[10px] font-bold text-slate-700">
                               {activeRoom.partner.avatarUrl ? (
-                                <img
+                                <Image
                                   src={activeRoom.partner.avatarUrl}
-                                  alt={activeRoom.partner.username}
-                                  className="h-full w-full object-cover"
+                                  alt={activeRoom.partner.username || "อวตารผู้สนทนา"}
+                                  fill
+                                  sizes="28px"
+                                  className="object-cover"
+                                  unoptimized={activeRoom.partner.avatarUrl.startsWith("data:") || activeRoom.partner.avatarUrl.startsWith("blob:")}
                                 />
                               ) : (
                                 <span>

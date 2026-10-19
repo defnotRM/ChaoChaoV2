@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Mail, Phone, MapPin } from "lucide-react";
 
@@ -46,9 +47,11 @@ export default function Footer() {
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-white/10">
-                <img
+                <Image
                   src="/logo.svg"
                   alt="ChaoChao"
+                  width={36}
+                  height={36}
                   className="h-full w-full object-contain"
                 />
               </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   Scale,
@@ -524,12 +525,15 @@ export default function AdminDisputesPage() {
                                   onClick={() => setPreviewImage(img.image_url)}
                                   className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 transition hover:border-[#3f6593]"
                                 >
-                                  <img
+                                  <Image
                                     src={img.image_url}
-                                    alt="Evidence"
-                                    className="h-full w-full object-cover transition group-hover:scale-105"
+                                    alt="ภาพหลักฐานข้อพิพาท"
+                                    fill
+                                    sizes="80px"
+                                    className="object-cover transition group-hover:scale-105"
+                                    unoptimized={img.image_url.startsWith("data:") || img.image_url.startsWith("blob:")}
                                   />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                                     <Eye className="h-4 w-4 text-white" />
                                   </div>
                                 </div>
@@ -699,11 +703,14 @@ export default function AdminDisputesPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-3 flex max-h-[75vh] items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
-              <img
+            <div className="relative mt-3 flex min-h-[300px] max-h-[75vh] w-full items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
+              <Image
                 src={previewImage}
-                alt="Evidence"
+                alt="ภาพหลักฐานข้อพิพาทขนาดเต็ม"
+                width={800}
+                height={600}
                 className="max-h-[70vh] w-auto rounded-xl object-contain"
+                unoptimized={previewImage.startsWith("data:") || previewImage.startsWith("blob:")}
               />
             </div>
             <div className="mt-3 flex justify-end">
