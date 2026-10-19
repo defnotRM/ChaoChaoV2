@@ -51,9 +51,18 @@ export default function NotificationBell({
   }, [userId]);
 
   useEffect(() => {
-    fetchNotifications();
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await fetchNotifications();
+      }
+    };
+    void run();
     const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   useEffect(() => {

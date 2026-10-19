@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const itemMap = new Map(itemList.map((i) => [i.item_id, i]));
 
     // 2. ดึงคำขอเช่า/คำสั่งเช่าทั้งหมดที่ส่งเข้ามายังสินค้าของผู้ให้เช่าคนนี้
-    let incomingOrders: any[] = [];
+    let incomingOrders: Record<string, unknown>[] = [];
     if (itemIds.length > 0) {
       const { data: rawOrders, error: ordersError } = await admin
         .from("rentalorder")
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
               : { data: [] },
           ]);
 
-        const renterMap = new Map<string, any>(
+        const renterMap = new Map(
           (renters || []).map((r) => [r.user_id, r]),
         );
         const phoneMap = new Map<string, string>();
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
             .map((p) => p.order_id),
         );
 
-        incomingOrders = rawOrders.map((o: any) => {
+        incomingOrders = rawOrders.map((o) => {
           const item = itemMap.get(o.item_id);
           const renter = renterMap.get(o.user_id);
           const hasPendingPayment = pendingPaymentOrderIds.has(o.order_id);

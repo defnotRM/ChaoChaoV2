@@ -111,7 +111,13 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
   );
 
   useEffect(() => {
-    loadData(false);
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await loadData(false);
+      }
+    };
+    void run();
 
     const supabase = createBrowserClient();
     const channel = supabase
@@ -132,6 +138,7 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
     }, 2000);
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       clearInterval(interval);
     };

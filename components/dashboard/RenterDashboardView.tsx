@@ -7,7 +7,6 @@ import {
   Package,
   Clock,
   CheckCircle2,
-  AlertCircle,
   MessageCircle,
   ChevronRight,
   Loader2,
@@ -88,7 +87,13 @@ export function RenterDashboardView({ userId }: { userId?: string } = {}) {
   );
 
   useEffect(() => {
-    loadData(false);
+    let cancelled = false;
+    const run = async () => {
+      if (!cancelled) {
+        await loadData(false);
+      }
+    };
+    void run();
 
     const supabase = createBrowserClient();
     const channel = supabase
@@ -106,6 +111,7 @@ export function RenterDashboardView({ userId }: { userId?: string } = {}) {
     }, 2000);
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       clearInterval(interval);
     };

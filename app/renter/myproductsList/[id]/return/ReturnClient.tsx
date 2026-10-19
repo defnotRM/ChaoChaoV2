@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -157,15 +158,18 @@ export default function ReturnClient({ data }: { data: ReturnPageData }) {
                   key={i}
                   className="relative aspect-square overflow-hidden rounded-xl border border-slate-200"
                 >
-                  <img
+                  <Image
                     src={url}
-                    alt={`หลักฐาน ${i + 1}`}
-                    className="h-full w-full object-cover"
+                    alt={`หลักฐานการส่งคืนรูปที่ ${i + 1}`}
+                    fill
+                    sizes="(max-width: 640px) 33vw, 20vw"
+                    className="object-cover"
+                    unoptimized={url.startsWith("data:") || url.startsWith("blob:")}
                   />
                   <button
                     type="button"
                     onClick={() => removePreview(i)}
-                    className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                    className="absolute right-1 top-1 z-10 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

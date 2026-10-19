@@ -73,11 +73,14 @@ export async function GET() {
       .select("user_id, role ( role_type )")
       .in("user_id", partnerIds);
     const rolesMap = new Map<string, string[]>();
-    (roleAssignments || []).forEach((ra: any) => {
-      const current = rolesMap.get(ra.user_id) || [];
-      if (ra.role?.role_type) current.push(ra.role.role_type);
-      rolesMap.set(ra.user_id, current);
-    });
+    (roleAssignments || []).forEach(
+      (ra: { user_id: string; role?: { role_type?: string } | { role_type?: string }[] | null }) => {
+        const current = rolesMap.get(ra.user_id) || [];
+        const roleType = Array.isArray(ra.role) ? ra.role[0]?.role_type : ra.role?.role_type;
+        if (roleType) current.push(roleType);
+        rolesMap.set(ra.user_id, current);
+      },
+    );
 
     // 4. ข้อความทั้งหมดของทุกห้อง (เรียงใหม่สุดก่อน) — เอาไปคำนวณ "ข้อความล่าสุด" +
     // "จำนวนที่ยังไม่อ่าน" เอง เพราะ chatroom ไม่มีคอลัมน์ last_message/updated_at จริง
@@ -113,7 +116,7 @@ export async function GET() {
       const partnerProfile = profileMap.get(partnerId);
       const partnerRoles = rolesMap.get(partnerId) || [];
       const last = lastMsgMap.get(r.chat_room_id);
-      const orderStatus = (r as any).rentalorder?.status as string | undefined;
+      const orderStatus = (r as unknown as { rentalorder?: { status?: string } | null }).rentalorder?.status;
 
       const roleLabel = partnerRoles.includes("admin")
         ? "ผู้ดูแลระบบ"

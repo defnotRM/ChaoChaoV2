@@ -1,30 +1,36 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { EmptyState } from '@/components/StateHandling';
+import React from "react";
+import { EmptyState } from "@/components/StateHandling";
+
+interface Item {
+  id: string;
+  name: string;
+  price: number;
+  deposit: number;
+  status: "available" | "rented";
+}
 
 export default function MyItemsPage() {
-  const items = [
+  const items: Item[] = [
     {
-      id: '1',
-      name: 'Sony Alpha A7 IV',
+      id: "1",
+      name: "Sony Alpha A7 IV",
       price: 1500,
       deposit: 5000,
-      status: 'available',
+      status: "available",
     },
     {
-      id: '2',
-      name: 'DJI Mini 3 Pro',
+      id: "2",
+      name: "DJI Mini 3 Pro",
       price: 800,
       deposit: 3000,
-      status: 'rented',
+      status: "rented",
     },
   ];
 
   if (items.length === 0) {
-    return (
-      <EmptyState message="คุณยังไม่มีรายการสินค้าที่ลงประกาศไว้" />
-    );
+    return <EmptyState message="คุณยังไม่มีรายการสินค้าที่ลงประกาศไว้" />;
   }
 
   return (
@@ -45,12 +51,12 @@ export default function MyItemsPage() {
               <h3 className="font-semibold text-lg">{item.name}</h3>
               <span
                 className={`text-xs px-2 py-1 rounded-full ${
-                  item.status === 'available'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-yellow-100 text-yellow-800'
+                  item.status === "available"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-yellow-100 text-yellow-800"
                 }`}
               >
-                {item.status === 'available' ? 'ว่าง' : 'ถูกเช่าอยู่'}
+                {item.status === "available" ? "ว่าง" : "ถูกเช่าอยู่"}
               </span>
             </div>
             <p className="text-sm text-gray-600">

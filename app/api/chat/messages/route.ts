@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       "refunded_dispute",
       "item_not_returned",
     ];
-    const orderStatus = (room as any).rentalorder?.status as string | undefined;
+    const orderStatus = (room as unknown as { rentalorder?: { status?: string } | null }).rentalorder?.status;
     if (orderStatus && CLOSED_STATUSES.includes(orderStatus)) {
       return NextResponse.json(
         { message: "ออเดอร์นี้เสร็จสิ้นแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
