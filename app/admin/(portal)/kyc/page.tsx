@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
-  ShieldCheck,
   CreditCard,
   Building2,
   CheckCircle2,
   XCircle,
-  Clock,
   Eye,
   X,
   ExternalLink,
-  AlertCircle,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -68,7 +65,7 @@ export default function AdminKycPage() {
     text: string;
   } | null>(null);
 
-  const fetchKycData = async () => {
+  const fetchKycData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/kyc?status=${statusFilter}`);
@@ -85,11 +82,12 @@ export default function AdminKycPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchKycData();
-  }, [statusFilter]);
+  }, [fetchKycData]);
 
   const handleUpdateStatus = async (
     target: "identity" | "bank",
@@ -256,7 +254,11 @@ export default function AdminKycPage() {
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value as "pending" | "all" | "verified" | "rejected"
+              )
+            }
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-[#3f6593]"
           >
             <option value="pending">เฉพาะรอดำเนินการ (Pending)</option>

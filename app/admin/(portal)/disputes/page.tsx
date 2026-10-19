@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Scale,
-  AlertTriangle,
   CheckCircle2,
-  XCircle,
-  Clock,
   Eye,
   X,
   ExternalLink,
-  ShieldAlert,
-  Calendar,
-  DollarSign,
   User,
   Package,
-  FileText,
   RefreshCw,
   Search,
-  ChevronRight,
-  UserX,
 } from "lucide-react";
 
 interface ReportImage {
@@ -134,7 +125,7 @@ export default function AdminDisputesPage() {
     text: string;
   } | null>(null);
 
-  const fetchDisputes = async () => {
+  const fetchDisputes = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/disputes?status=${statusFilter}`);
@@ -150,11 +141,12 @@ export default function AdminDisputesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDisputes();
-  }, [statusFilter]);
+  }, [fetchDisputes]);
 
   const openResolveDialog = (dispute: DisputeReport) => {
     setSelectedDispute(dispute);
