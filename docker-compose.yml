@@ -10,6 +10,7 @@ services:
         SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     restart: always
     ports:
+      - "80:3000"
       - "3000:3000"
     env_file:
       - .env.local
