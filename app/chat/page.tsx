@@ -140,6 +140,8 @@ function ChatContent() {
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const roomChannelRef = useRef<any>(null);
+  const globalChannelRef = useRef<any>(null);
 
   const activeRoom = rooms.find((r) => r.id === selectedRoomId);
 
@@ -289,8 +291,46 @@ function ChatContent() {
   useEffect(() => {
     const supabase = createBrowserClient();
 
-    const channel = supabase
-      .channel("realtime-chat-sync")
+    // 1. Channel สำหรับห้องแชทที่กำลังเปิดอยู่ (Broadcast แบบเรียลไทม์ทันที < 50ms)
+    let roomChannel: any = null;
+    if (selectedRoomId) {
+      roomChannel = supabase
+        .channel(`chat-room-${selectedRoomId}`)
+        .on(
+          "broadcast",
+          { event: "new_message" },
+          (event: { payload?: Record<string, unknown> }) => {
+            const incomingMsg = event.payload as unknown as MessageItem;
+            if (incomingMsg && incomingMsg.roomId === selectedRoomId) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+                return [
+                  ...prev,
+                  {
+                    ...incomingMsg,
+                    isMe: incomingMsg.senderId === currentUserId,
+                  },
+                ];
+              });
+              setTimeout(() => scrollToBottom(true), 20);
+            }
+            void fetchRooms();
+          },
+        )
+        .subscribe();
+
+      roomChannelRef.current = roomChannel;
+    }
+
+    // 2. Global Channel สำหรับรับ event เรียลไทม์ทั้งแบบ Broadcast และ Database Changes
+    const globalChannel = supabase
+      .channel("realtime-chat-global-sync")
+      .on("broadcast", { event: "room_updated" }, () => {
+        void fetchRooms();
+        if (selectedRoomId) {
+          void fetchMessages(selectedRoomId, true, false);
+        }
+      })
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "message" },
@@ -304,31 +344,51 @@ function ChatContent() {
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "chatroom" },
+        { event: "*", schema: "public", table: "chatroom" },
         () => {
-          fetchRooms();
+          void fetchRooms();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rentalorder" },
+        () => {
+          void fetchRooms();
         },
       )
       .subscribe();
 
-    const handleVisibilityCheck = () => {
+    globalChannelRef.current = globalChannel;
+
+    // 3. Fast Silent Polling ทุก 2.5 วินาที — สแตนด์บายสำรองตลอดเวลาเพื่อให้แชทอัปเดตต่อเนื่องไม่มีสะดุด
+    const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchRooms();
         if (selectedRoomId) {
-          fetchMessages(selectedRoomId, true, false);
+          void fetchMessages(selectedRoomId, true, false);
         }
+        void fetchRooms();
+      }
+    }, 2500);
+
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        if (selectedRoomId) {
+          void fetchMessages(selectedRoomId, true, false);
+        }
+        void fetchRooms();
       }
     };
-
-    const interval = setInterval(handleVisibilityCheck, 15000);
-    window.addEventListener("focus", handleVisibilityCheck);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (roomChannel) supabase.removeChannel(roomChannel);
+      supabase.removeChannel(globalChannel);
       clearInterval(interval);
-      window.removeEventListener("focus", handleVisibilityCheck);
+      window.removeEventListener("focus", handleFocus);
+      roomChannelRef.current = null;
+      globalChannelRef.current = null;
     };
-  }, [selectedRoomId, fetchRooms, fetchMessages]);
+  }, [selectedRoomId, currentUserId, fetchRooms, fetchMessages, scrollToBottom]);
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -375,8 +435,25 @@ function ChatContent() {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? data.message : m)),
         );
-        fetchRooms();
+        void fetchRooms();
         setTimeout(() => scrollToBottom(true), 20);
+
+        // Broadcast เรียลไทม์ทันทีไปยังคู่สนทนาในห้องแชท
+        if (roomChannelRef.current) {
+          roomChannelRef.current.send({
+            type: "broadcast",
+            event: "new_message",
+            payload: data.message,
+          });
+        }
+        // Broadcast แจ้งเตือนห้องแชทโดยรวม
+        if (globalChannelRef.current) {
+          globalChannelRef.current.send({
+            type: "broadcast",
+            event: "room_updated",
+            payload: { roomId: selectedRoomId },
+          });
+        }
       } else {
         const errData = await res.json().catch(() => ({}));
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
