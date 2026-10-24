@@ -36,9 +36,28 @@ export async function GET(request: NextRequest) {
       console.error("Error fetching lender items:", itemsError);
     }
 
+    const rawItemIds = (rawItems || []).map((i) => i.item_id);
+    const { data: rawImages } =
+      rawItemIds.length > 0
+        ? await admin
+            .from("itemimage")
+            .select("item_id, image_url, is_primary, sequence")
+            .in("item_id", rawItemIds)
+            .order("is_primary", { ascending: false })
+            .order("sequence", { ascending: true })
+        : { data: [] };
+
+    const imageMap = new Map<string, string>();
+    (rawImages || []).forEach((img) => {
+      if (img.image_url && !imageMap.has(img.item_id)) {
+        imageMap.set(img.item_id, img.image_url);
+      }
+    });
+
     const catMap = new Map((rawCategories || []).map((c) => [c.category_id, c.category_name]));
     const itemList = (rawItems || []).map((item) => ({
       ...item,
+      image_url: imageMap.get(item.item_id) || null,
       category: {
         category_name: catMap.get(item.category_id) || "ทั่วไป",
       },
@@ -94,7 +113,9 @@ export async function GET(request: NextRequest) {
           return {
             ...o,
             hasPendingPayment,
-            item: item ? { item_name: item.item_name } : { item_name: "รายการสินค้า" },
+            item: item
+              ? { item_name: item.item_name, image_url: item.image_url || null }
+              : { item_name: "รายการสินค้า", image_url: null },
             renter: renter
               ? {
                   username:

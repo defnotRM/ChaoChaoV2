@@ -37,6 +37,7 @@ interface RenterOrder {
     rental_fee_per_day: number;
     deposit: number;
     status: string;
+    image_url?: string | null;
     lender?: {
       username: string;
       avatarUrl?: string;
@@ -283,8 +284,16 @@ export function RenterDashboardView({ userId }: { userId?: string } = {}) {
                 >
                   {/* Item & Order Info */}
                   <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#1b3554]">
-                      <Package className="h-7 w-7" />
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-100 text-[#1b3554]">
+                      {order.item?.image_url ? (
+                        <img
+                          src={order.item.image_url}
+                          alt={itemName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Package className="h-7 w-7" />
+                      )}
                     </div>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">

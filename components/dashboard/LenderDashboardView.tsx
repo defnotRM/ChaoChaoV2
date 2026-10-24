@@ -29,6 +29,7 @@ interface LenderItem {
   rental_fee_per_day: number;
   deposit: number;
   status: string;
+  image_url?: string | null;
   /** แสดงผลเท่านั้น: ถูกเช่าออกไปอยู่ตอนนี้ (มีออเดอร์ item_sent/item_received) */
   isRentedOut?: boolean;
   created_at: string;
@@ -50,6 +51,7 @@ interface IncomingOrder {
   hasPendingPayment?: boolean;
   item?: {
     item_name: string;
+    image_url?: string | null;
   };
   renter?: {
     username: string;
@@ -355,8 +357,16 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
                   className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition duration-200 hover:border-[#3f6593]/40 hover:shadow-md"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#1b3554]">
-                      <Package className="h-6 w-6" />
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-100 text-[#1b3554]">
+                      {order.item?.image_url ? (
+                        <img
+                          src={order.item.image_url}
+                          alt={itemName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Package className="h-6 w-6" />
+                      )}
                     </div>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -471,8 +481,16 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[#1b3554]">
-                        <Package className="h-5 w-5" />
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-100 text-[#1b3554]">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.item_name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6" />
+                        )}
                       </div>
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${badge.className}`}

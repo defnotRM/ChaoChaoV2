@@ -43,14 +43,29 @@ export async function GET(request: NextRequest) {
     const itemIds = Array.from(new Set(orderList.map((o) => o.item_id).filter(Boolean)));
     const orderIds = orderList.map((o) => o.order_id);
 
-    const [{ data: rawItems }, { data: rawPayments }] = await Promise.all([
+    const [{ data: rawItems }, { data: rawPayments }, { data: rawImages }] = await Promise.all([
       itemIds.length > 0
         ? admin.from("item").select("item_id, user_id, item_name, description, rental_fee_per_day, deposit, status").in("item_id", itemIds)
         : { data: [] },
       orderIds.length > 0
         ? admin.from("payment").select("order_id, status").in("order_id", orderIds)
         : { data: [] },
+      itemIds.length > 0
+        ? admin
+            .from("itemimage")
+            .select("item_id, image_url, is_primary, sequence")
+            .in("item_id", itemIds)
+            .order("is_primary", { ascending: false })
+            .order("sequence", { ascending: true })
+        : { data: [] },
     ]);
+
+    const imageMap = new Map<string, string>();
+    (rawImages || []).forEach((img) => {
+      if (img.image_url && !imageMap.has(img.item_id)) {
+        imageMap.set(img.item_id, img.image_url);
+      }
+    });
 
     const itemMap = new Map((rawItems || []).map((i) => [i.item_id, i]));
     const lenderUserIds = Array.from(new Set((rawItems || []).map((i) => i.user_id).filter(Boolean)));
@@ -74,6 +89,7 @@ export async function GET(request: NextRequest) {
         item: it
           ? {
               ...it,
+              image_url: imageMap.get(it.item_id) || null,
               lender: lender
                 ? {
                     username: lender.username || "เจ้าของสินค้า",
@@ -92,6 +108,7 @@ export async function GET(request: NextRequest) {
               rental_fee_per_day: o.rental_fee || 0,
               deposit: o.deposit || 0,
               status: "available",
+              image_url: null,
               lender: null,
             },
       };
