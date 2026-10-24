@@ -1,6 +1,12 @@
 export type ItemStatus = "available" | "rented" | "maintenance" | "inactive";
 export type ItemCondition = "like-new" | "good" | "fair";
 
+export const ITEM_CONDITION_LABELS: Record<ItemCondition, string> = {
+  "like-new": "เหมือนใหม่",
+  good: "ดี",
+  fair: "พอใช้",
+};
+
 // Database rows used by the product/listing feature.
 export interface ItemCategoryRow {
   category_id: number;

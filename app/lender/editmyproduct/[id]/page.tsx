@@ -12,19 +12,17 @@ export default async function EditProductPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [{ data: item, error: itemError }, { data: categories }] =
-    await Promise.all([
-      admin
-        .from("item")
-        // "*" เพื่อให้ได้ item_condition ด้วย (และไม่ error ถ้ายังไม่ได้รัน migration 25)
-        .select("*")
-        .eq("item_id", id)
-        .maybeSingle(),
-      admin
-        .from("itemcategory")
-        .select("category_id, category_name")
-        .order("category_name", { ascending: true }),
-    ]);
+  const [{ data: item, error: itemError }, { data: categories }] = await Promise.all([
+    admin
+      .from("item")
+      .select("*")
+      .eq("item_id", id)
+      .maybeSingle(),
+    admin
+      .from("itemcategory")
+      .select("category_id, category_name")
+      .order("category_name", { ascending: true }),
+  ]);
 
   if (itemError || !item) {
     notFound();
@@ -38,9 +36,7 @@ export default async function EditProductPage({
       .order("sequence", { ascending: true }),
     admin
       .from("itemlocation")
-      .select(
-        "location_id, description, no, alley, road, subdistrict, district, province, location_type",
-      )
+      .select("location_id, description, no, alley, road, subdistrict, district, province")
       .eq("item_id", id),
     admin
       .from("itemcondition")

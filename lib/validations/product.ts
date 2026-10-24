@@ -20,7 +20,7 @@ export const createProductSchema = z.object({
   originalPrice: nonNegativeNumber.nullish(),
   rentalFeePerDay: nonNegativeNumber,
   deposit: nonNegativeNumber,
-  condition: itemCondition,
+  condition: itemCondition.optional().default("good"),
   images: z
     .array(
       z.object({

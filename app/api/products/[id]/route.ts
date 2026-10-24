@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateProductSchema } from "@/lib/validations/product";
 import { uploadToStorage } from "@/lib/storage";
+import { saveItemCondition } from "@/lib/products/itemCondition";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -97,6 +98,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     if (!itemData) {
       return apiError("ไม่พบสินค้านี้", 404);
+    }
+
+    if (input.condition !== undefined) {
+      await saveItemCondition(admin, id, input.condition);
     }
 
     // 2) Update Locations if provided

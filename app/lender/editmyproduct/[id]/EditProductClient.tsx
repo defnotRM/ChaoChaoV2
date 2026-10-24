@@ -21,6 +21,8 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
+import type { ItemCondition as ItemUsageCondition } from "@/lib/types/product";
+import ConditionPicker from "@/components/products/ConditionPicker";
 
 interface Category {
   category_id: string;
@@ -59,6 +61,7 @@ interface InitialItem {
   rental_fee_per_day: number;
   deposit: number;
   status: string;
+  item_condition?: ItemUsageCondition | null;
   itemimage?: Array<{ image_id?: string; image_url: string; is_primary?: boolean; sequence?: number }>;
   itemlocation?: ItemLocation[];
   itemcondition?: ItemCondition[];
@@ -162,6 +165,9 @@ export default function EditProductClient({
   const [deposit, setDeposit] = useState<string>(
     String(initialItem.deposit !== undefined ? initialItem.deposit : "")
   );
+  const [condition, setCondition] = useState<ItemUsageCondition>(
+    initialItem.item_condition ?? "good"
+  );
   const [status, setStatus] = useState<string>(initialItem.status || "available");
 
   // Location
@@ -241,6 +247,7 @@ export default function EditProductClient({
         originalPrice: originalPrice ? Number(originalPrice) : undefined,
         rentalFeePerDay: fee,
         deposit: dep,
+        condition,
         status,
         locations: [
           {
@@ -381,6 +388,8 @@ export default function EditProductClient({
                 />
               </div>
             </div>
+
+            <ConditionPicker value={condition} onChange={setCondition} />
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
