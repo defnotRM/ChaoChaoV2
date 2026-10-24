@@ -162,6 +162,24 @@ export async function POST(request: Request) {
       }
     }
 
+    // 7. Save bank account if provided (for lenders)
+    if (body.bankName && body.accountNumber && body.accountName) {
+      try {
+        await admin.from("bankaccount").upsert(
+          {
+            user_id: userId,
+            bank_name: String(body.bankName).trim(),
+            account_number: String(body.accountNumber).trim(),
+            account_name: String(body.accountName).trim(),
+            verification_status: "pending",
+          },
+          { onConflict: "user_id,account_number" }
+        );
+      } catch (bankErr) {
+        console.warn("Error inserting bank account during registration:", bankErr);
+      }
+    }
+
     return NextResponse.json(
       {
         message: "สมัครสมาชิกสำเร็จ",

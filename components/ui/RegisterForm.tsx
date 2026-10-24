@@ -19,6 +19,7 @@ import {
   Upload,
   Trash2,
   Camera,
+  Landmark,
   Image as ImageIcon,
 } from "lucide-react";
 import {
@@ -523,6 +524,77 @@ export default function RegisterForm() {
                       />
                     </label>
                   )}
+                </div>
+
+                {/* 3. ข้อมูลบัญชีธนาคารสำหรับรับเงินโอนค่าเช่า */}
+                <div className="pt-3 border-t border-sky-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Landmark className="h-4 w-4 text-[#1b3554]" />
+                    <div>
+                      <h4 className="text-xs font-bold text-[#000f22]">
+                        3. บัญชีธนาคาร (สำหรับรับเงินโอนค่าเช่า)
+                      </h4>
+                      <p className="text-[10px] text-slate-500">
+                        รายได้จากการปล่อยเช่าจะถูกโอนเข้าบัญชีนี้
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Bank Name */}
+                    <div>
+                      <label htmlFor="bankName" className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                        ธนาคาร
+                      </label>
+                      <select
+                        id="bankName"
+                        {...register("bankName")}
+                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      >
+                        <option value="">-- เลือกธนาคาร --</option>
+                        <option value="กสิกรไทย">ธนาคารกสิกรไทย (KBANK)</option>
+                        <option value="ไทยพาณิชย์">ธนาคารไทยพาณิชย์ (SCB)</option>
+                        <option value="กรุงเทพ">ธนาคารกรุงเทพ (BBL)</option>
+                        <option value="กรุงไทย">ธนาคารกรุงไทย (KTB)</option>
+                        <option value="กรุงศรีอยุธยา">ธนาคารกรุงศรีอยุธยา (BAY)</option>
+                        <option value="ทหารไทยธนชาต">ธนาคารทหารไทยธนชาต (TTB)</option>
+                        <option value="ออมสิน">ธนาคารออมสิน (GSB)</option>
+                        <option value="ธ.ก.ส.">ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)</option>
+                        <option value="ยูโอบี">ธนาคารยูโอบี (UOB)</option>
+                        <option value="อื่นๆ">ธนาคารอื่นๆ</option>
+                      </select>
+                    </div>
+
+                    {/* Account Number */}
+                    <div>
+                      <label htmlFor="accountNumber" className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                        เลขที่บัญชี
+                      </label>
+                      <input
+                        id="accountNumber"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={15}
+                        placeholder="กรอกเลขที่บัญชีธนาคาร (เฉพาะตัวเลข เช่น 1234567890)"
+                        {...register("accountNumber")}
+                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      />
+                    </div>
+
+                    {/* Account Name */}
+                    <div>
+                      <label htmlFor="accountName" className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                        ชื่อบัญชี (ตรงตามสมุดบัญชี)
+                      </label>
+                      <input
+                        id="accountName"
+                        type="text"
+                        placeholder="เช่น นาย สมชาย ใจดี"
+                        {...register("accountName")}
+                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
