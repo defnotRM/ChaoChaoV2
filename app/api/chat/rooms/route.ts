@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CLOSED_ORDER_STATUSES, isOrderChatClosed } from "@/lib/chat-statuses";
+import { getRoomsSummary } from "@/lib/chat-storage";
 
 export async function GET() {
   try {
@@ -94,33 +95,9 @@ export async function GET() {
       },
     );
 
-    // 4. ข้อความทั้งหมดของทุกห้อง (เรียงใหม่สุดก่อน) — คำนวณ "ข้อความล่าสุด" + "จำนวนที่ยังไม่อ่าน"
+    // 4. ดึงข้อมูลข้อความล่าสุดและจำนวนที่ยังไม่อ่านจาก Storage Bucket (chat-logs/{roomId}.json)
     const roomIds = rooms.map((r) => r.chat_room_id);
-    const { data: allMessages } = await admin
-      .from("message")
-      .select("chat_room_id, content, created_at, sender_id, is_read")
-      .in("chat_room_id", roomIds)
-      .order("created_at", { ascending: false });
-
-    const lastMsgMap = new Map<
-      string,
-      { content: string; created_at: string }
-    >();
-    const unreadCountMap = new Map<string, number>();
-    for (const m of allMessages || []) {
-      if (!lastMsgMap.has(m.chat_room_id)) {
-        lastMsgMap.set(m.chat_room_id, {
-          content: m.content,
-          created_at: m.created_at,
-        });
-      }
-      if (m.sender_id !== user.id && !m.is_read) {
-        unreadCountMap.set(
-          m.chat_room_id,
-          (unreadCountMap.get(m.chat_room_id) || 0) + 1,
-        );
-      }
-    }
+    const roomsSummary = await getRoomsSummary(roomIds, user.id);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formattedRooms = rooms.map((r: any) => {
@@ -128,7 +105,7 @@ export async function GET() {
       const partnerId = isRenter ? r.user_b : r.user_a;
       const partnerProfile = profileMap.get(partnerId);
       const partnerRoles = rolesMap.get(partnerId) || [];
-      const last = lastMsgMap.get(r.chat_room_id);
+      const summary = roomsSummary.get(r.chat_room_id);
 
       const orderData = Array.isArray(r.rentalorder)
         ? r.rentalorder[0]
@@ -157,10 +134,10 @@ export async function GET() {
         orderId: r.order_id,
         isClosed,
         myRole: (isRenter ? "renter" : "lender") as "renter" | "lender",
-        lastMessage: last?.content || "",
-        updatedAt: last?.created_at || r.created_at,
+        lastMessage: summary?.lastMessage || "",
+        updatedAt: summary?.lastCreatedAt || r.created_at,
         createdAt: r.created_at,
-        unreadCount: unreadCountMap.get(r.chat_room_id) || 0,
+        unreadCount: summary?.unreadCount || 0,
         partner: {
           id: partnerId,
           username: partnerProfile?.username || "ผู้ใช้งาน",

@@ -331,17 +331,7 @@ function ChatContent() {
           void fetchMessages(selectedRoomId, true, false);
         }
       })
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "message" },
-        (payload: { new: Record<string, unknown> }) => {
-          const newMsg = payload.new as unknown as { chat_room_id?: string };
-          if (selectedRoomId && newMsg.chat_room_id === selectedRoomId) {
-            void fetchMessages(selectedRoomId, true, true);
-          }
-          void fetchRooms();
-        },
-      )
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "chatroom" },

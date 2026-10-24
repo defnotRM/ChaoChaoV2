@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getRoomMessages,
+  appendRoomMessage,
+  markRoomMessagesAsRead,
+  StoredMessage,
+} from "@/lib/chat-storage";
 import { isOrderChatClosed } from "@/lib/chat-statuses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
@@ -50,38 +58,22 @@ export async function GET(request: Request) {
       );
     }
 
-    await admin
-      .from("message")
-      .update({ is_read: true })
-      .eq("chat_room_id", roomId)
-      .neq("sender_id", user.id)
-      .eq("is_read", false);
+    // 1. ดึงประวัติข้อความจาก Storage Bucket (chat-logs/{roomId}.json)
+    const chatLog = await getRoomMessages(roomId);
 
-    const { data: messages, error: messagesError } = await admin
-      .from("message")
-      .select(
-        "message_id, chat_room_id, sender_id, type, content, is_read, created_at",
-      )
-      .eq("chat_room_id", roomId)
-      .order("created_at", { ascending: true });
+    // 2. อัปเดตสถานะอ่านแล้วลงไฟล์ใน Storage แบบ Asynchronous
+    void markRoomMessagesAsRead(roomId, user.id);
 
-    if (messagesError) {
-      console.error("Error fetching messages:", messagesError);
-      return NextResponse.json(
-        { message: "เกิดข้อผิดพลาดในการโหลดข้อความ" },
-        { status: 500 },
-      );
-    }
-
-    const formattedMessages = (messages || []).map((m) => ({
-      id: m.message_id,
-      roomId: m.chat_room_id,
-      senderId: m.sender_id,
-      isMe: m.sender_id === user.id,
+    // 3. จัดรูปแบบข้อความส่งกลับไปยัง Client
+    const formattedMessages = chatLog.messages.map((m) => ({
+      id: m.id,
+      roomId: m.roomId,
+      senderId: m.senderId,
+      isMe: m.senderId === user.id,
       type: m.type,
       content: m.content,
-      isRead: m.is_read,
-      createdAt: m.created_at,
+      isRead: m.senderId === user.id ? m.isRead : true,
+      createdAt: m.createdAt,
     }));
 
     return NextResponse.json({ messages: formattedMessages });
@@ -164,39 +156,24 @@ export async function POST(request: Request) {
 
     const cleanContent = content.trim();
 
-    const { data: newMsg, error: insertError } = await admin
-      .from("message")
-      .insert({
-        chat_room_id: roomId,
-        sender_id: user.id,
-        type: type === "image" ? "image" : "text",
-        content: cleanContent,
-        is_read: false,
-      })
-      .select(
-        "message_id, chat_room_id, sender_id, type, content, is_read, created_at",
-      )
-      .single();
+    const newMsg: StoredMessage = {
+      id: crypto.randomUUID(),
+      roomId,
+      senderId: user.id,
+      type: type === "image" ? "image" : "text",
+      content: cleanContent,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
 
-    if (insertError || !newMsg) {
-      console.error("Error sending message:", insertError);
-      return NextResponse.json(
-        { message: "ไม่สามารถส่งข้อความได้" },
-        { status: 500 },
-      );
-    }
+    // บันทึกข้อความลงใน Supabase Storage Bucket (chat-logs/{roomId}.json)
+    await appendRoomMessage(roomId, newMsg);
 
     return NextResponse.json(
       {
         message: {
-          id: newMsg.message_id,
-          roomId: newMsg.chat_room_id,
-          senderId: newMsg.sender_id,
+          ...newMsg,
           isMe: true,
-          type: newMsg.type,
-          content: newMsg.content,
-          isRead: newMsg.is_read,
-          createdAt: newMsg.created_at,
         },
       },
       { status: 201 },
