@@ -85,7 +85,7 @@ function computeWindowMs(
   const hhmm = normalizeTimeStr(timeStr);
   const startObj = new Date(`${cleanDate}T${hhmm}:00+07:00`);
   const startMs = Number.isNaN(startObj.getTime())
-    ? Date.now()
+    ? 1767225600000
     : startObj.getTime();
   const deadlineMs = startMs + graceHours * 3600 * 1000;
   return { startMs, deadlineMs, hhmm };
@@ -171,10 +171,11 @@ export function OrderEvidencePanel({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Simulated clock state
+  const [mounted, setMounted] = useState<boolean>(false);
   const [offsetSeconds, setOffsetSeconds] = useState<number>(0);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const [graceHours, setGraceHours] = useState<number>(1);
-  const [tickNowMs, setTickNowMs] = useState<number>(() => Date.now());
+  const [tickNowMs, setTickNowMs] = useState<number>(0);
   const expiredTriggeredRef = useRef<boolean>(false);
 
   // FR-28 กรณีที่ 3: ปฏิเสธรับสินค้า
@@ -210,6 +211,8 @@ export function OrderEvidencePanel({
   }, [orderId, onSuccess]);
 
   useEffect(() => {
+    setMounted(true);
+    setTickNowMs(Date.now());
     syncSimulatedTime();
     const pollId = setInterval(syncSimulatedTime, 2500);
     return () => clearInterval(pollId);
@@ -227,12 +230,13 @@ export function OrderEvidencePanel({
     scheduledTime,
     graceHours,
   );
+  const effectiveNowMs = mounted && tickNowMs > 0 ? tickNowMs : startMs;
   const deadlineTimeStr = timeOnlyFmt.format(new Date(deadlineMs));
-  const isBeforeWindow = Boolean(scheduledDate) && tickNowMs < startMs;
+  const isBeforeWindow = Boolean(scheduledDate) && effectiveNowMs < startMs;
   const isWithinWindow =
-    !scheduledDate || (tickNowMs >= startMs && tickNowMs <= deadlineMs);
-  const isExpiredWindow = Boolean(scheduledDate) && tickNowMs > deadlineMs;
-  const remainingMs = Math.max(0, deadlineMs - tickNowMs);
+    !scheduledDate || (effectiveNowMs >= startMs && effectiveNowMs <= deadlineMs);
+  const isExpiredWindow = Boolean(scheduledDate) && effectiveNowMs > deadlineMs;
+  const remainingMs = Math.max(0, deadlineMs - effectiveNowMs);
   const totalWindowMs = Math.max(1, deadlineMs - startMs);
   const progressPercent = Math.min(
     100,
@@ -507,8 +511,11 @@ export function OrderEvidencePanel({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
                   เวลาที่เหลือ
                 </span>
-                <span className="font-mono text-2xl font-extrabold tracking-tight text-[#1b3554]">
-                  {formatRemainingMMSS(remainingMs)}
+                <span
+                  suppressHydrationWarning
+                  className="font-mono text-2xl font-extrabold tracking-tight text-[#1b3554]"
+                >
+                  {mounted ? formatRemainingMMSS(remainingMs) : "--:--"}
                 </span>
               </div>
             ) : isBeforeWindow ? (
@@ -516,8 +523,13 @@ export function OrderEvidencePanel({
                 <span className="block text-[10px] font-semibold text-amber-700">
                   เปิดให้อัปโหลดในอีก
                 </span>
-                <span className="font-mono text-xs font-bold text-amber-950">
-                  {formatWaitDuration(startMs - tickNowMs)}
+                <span
+                  suppressHydrationWarning
+                  className="font-mono text-xs font-bold text-amber-950"
+                >
+                  {mounted
+                    ? formatWaitDuration(startMs - effectiveNowMs)
+                    : "กำลังซิงก์..."}
                 </span>
               </div>
             ) : (
@@ -540,12 +552,12 @@ export function OrderEvidencePanel({
             </div>
           )}
 
-          {isSimulated && (
+          {mounted && isSimulated && (
             <div className="mt-2.5 flex items-center justify-between border-t border-slate-200/60 pt-2 text-[11px] text-slate-600">
               <span>
                 🕒 โหมดเวลาจำลอง Admin ปัจจุบัน:{" "}
-                <strong className="text-[#1b3554]">
-                  {dateTimeFmt.format(new Date(tickNowMs))} น.
+                <strong suppressHydrationWarning className="text-[#1b3554]">
+                  {dateTimeFmt.format(new Date(effectiveNowMs))} น.
                 </strong>
               </span>
             </div>

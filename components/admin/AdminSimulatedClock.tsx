@@ -66,9 +66,10 @@ export default function AdminSimulatedClock({
 }: {
   onClockChanged?: () => void;
 }) {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [offsetSeconds, setOffsetSeconds] = useState<number>(0);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
-  const [tickNowMs, setTickNowMs] = useState<number>(() => Date.now());
+  const [tickNowMs, setTickNowMs] = useState<number>(0);
   const [inputDate, setInputDate] = useState<string>("");
   const [inputTime, setInputTime] = useState<string>("12:00");
   const [activeOrders, setActiveOrders] = useState<ActiveOrderPreset[]>([]);
@@ -101,6 +102,8 @@ export default function AdminSimulatedClock({
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+    setTickNowMs(Date.now());
     fetchClock(true);
   }, [fetchClock]);
 
@@ -181,8 +184,13 @@ export default function AdminSimulatedClock({
           <span className="block text-[10px] font-semibold uppercase tracking-wider text-sky-300">
             เวลาของระบบปัจจุบัน (Asia/Bangkok)
           </span>
-          <span className="font-mono text-base font-extrabold tracking-tight sm:text-lg">
-            {fullDateTimeFmt.format(new Date(tickNowMs))}
+          <span
+            suppressHydrationWarning
+            className="font-mono text-base font-extrabold tracking-tight sm:text-lg"
+          >
+            {mounted && tickNowMs > 0
+              ? fullDateTimeFmt.format(new Date(tickNowMs))
+              : "กำลังซิงก์เวลาระบบ..."}
           </span>
         </div>
       </div>
