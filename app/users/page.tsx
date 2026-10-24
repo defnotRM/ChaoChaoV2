@@ -302,21 +302,13 @@ function UsersContent() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="mt-5 grid grid-cols-2 gap-2 border-t border-slate-100 p-4">
+                  <div className="mt-5 border-t border-slate-100 p-4">
                     <Link
                       href={`/user/${u.id}?from=users`}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
                     >
                       <User className="h-3.5 w-3.5" />
                       <span>ดูโปรไฟล์</span>
-                    </Link>
-
-                    <Link
-                      href={`/chat?userId=${u.id}`}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:from-[#000f22] hover:to-[#1b3554]"
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      <span>แชท</span>
                     </Link>
                   </div>
                 </div>

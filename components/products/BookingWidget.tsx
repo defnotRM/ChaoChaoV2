@@ -235,20 +235,13 @@ export default function BookingWidget({
           แก้ไขประกาศ
         </Link>
       ) : (
-        /* ปุ่มคู่: แชท / บันทึก */
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Link
-            href={`/chat?userId=${ownerId}`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
-          >
-            <MessageCircle className="h-4 w-4" />
-            แชท
-          </Link>
+        /* ปุ่มบันทึก */
+        <div className="mt-3">
           <button
             type="button"
             onClick={() => setSaved((v) => !v)}
             aria-pressed={saved}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 ${
+            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 ${
               saved
                 ? "border-rose-200 bg-rose-50 text-rose-600"
                 : "border-slate-200 bg-white text-slate-700 hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
@@ -257,7 +250,7 @@ export default function BookingWidget({
             <Heart
               className={`h-4 w-4 ${saved ? "fill-rose-500 text-rose-500" : ""}`}
             />
-            {saved ? "บันทึกแล้ว" : "บันทึก"}
+            {saved ? "บันทึกแล้ว" : "บันทึกสินค้า"}
           </button>
         </div>
       )}

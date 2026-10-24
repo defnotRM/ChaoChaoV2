@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-// สถานะ order ที่ถือว่า "คืนของอัปรูปเสร็จแล้ว" เป็นต้นไป — แชทอ่านได้ ส่งไม่ได้
-const CLOSED_STATUSES = [
-  "item_returned",
-  "completed",
-  "awaiting_additional_payment",
-  "refunded_dispute",
-  "item_not_returned",
-];
+import { CLOSED_ORDER_STATUSES, isOrderChatClosed } from "@/lib/chat-statuses";
 
 export async function GET() {
   try {
@@ -28,12 +20,32 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    // 1. ดึงห้องแชททั้งหมดที่ user เป็นคู่สนทนา พร้อม join สถานะ order ที่ผูกอยู่
+    // 1. ดึงห้องแชททั้งหมดที่ผูกกับ order และ user เป็นคู่สนทนา พร้อม join รายละเอียดสินค้า
     const { data: rooms, error: roomsError } = await admin
       .from("chatroom")
-      .select(
-        "chat_room_id, user_a, user_b, order_id, created_at, rentalorder(status)",
-      )
+      .select(`
+        chat_room_id,
+        user_a,
+        user_b,
+        order_id,
+        created_at,
+        rentalorder (
+          order_id,
+          user_id,
+          status,
+          start_date,
+          end_date,
+          item:item_id (
+            item_id,
+            item_name,
+            itemimage (
+              image_url,
+              is_primary
+            )
+          )
+        )
+      `)
+      .not("order_id", "is", null)
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
 
     if (roomsError) {
@@ -82,8 +94,7 @@ export async function GET() {
       },
     );
 
-    // 4. ข้อความทั้งหมดของทุกห้อง (เรียงใหม่สุดก่อน) — เอาไปคำนวณ "ข้อความล่าสุด" +
-    // "จำนวนที่ยังไม่อ่าน" เอง เพราะ chatroom ไม่มีคอลัมน์ last_message/updated_at จริง
+    // 4. ข้อความทั้งหมดของทุกห้อง (เรียงใหม่สุดก่อน) — คำนวณ "ข้อความล่าสุด" + "จำนวนที่ยังไม่อ่าน"
     const roomIds = rooms.map((r) => r.chat_room_id);
     const { data: allMessages } = await admin
       .from("message")
@@ -111,27 +122,41 @@ export async function GET() {
       }
     }
 
-    const formattedRooms = rooms.map((r) => {
-      const partnerId = r.user_a === user.id ? r.user_b : r.user_a;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const formattedRooms = rooms.map((r: any) => {
+      const isRenter = r.user_a === user.id;
+      const partnerId = isRenter ? r.user_b : r.user_a;
       const partnerProfile = profileMap.get(partnerId);
       const partnerRoles = rolesMap.get(partnerId) || [];
       const last = lastMsgMap.get(r.chat_room_id);
-      const orderStatus = (r as unknown as { rentalorder?: { status?: string } | null }).rentalorder?.status;
 
-      const roleLabel = partnerRoles.includes("admin")
-        ? "ผู้ดูแลระบบ"
-        : partnerRoles.includes("lender")
-          ? "ผู้ให้เช่า"
-          : "ผู้เช่า";
+      const orderData = Array.isArray(r.rentalorder)
+        ? r.rentalorder[0]
+        : r.rentalorder;
+      const orderStatus = orderData?.status || "";
+      const isClosed = isOrderChatClosed(orderStatus);
+
+      // Contextual role in this rental
+      const contextualRole = isRenter ? "ผู้ให้เช่า" : "ผู้เช่า";
 
       const v = partnerProfile?.updated_at
         ? new Date(partnerProfile.updated_at).getTime()
         : Date.now();
 
+      const itemData = Array.isArray(orderData?.item)
+        ? orderData.item[0]
+        : orderData?.item;
+      const itemImages = itemData?.itemimage || [];
+      const primaryImage =
+        itemImages.find((img: { is_primary?: boolean }) => img.is_primary)?.image_url ||
+        itemImages[0]?.image_url ||
+        null;
+
       return {
         id: r.chat_room_id,
         orderId: r.order_id,
-        isClosed: orderStatus ? CLOSED_STATUSES.includes(orderStatus) : false,
+        isClosed,
+        myRole: (isRenter ? "renter" : "lender") as "renter" | "lender",
         lastMessage: last?.content || "",
         updatedAt: last?.created_at || r.created_at,
         createdAt: r.created_at,
@@ -142,8 +167,17 @@ export async function GET() {
           avatarUrl: partnerProfile?.avatar_url
             ? `/api/avatar?id=${partnerId}&v=${v}`
             : null,
-          role: roleLabel,
+          role: contextualRole,
           status: partnerProfile?.status || "Active",
+        },
+        order: {
+          id: orderData?.order_id || r.order_id,
+          status: orderStatus,
+          startDate: orderData?.start_date || "",
+          endDate: orderData?.end_date || "",
+          itemId: itemData?.item_id || "",
+          itemName: itemData?.item_name || "สินค้าให้เช่า",
+          itemImageUrl: primaryImage,
         },
       };
     });
@@ -172,7 +206,7 @@ export async function GET() {
   }
 }
 
-// สร้าง/เปิดห้องแชทของ order หนึ่งๆ — ตอนนี้ผูกกับ orderId แทน partnerId แบบเดิม
+// สร้าง/เปิดห้องแชทของ order หนึ่งๆ
 export async function POST(request: Request) {
   try {
     const supabase = await createServerClient();
@@ -246,7 +280,21 @@ export async function POST(request: Request) {
       .select("chat_room_id")
       .single();
 
-    if (createError || !newRoom) {
+    if (createError) {
+      // จัดการกรณีเกิด concurrent insert
+      if (createError.code === "23505") {
+        const { data: fallbackRoom } = await admin
+          .from("chatroom")
+          .select("chat_room_id")
+          .eq("order_id", orderId)
+          .maybeSingle();
+        if (fallbackRoom) {
+          return NextResponse.json({
+            roomId: fallbackRoom.chat_room_id,
+            isNew: false,
+          });
+        }
+      }
       console.error("Error creating chat room:", createError);
       return NextResponse.json(
         { message: "ไม่สามารถสร้างห้องสนทนาได้" },

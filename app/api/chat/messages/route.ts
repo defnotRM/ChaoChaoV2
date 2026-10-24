@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isOrderChatClosed } from "@/lib/chat-statuses";
 
 export async function GET(request: Request) {
   try {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
     const { data: room, error: roomError } = await admin
       .from("chatroom")
-      .select("chat_room_id, user_a, user_b")
+      .select("chat_room_id, user_a, user_b, order_id")
       .eq("chat_room_id", roomId)
       .maybeSingle();
 
@@ -133,6 +134,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!room.order_id) {
+      return NextResponse.json(
+        { message: "ระบบแชทรองรับเฉพาะแชทที่ผูกกับออเดอร์การเช่าเท่านั้น" },
+        { status: 403 },
+      );
+    }
+
     if (room.user_a !== user.id && room.user_b !== user.id) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์ส่งข้อความในห้องนี้" },
@@ -140,19 +148,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // ปิดไมค์แล้ว (order คืนของอัปรูปเสร็จเป็นต้นไป) — เช็คซ้ำที่ชั้น API ให้ error อ่านง่าย
-    // (RLS ก็บล็อกไว้อีกชั้นอยู่แล้ว)
-    const CLOSED_STATUSES = [
-      "item_returned",
-      "completed",
-      "awaiting_additional_payment",
-      "refunded_dispute",
-      "item_not_returned",
-    ];
-    const orderStatus = (room as unknown as { rentalorder?: { status?: string } | null }).rentalorder?.status;
-    if (orderStatus && CLOSED_STATUSES.includes(orderStatus)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orderData = Array.isArray(room.rentalorder)
+      ? room.rentalorder[0]
+      : (room as any).rentalorder;
+    const orderStatus = orderData?.status;
+
+    // หากออเดอร์สิ้นสุดการเช่าแล้ว ปิดไมค์ไม่ให้ส่งข้อความใหม่
+    if (isOrderChatClosed(orderStatus)) {
       return NextResponse.json(
-        { message: "ออเดอร์นี้เสร็จสิ้นแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
+        { message: "การเช่านี้สิ้นสุดแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
         { status: 403 },
       );
     }
@@ -180,9 +185,6 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-
-    // ไม่ต้องอัปเดต chatroom.last_message/updated_at อีกต่อไป (คอลัมน์นี้ไม่มีอยู่จริง
-    // อยู่แล้ว — หน้า /chat คำนวณ "ข้อความล่าสุด" จากตาราง message โดยตรงตอนนี้)
 
     return NextResponse.json(
       {

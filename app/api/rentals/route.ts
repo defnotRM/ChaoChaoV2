@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     // 2) ตรวจสินค้ามีจริงและพร้อมให้เช่า
     const { data: item, error: itemError } = await admin
       .from("item")
-      .select("item_id, status, rental_fee_per_day, deposit")
+      .select("item_id, user_id, status, rental_fee_per_day, deposit")
       .eq("item_id", itemId)
       .maybeSingle();
 
@@ -219,6 +219,19 @@ export async function POST(request: Request) {
         { message: "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
         { status: 500 },
       );
+    }
+
+    // 5) สร้างห้องแชทผูกกับออเดอร์ทันที (order-bound chat)
+    if (item.user_id) {
+      try {
+        await admin.from("chatroom").insert({
+          user_a: renterUserId,
+          user_b: item.user_id,
+          order_id: order.order_id,
+        });
+      } catch (chatErr) {
+        console.error("Auto create chatroom error on rental:", chatErr);
+      }
     }
 
     return NextResponse.json(
