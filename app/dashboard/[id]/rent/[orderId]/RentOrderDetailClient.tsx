@@ -32,6 +32,7 @@ import {
   XCircle,
 } from "lucide-react";
 import CountdownBanner from "./CountdownBanner";
+import RenterCancelModal from "@/components/orders/RenterCancelModal";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
 import OrderReviewSection, {
   type OrderReviewRecord,
@@ -219,6 +220,8 @@ export default function RentOrderDetailClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showRenterCancelModal, setShowRenterCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [disputes, setDisputes] = useState<any[]>([]);
   const [loadingDisputes, setLoadingDisputes] = useState(false);
 
@@ -443,6 +446,42 @@ export default function RentOrderDetailClient({
     } finally {
       setIsSubmittingSlip(false);
     }
+  }
+
+  // FR-33: ผู้เช่ายกเลิกคำขอเช่าฟรีก่อนการชำระเงิน
+  async function handleCancelUnpaidOrder() {
+    if (!confirm("คุณต้องการยกเลิกคำขอเช่านี้ใช่หรือไม่ (ไม่มีค่าใช้จ่าย)?")) return;
+    try {
+      setIsCancelling(true);
+      setErrorMsg(null);
+      const res = await fetch(`/api/rentals/${order.order_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.message || "ไม่สามารถยกเลิกคำขอเช่าได้");
+        return;
+      }
+      setCurrentStatus("cancelled");
+      setSuccessMsg("ยกเลิกคำขอเช่าเรียบร้อยแล้ว (ไม่มีค่าใช้จ่าย)");
+      fetchLatestOrder();
+      router.refresh();
+    } catch (err) {
+      console.error("Cancel unpaid order error:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  // FR-34: ผู้เช่ายกเลิกการเช่าที่ชำระเงินแล้วสำเร็จ
+  function handleRenterCancelSuccess(res: any) {
+    setCurrentStatus("cancelled");
+    setSuccessMsg(res.message || "ขอยกเลิกการเช่าเรียบร้อยแล้ว");
+    fetchLatestOrder();
+    router.refresh();
   }
 
   return (
@@ -999,14 +1038,25 @@ export default function RentOrderDetailClient({
               {/* ปุ่มการทำงาน */}
               <div className="mt-4 space-y-2.5">
                 {currentStatus === "requested" ? (
-                  <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
-                    <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
-                      <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
-                      <span>ส่งคำขอเช่าแล้ว · รอผู้ให้เช่าอนุมัติ</span>
-                    </p>
-                    <p className="text-[11px] text-amber-700 mt-1">
-                      ผู้ให้เช่ามีเวลาพิจารณาและอนุมัติคำขอภายใน 8 ชั่วโมง
-                    </p>
+                  <div className="space-y-2">
+                    <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
+                      <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                        <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>ส่งคำขอเช่าแล้ว · รอผู้ให้เช่าอนุมัติ</span>
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-1">
+                        ผู้ให้เช่ามีเวลาพิจารณาและอนุมัติคำขอภายใน 8 ชั่วโมง
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelUnpaidOrder}
+                      disabled={isCancelling}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-95 disabled:opacity-50"
+                    >
+                      {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                      <span>ยกเลิกคำขอเช่า (ฟรี)</span>
+                    </button>
                   </div>
                 ) : currentStatus === "awaiting_payment" ? (
                   canPay ? (
@@ -1022,6 +1072,15 @@ export default function RentOrderDetailClient({
                       <p className="text-center text-[11px] text-slate-500">
                         มีเวลาชำระเงินภายใน 8 ชั่วโมงหลังได้รับอนุมัติ
                       </p>
+                      <button
+                        type="button"
+                        onClick={handleCancelUnpaidOrder}
+                        disabled={isCancelling}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-95 disabled:opacity-50"
+                      >
+                        {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                        <span>ยกเลิกคำขอเช่า (ฟรี)</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200">
@@ -1070,6 +1129,14 @@ export default function RentOrderDetailClient({
                           ? "ดูรูปหลักฐานรับของ"
                           : "ถ่ายรูปสภาพก่อนรับของ & รับมอบ"}
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRenterCancelModal(true)}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-95"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      <span>ขอยกเลิกการเช่า (ก่อนวันนัดรับ)</span>
                     </button>
                   </div>
                 ) : currentStatus === "item_sent" || currentStatus === "item_returned" ? (
@@ -1295,6 +1362,19 @@ export default function RentOrderDetailClient({
           </div>
         </div>
       )}
+
+      {/* Modal ขอยกเลิกการเช่า (FR-34) */}
+      <RenterCancelModal
+        isOpen={showRenterCancelModal}
+        onClose={() => setShowRenterCancelModal(false)}
+        orderId={order.order_id}
+        startDate={order.start_date}
+        meetupTime={order.meetup_time}
+        rentalFee={rentalFee}
+        deposit={deposit}
+        totalPaid={totalPaid}
+        onSuccess={handleRenterCancelSuccess}
+      />
     </div>
   );
 }

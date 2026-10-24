@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import CountdownBanner from "@/components/orders/CountdownBanner";
+import LenderCancelModal from "@/components/orders/LenderCancelModal";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
 import OrderReviewSection, {
   type OrderReviewRecord,
@@ -237,6 +238,7 @@ export default function LendOrderDetailClient({
   // Modals for Before & After evidence
   const [showBeforeModal, setShowBeforeModal] = useState<boolean>(false);
   const [showAfterModal, setShowAfterModal] = useState<boolean>(false);
+  const [showLenderCancelModal, setShowLenderCancelModal] = useState<boolean>(false);
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -396,7 +398,7 @@ export default function LendOrderDetailClient({
     }
   }
 
-  async function handleUpdateStatus(newStatus: "awaiting_payment" | "rejected") {
+  async function handleUpdateStatus(newStatus: "awaiting_payment" | "rejected" | "cancelled") {
     try {
       setIsUpdating(true);
       setErrorMsg(null);
@@ -418,8 +420,11 @@ export default function LendOrderDetailClient({
       setSuccessMsg(
         newStatus === "awaiting_payment"
           ? "อนุมัติคำขอเช่าเรียบร้อยแล้ว ระบบได้แจ้งเตือนให้ผู้เช่าชำระเงิน"
-          : "ปฏิเสธคำขอเช่าเรียบร้อยแล้ว"
+          : newStatus === "cancelled"
+            ? "ยกเลิกคำขอเช่าเรียบร้อยแล้ว (ไม่มีค่าใช้จ่าย)"
+            : "ปฏิเสธคำขอเช่าเรียบร้อยแล้ว"
       );
+      fetchLatestOrder();
       router.refresh();
     } catch (err) {
       console.error("Error updating order status:", err);
@@ -427,6 +432,14 @@ export default function LendOrderDetailClient({
     } finally {
       setIsUpdating(false);
     }
+  }
+
+  // FR-35: ผู้ให้เช่ายกเลิกคำสั่งเช่าสำเร็จ
+  function handleLenderCancelSuccess(res: any) {
+    setCurrentStatus("cancelled");
+    setSuccessMsg(res.message || "ยกเลิกคำสั่งเช่าเรียบร้อยแล้ว");
+    fetchLatestOrder();
+    router.refresh();
   }
 
   function handleEvidenceSuccess(res: {
@@ -1029,6 +1042,15 @@ export default function LendOrderDetailClient({
                     <p className="text-xs text-sky-700">
                       ระบบเปิดให้ผู้เช่าโอนเงินและอัปโหลดสลิปแล้ว เมื่อผู้เช่าโอนแล้วคุณจะสามารถกดตรวจรับการชำระเงินได้ที่นี่
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus("cancelled")}
+                      disabled={isUpdating}
+                      className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-95 disabled:opacity-50"
+                    >
+                      {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                      <span>ยกเลิกคำขอเช่า (ฟรี)</span>
+                    </button>
                   </div>
                 )
               ) : currentStatus === "paid" ? (
@@ -1066,6 +1088,14 @@ export default function LendOrderDetailClient({
                         ? "ดูรูปหลักฐานส่งมอบของ"
                         : "ถ่ายรูปสภาพก่อนให้เช่า & ส่งมอบ"}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLenderCancelModal(true)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-95"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    <span>ยกเลิกคำสั่งเช่า (คืนเงินเต็มจำนวน)</span>
                   </button>
                 </div>
               ) : currentStatus === "item_sent" || currentStatus === "item_returned" ? (
@@ -1201,6 +1231,15 @@ export default function LendOrderDetailClient({
         deposit={deposit}
         evidenceList={evidenceList}
         onSuccess={handleEvidenceSuccess}
+      />
+
+      {/* Modal ยกเลิกคำสั่งเช่า (FR-35) */}
+      <LenderCancelModal
+        isOpen={showLenderCancelModal}
+        onClose={() => setShowLenderCancelModal(false)}
+        orderId={order.order_id}
+        totalPaid={totalPaid}
+        onSuccess={handleLenderCancelSuccess}
       />
     </div>
   );
