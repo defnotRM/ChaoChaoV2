@@ -69,7 +69,7 @@ export default function AdminSimulatedClock({
   const [mounted, setMounted] = useState<boolean>(false);
   const [offsetSeconds, setOffsetSeconds] = useState<number>(0);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
-  const [tickNowMs, setTickNowMs] = useState<number>(0);
+  const [realNowMs, setRealNowMs] = useState<number>(0);
   const [inputDate, setInputDate] = useState<string>("");
   const [inputTime, setInputTime] = useState<string>("12:00");
   const [activeOrders, setActiveOrders] = useState<ActiveOrderPreset[]>([]);
@@ -84,10 +84,11 @@ export default function AdminSimulatedClock({
       if (!res.ok) return;
       const data = await res.json();
       const offset = Number(data.offsetSeconds || 0);
-      const simMs = Date.now() + offset * 1000;
+      const now = Date.now();
+      const simMs = now + offset * 1000;
       setOffsetSeconds(offset);
       setIsSimulated(Boolean(data.isSimulated));
-      setTickNowMs(simMs);
+      setRealNowMs(now);
       if (Array.isArray(data.activeOrders)) {
         setActiveOrders(data.activeOrders);
       }
@@ -103,16 +104,15 @@ export default function AdminSimulatedClock({
 
   useEffect(() => {
     setMounted(true);
-    setTickNowMs(Date.now());
+    setRealNowMs(Date.now());
     fetchClock(true);
-  }, [fetchClock]);
-
-  useEffect(() => {
     const id = setInterval(() => {
-      setTickNowMs(Date.now() + offsetSeconds * 1000);
+      setRealNowMs(Date.now());
     }, 1000);
     return () => clearInterval(id);
-  }, [offsetSeconds]);
+  }, [fetchClock]);
+
+  const tickNowMs = realNowMs + offsetSeconds * 1000;
 
   async function applyClockAction(payload: Record<string, any>) {
     setBusy(true);
@@ -126,10 +126,11 @@ export default function AdminSimulatedClock({
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         const offset = Number(data.offsetSeconds || 0);
-        const simMs = Date.now() + offset * 1000;
+        const now = Date.now();
+        const simMs = now + offset * 1000;
         setOffsetSeconds(offset);
         setIsSimulated(Boolean(data.isSimulated));
-        setTickNowMs(simMs);
+        setRealNowMs(now);
         const { datePart, timePart } = toBangkokDateAndTimeInputs(simMs);
         setInputDate(datePart);
         setInputTime(timePart);

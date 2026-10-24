@@ -175,8 +175,13 @@ export function OrderEvidencePanel({
   const [offsetSeconds, setOffsetSeconds] = useState<number>(0);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const [graceHours, setGraceHours] = useState<number>(1);
-  const [tickNowMs, setTickNowMs] = useState<number>(0);
+  const [realNowMs, setRealNowMs] = useState<number>(0);
   const expiredTriggeredRef = useRef<boolean>(false);
+  const onSuccessRef = useRef(onSuccess);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   // FR-28 กรณีที่ 3: ปฏิเสธรับสินค้า
   const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
@@ -197,40 +202,42 @@ export function OrderEvidencePanel({
       if (typeof data.offsetSeconds === "number") {
         setOffsetSeconds(data.offsetSeconds);
         setIsSimulated(Boolean(data.isSimulated));
-        setTickNowMs(Date.now() + data.offsetSeconds * 1000);
+        setRealNowMs(Date.now());
       }
       if (typeof data.graceHours === "number" && data.graceHours > 0) {
         setGraceHours(data.graceHours);
       }
       if (Array.isArray(data.processed) && data.processed.length > 0) {
-        onSuccess({});
+        onSuccessRef.current({});
       }
     } catch {
       // ignore
     }
-  }, [orderId, onSuccess]);
+  }, [orderId]);
 
   useEffect(() => {
     setMounted(true);
-    setTickNowMs(Date.now());
+    setRealNowMs(Date.now());
+    const timerId = setInterval(() => {
+      setRealNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
     syncSimulatedTime();
     const pollId = setInterval(syncSimulatedTime, 2500);
     return () => clearInterval(pollId);
   }, [syncSimulatedTime]);
-
-  useEffect(() => {
-    const timerId = setInterval(() => {
-      setTickNowMs(Date.now() + offsetSeconds * 1000);
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, [offsetSeconds]);
 
   const { startMs, deadlineMs, hhmm } = computeWindowMs(
     scheduledDate,
     scheduledTime,
     graceHours,
   );
-  const effectiveNowMs = mounted && tickNowMs > 0 ? tickNowMs : startMs;
+  const simulatedNowMs = realNowMs + offsetSeconds * 1000;
+  const effectiveNowMs =
+    mounted && realNowMs > 0 ? simulatedNowMs : startMs;
   const deadlineTimeStr = timeOnlyFmt.format(new Date(deadlineMs));
   const isBeforeWindow = Boolean(scheduledDate) && effectiveNowMs < startMs;
   const isWithinWindow =
