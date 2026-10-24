@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
-import { processSimulatedExpiredOrders } from "@/lib/simulated-time";
+import { getSimulatedTimeInfo, processSimulatedExpiredOrders } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -121,9 +121,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
   }
 
+  const timeInfo = await getSimulatedTimeInfo(admin);
+  const nowIso = timeInfo.simulatedNowIso;
+
   const { data, error } = await admin
     .from("rentalorder")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status, updated_at: nowIso })
     .eq("order_id", id)
     .select()
     .maybeSingle();

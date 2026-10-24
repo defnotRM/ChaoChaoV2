@@ -202,7 +202,7 @@ export async function processSimulatedExpiredOrders(
             .from("rentalorder")
             .update({
               status: "rejected_by_lender",
-              updated_at: new Date().toISOString(),
+              updated_at: timeInfo.simulatedNowIso,
             })
             .eq("order_id", ord.order_id);
 
@@ -236,7 +236,7 @@ export async function processSimulatedExpiredOrders(
               .from("rentalorder")
               .update({
                 status: "cancelled",
-                updated_at: new Date().toISOString(),
+                updated_at: timeInfo.simulatedNowIso,
               })
               .eq("order_id", ord.order_id);
 
@@ -267,7 +267,7 @@ export async function processSimulatedExpiredOrders(
               .from("rentalorder")
               .update({
                 status: "paid",
-                updated_at: new Date().toISOString(),
+                updated_at: timeInfo.simulatedNowIso,
               })
               .eq("order_id", ord.order_id);
 
@@ -322,7 +322,7 @@ export async function processSimulatedExpiredOrders(
             .from("rentalorder")
             .update({
               status: "item_sent",
-              updated_at: new Date().toISOString(),
+              updated_at: timeInfo.simulatedNowIso,
             })
             .eq("order_id", ord.order_id);
 

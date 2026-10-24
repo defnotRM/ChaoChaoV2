@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { uploadToStorage } from "@/lib/storage";
+import { getSimulatedTimeInfo } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,11 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    const timeInfo = await getSimulatedTimeInfo(admin);
+    const nowIso = timeInfo.simulatedNowIso;
+    if (!transferDate) {
+      transferDate = nowIso;
+    }
 
     // 2) ตรวจออเดอร์ต้องมีจริง
     const { data: order, error: orderError } = await admin
@@ -128,7 +134,7 @@ export async function POST(request: Request) {
     if (order.status !== "awaiting_payment") {
       await admin
         .from("rentalorder")
-        .update({ status: "awaiting_payment", updated_at: new Date().toISOString() })
+        .update({ status: "awaiting_payment", updated_at: nowIso })
         .eq("order_id", orderId);
     }
 

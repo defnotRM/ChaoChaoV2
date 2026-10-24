@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getSimulatedTimeInfo } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -255,6 +256,9 @@ export async function POST(request: Request) {
     const normalizedMeetupTime = (meetupTime || "12:00").trim().slice(0, 5);
     const normalizedReturnTime = (returnTime || "12:00").trim().slice(0, 5);
 
+    const timeInfo = await getSimulatedTimeInfo(admin);
+    const nowIso = timeInfo.simulatedNowIso;
+
     // 4) INSERT rentalorder
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
@@ -271,6 +275,8 @@ export async function POST(request: Request) {
         deposit: finalDeposit,
         total_paid: finalTotal,
         status: "requested",
+        created_at: nowIso,
+        updated_at: nowIso,
       })
       .select("order_id")
       .single();
