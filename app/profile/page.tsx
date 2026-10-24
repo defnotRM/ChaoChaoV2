@@ -48,6 +48,8 @@ export default function ProfilePage() {
   const [bannerUrl, setBannerUrl] = useState<string>("");
   const [avatarImgError, setAvatarImgError] = useState(false);
   const [bannerImgError, setBannerImgError] = useState(false);
+  const [idCardImgError, setIdCardImgError] = useState(false);
+  const [selfieImgError, setSelfieImgError] = useState(false);
 
   useEffect(() => {
     setAvatarImgError(false);
@@ -56,6 +58,14 @@ export default function ProfilePage() {
   useEffect(() => {
     setBannerImgError(false);
   }, [bannerUrl]);
+
+  useEffect(() => {
+    setIdCardImgError(false);
+  }, [idCardUrl]);
+
+  useEffect(() => {
+    setSelfieImgError(false);
+  }, [idCardSelfieUrl]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
@@ -1045,7 +1055,7 @@ export default function ProfilePage() {
                     เอกสารที่อัปโหลดไว้:
                   </span>
                   <div className="flex flex-wrap gap-3">
-                    {idCardUrl ? (
+                    {idCardUrl && !idCardImgError ? (
                       <button
                         type="button"
                         onClick={() => setPreviewImage({ url: idCardUrl, title: "รูปภาพบัตรประชาชน" })}
@@ -1055,18 +1065,22 @@ export default function ProfilePage() {
                           src={idCardUrl}
                           alt="ID Card"
                           className="h-full w-full object-cover transition group-hover:scale-105"
+                          onError={() => setIdCardImgError(true)}
                         />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
                           <ExternalLink className="h-4 w-4 text-white" />
                         </div>
                       </button>
                     ) : (
-                      <div className="flex h-16 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100/50 text-[10px] text-slate-400">
-                        ไม่มีรูปบัตร
+                      <div className="flex h-16 w-24 flex-col items-center justify-center rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-1 text-center">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 mb-0.5" />
+                        <span className="text-[9px] font-semibold text-amber-800 leading-tight">
+                          {idCardUrl ? "ไฟล์ไม่สมบูรณ์" : "ไม่มีรูปบัตร"}
+                        </span>
                       </div>
                     )}
 
-                    {idCardSelfieUrl ? (
+                    {idCardSelfieUrl && !selfieImgError ? (
                       <button
                         type="button"
                         onClick={() => setPreviewImage({ url: idCardSelfieUrl, title: "รูปเซลฟี่คู่กับบัตรประชาชน" })}
@@ -1076,14 +1090,18 @@ export default function ProfilePage() {
                           src={idCardSelfieUrl}
                           alt="Selfie with ID"
                           className="h-full w-full object-cover transition group-hover:scale-105"
+                          onError={() => setSelfieImgError(true)}
                         />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
                           <ExternalLink className="h-4 w-4 text-white" />
                         </div>
                       </button>
                     ) : (
-                      <div className="flex h-16 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100/50 text-[10px] text-slate-400">
-                        ไม่มีรูปเซลฟี่
+                      <div className="flex h-16 w-24 flex-col items-center justify-center rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-1 text-center">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 mb-0.5" />
+                        <span className="text-[9px] font-semibold text-amber-800 leading-tight">
+                          {idCardSelfieUrl ? "ไฟล์ไม่สมบูรณ์" : "ไม่มีรูปเซลฟี่"}
+                        </span>
                       </div>
                     )}
                   </div>
