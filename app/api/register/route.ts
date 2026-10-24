@@ -135,7 +135,8 @@ export async function POST(request: Request) {
     }
 
     // 5. Ensure profile exists and is active in public.useraccount
-    await admin
+    const cleanPhone = phone ? phone.replace(/\D/g, "").slice(0, 10) : null;
+    const { error: upsertErr } = await admin
       .from("useraccount")
       .upsert(
         {
@@ -144,26 +145,31 @@ export async function POST(request: Request) {
           firstname: firstname.trim(),
           lastname: lastname.trim(),
           email: cleanEmail,
+          phone: cleanPhone && cleanPhone.length === 10 ? cleanPhone : null,
           national_id: nationalId,
           avatar_url: finalAvatarUrl,
           id_card_url: finalIdCardUrl,
           id_card_selfie_url: finalSelfieUrl,
-          identity_verification_status:
-            finalIdCardUrl && finalSelfieUrl ? "pending" : "unverified",
+          identity_verification_status: "pending",
           status: "Active",
         },
         { onConflict: "user_id" }
       );
 
-    // 5.1 Save phone number to public.userphones
-    if (phone && phone.trim()) {
-      const cleanPhone = phone.replace(/\D/g, "").slice(0, 10);
-      if (cleanPhone.length === 10) {
+    if (upsertErr) {
+      console.error("Error upserting useraccount during registration:", upsertErr);
+    }
+
+    // 5.1 Save phone number to public.userphones (if table exists in environment)
+    if (cleanPhone && cleanPhone.length === 10) {
+      try {
         await admin.from("userphones").delete().eq("user_id", userId);
         await admin.from("userphones").insert({
           user_id: userId,
           phone: cleanPhone,
         });
+      } catch {
+        // useraccount.phone is primary on cloud schema
       }
     }
 

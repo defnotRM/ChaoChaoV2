@@ -75,7 +75,7 @@ export async function GET() {
       admin
         .from("useraccount")
         .select(
-          "user_id, username, firstname, lastname, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at, identity_verification_status, id_card_url, id_card_selfie_url"
+          "user_id, username, firstname, lastname, email, phone, national_id, bio, avatar_url, banner_url, updated_at, status, created_at, identity_verification_status, id_card_url, id_card_selfie_url"
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -102,6 +102,7 @@ export async function GET() {
       const uNatId = user.user_metadata?.national_id || null;
       const uFirst = user.user_metadata?.firstname || null;
       const uLast = user.user_metadata?.lastname || null;
+      const uPhone = user.user_metadata?.phone || null;
 
       await admin.from("useraccount").upsert(
         {
@@ -110,7 +111,9 @@ export async function GET() {
           firstname: uFirst,
           lastname: uLast,
           email: uEmail,
+          phone: uPhone,
           national_id: uNatId,
+          identity_verification_status: "pending",
           status: "Active",
         },
         { onConflict: "user_id" }
@@ -122,6 +125,7 @@ export async function GET() {
         firstname: uFirst,
         lastname: uLast,
         email: uEmail,
+        phone: uPhone,
         national_id: uNatId,
         bio: "",
         avatar_url: null,
@@ -129,7 +133,7 @@ export async function GET() {
         updated_at: new Date().toISOString(),
         status: "Active",
         created_at: new Date().toISOString(),
-        identity_verification_status: "unverified",
+        identity_verification_status: "pending",
         id_card_url: null,
         id_card_selfie_url: null,
       };
@@ -149,9 +153,16 @@ export async function GET() {
       roles = uRole === "both" ? ["renter", "lender"] : [uRole];
     }
 
-    const phones = (phonesRes.data || [])
+    let phones = (phonesRes.data || [])
       .map((p: any) => p.phone)
       .filter(Boolean);
+
+    if (phones.length === 0 && profile.phone) {
+      phones = String(profile.phone)
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+    }
 
     const v = profile.updated_at
       ? new Date(profile.updated_at).getTime()
@@ -159,6 +170,12 @@ export async function GET() {
 
     const avatarUrl = profile.avatar_url || "";
     const bannerUrl = profile.banner_url || "";
+    const resolvedIdentityStatus =
+      profile.identity_verification_status === "pending" &&
+      !profile.id_card_url &&
+      !profile.id_card_selfie_url
+        ? "unverified"
+        : profile.identity_verification_status || "unverified";
 
     return NextResponse.json({
       user: {
@@ -175,7 +192,7 @@ export async function GET() {
         status: profile.status,
         roles,
         createdAt: profile.created_at,
-        identityVerificationStatus: profile.identity_verification_status || "unverified",
+        identityVerificationStatus: resolvedIdentityStatus,
         idCardUrl: profile.id_card_url || null,
         idCardSelfieUrl: profile.id_card_selfie_url || null,
         bankAccount: bankRes.data
@@ -293,6 +310,18 @@ export async function PATCH(request: Request) {
       updateData.lastname = lastname?.trim() || null;
     }
 
+    let cleanPhones: string[] | null = null;
+    if (phones !== undefined && phones !== null) {
+      cleanPhones = Array.from(
+        new Set(
+          phones
+            .map((p) => p.replace(/\D/g, "").slice(0, 10))
+            .filter((p) => p.length === 10)
+        )
+      ).slice(0, 2);
+      updateData.phone = cleanPhones[0] || null;
+    }
+
     if (avatarUrl === "") {
       updateData.avatar_url = null;
     } else if (avatarUrl && avatarUrl.startsWith("data:")) {
@@ -338,31 +367,18 @@ export async function PATCH(request: Request) {
 
     // 3. Update userphones (Max 2 phone numbers, or 0/1)
     let updatedPhones: string[] = [];
-    if (phones !== undefined && phones !== null) {
-      const cleanPhones = Array.from(
-        new Set(
-          phones
-            .map((p) => p.replace(/\D/g, "").slice(0, 10))
-            .filter((p) => p.length === 10)
-        )
-      ).slice(0, 2);
-
-      // Delete existing phones for this user
-      await admin.from("userphones").delete().eq("user_id", user.id);
-
-      // Insert new phone numbers (if any)
-      if (cleanPhones.length > 0) {
-        const phoneRows = cleanPhones.map((phone) => ({
-          user_id: user.id,
-          phone,
-        }));
-        const { error: phoneInsertError } = await admin
-          .from("userphones")
-          .insert(phoneRows);
-
-        if (phoneInsertError) {
-          console.error("userphones insert error:", phoneInsertError);
+    if (cleanPhones !== null) {
+      try {
+        await admin.from("userphones").delete().eq("user_id", user.id);
+        if (cleanPhones.length > 0) {
+          const phoneRows = cleanPhones.map((phone) => ({
+            user_id: user.id,
+            phone,
+          }));
+          await admin.from("userphones").insert(phoneRows);
         }
+      } catch {
+        // useraccount.phone is primary on cloud schema
       }
       updatedPhones = cleanPhones;
     } else {
@@ -371,6 +387,16 @@ export async function PATCH(request: Request) {
         .select("phone")
         .eq("user_id", user.id);
       updatedPhones = (currentPhones || []).map((p: any) => p.phone).filter(Boolean);
+      if (updatedPhones.length === 0) {
+        const { data: accPhone } = await admin
+          .from("useraccount")
+          .select("phone")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (accPhone?.phone) {
+          updatedPhones = [accPhone.phone];
+        }
+      }
     }
 
     // 4. Update auth.users email and metadata
