@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToStorage } from "@/lib/storage";
@@ -36,9 +37,9 @@ export async function GET(
 
     const { data: images } = await admin
       .from("reviewimage")
-      .select("image_id, image_url, sequence")
+      .select("image_url, created_at")
       .eq("review_id", rev.review_id)
-      .order("sequence", { ascending: true });
+      .order("created_at", { ascending: true });
 
     return NextResponse.json({
       review: {
@@ -220,12 +221,18 @@ export async function POST(
     await admin.from("reviewimage").delete().eq("review_id", reviewId);
     if (finalImageUrls.length > 0) {
       await admin.from("reviewimage").insert(
-        finalImageUrls.map((url, idx) => ({
+        finalImageUrls.map((url) => ({
           review_id: reviewId,
           image_url: url,
-          sequence: idx + 1,
         })),
       );
+    }
+
+    try {
+      revalidatePath(`/product/${order.item_id}`);
+      revalidatePath("/products");
+    } catch {
+      // ignore revalidate errors
     }
 
     // แจ้งเตือนผู้ให้เช่าเมื่อได้รับรีวิวใหม่

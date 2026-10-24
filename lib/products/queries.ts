@@ -227,7 +227,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   if (error || !it) return null;
 
-  const [catRes, imgRes, locRes, availRes, termsRes, ownerRes, reviewRes, ownerItemsRes] =
+  const [catRes, imgRes, locRes, availRes, termsRes, ownerRes, itemOrdersRes, ownerItemsRes] =
     await Promise.all([
       admin
         .from("itemcategory")
@@ -257,14 +257,11 @@ export async function getProductById(id: string): Promise<Product | null> {
         .select("user_id, firstname, lastname, username, avatar_url, updated_at, status, created_at")
         .eq("user_id", it.user_id)
         .maybeSingle(),
-      // รีวิวของชิ้นนี้ + ชื่อผู้รีวิว (renter ผ่าน rentalorder.user_id) + รูปประกอบรีวิว
+      // คำสั่งเช่าทั้งหมดของอุปกรณ์ชิ้นนี้ (สำหรับดึงรีวิวและข้อมูลผู้เช่า)
       admin
-        .from("review")
-        .select(
-          "review_id, rating, comment, created_at, reviewimage ( image_url, sequence ), order:order_id!inner ( item_id, renter:user_id ( firstname, lastname, username, avatar_url ) )"
-        )
-        .eq("order.item_id", id)
-        .order("created_at", { ascending: false }),
+        .from("rentalorder")
+        .select("order_id, user_id")
+        .eq("item_id", id),
       // item ทั้งหมดของ owner (สำหรับ aggregate เรตติ้งผู้ให้เช่า)
       admin.from("item").select("item_id").eq("user_id", it.user_id),
     ]);
@@ -283,38 +280,93 @@ export async function getProductById(id: string): Promise<Product | null> {
     .map((t) => t.condition)
     .filter((c): c is string => Boolean(c && c.trim()));
 
-  const reviews: ProductReview[] = (
-    (reviewRes.data || []) as unknown as Array<{
-      review_id?: string;
-      rating: number;
-      comment: string | null;
-      created_at: string;
-      reviewimage?: Array<{ image_url: string; sequence: number | null }> | null;
-      order: {
-        renter: {
-          firstname: string | null;
-          lastname: string | null;
-          username: string | null;
-          avatar_url?: string | null;
-        } | null;
-      } | null;
-    }>
-  ).map((r, index) => {
-    const renter = r.order?.renter;
+  const orderRows = (itemOrdersRes.data || []) as Array<{
+    order_id: string;
+    user_id: string;
+  }>;
+  const orderIds = orderRows.map((o) => o.order_id);
+  const orderUserMap = new Map<string, string>(
+    orderRows.map((o) => [o.order_id, o.user_id]),
+  );
+  const renterIds = [...new Set(orderRows.map((o) => o.user_id).filter(Boolean))];
+
+  let rawReviews: Array<{
+    review_id: string;
+    order_id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+  }> = [];
+  const renterMap = new Map<
+    string,
+    {
+      firstname: string | null;
+      lastname: string | null;
+      username: string | null;
+      avatar_url: string | null;
+    }
+  >();
+  const reviewImagesByReviewId = new Map<string, string[]>();
+
+  if (orderIds.length > 0) {
+    const [revRes, rentersRes] = await Promise.all([
+      admin
+        .from("review")
+        .select("review_id, order_id, rating, comment, created_at")
+        .in("order_id", orderIds)
+        .order("created_at", { ascending: false }),
+      renterIds.length > 0
+        ? admin
+            .from("useraccount")
+            .select("user_id, firstname, lastname, username, avatar_url")
+            .in("user_id", renterIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    rawReviews = (revRes.data || []) as typeof rawReviews;
+    for (const u of (rentersRes.data || []) as Array<{
+      user_id: string;
+      firstname: string | null;
+      lastname: string | null;
+      username: string | null;
+      avatar_url: string | null;
+    }>) {
+      renterMap.set(u.user_id, u);
+    }
+
+    const reviewIds = rawReviews.map((r) => r.review_id).filter(Boolean);
+    if (reviewIds.length > 0) {
+      const { data: revImgs } = await admin
+        .from("reviewimage")
+        .select("review_id, image_url, created_at")
+        .in("review_id", reviewIds)
+        .order("created_at", { ascending: true });
+
+      for (const img of (revImgs || []) as Array<{
+        review_id: string;
+        image_url: string;
+      }>) {
+        const list = reviewImagesByReviewId.get(img.review_id) || [];
+        list.push(img.image_url);
+        reviewImagesByReviewId.set(img.review_id, list);
+      }
+    }
+  }
+
+  const reviews: ProductReview[] = rawReviews.map((r, index) => {
+    const renterUserId = orderUserMap.get(r.order_id) || "";
+    const renter = renterMap.get(renterUserId);
     const reviewerName =
       renter?.username ||
       [renter?.firstname, renter?.lastname].filter(Boolean).join(" ").trim() ||
       "ผู้เช่า";
-    const sortedReviewImages = [...(r.reviewimage || [])]
-      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-      .map((img) => img.image_url);
     return {
       id: r.review_id || `${id}-review-${index}`,
       reviewerName,
       reviewerAvatarUrl: renter?.avatar_url || null,
       rating: toNumber(r.rating),
       comment: r.comment || "",
-      imageUrls: sortedReviewImages,
+      imageUrls: reviewImagesByReviewId.get(r.review_id) || [],
       createdAt: r.created_at,
     };
   });

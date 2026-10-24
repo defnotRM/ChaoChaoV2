@@ -60,7 +60,7 @@ export default async function LenderOrderDetailPage({
       .order("created_at", { ascending: true }),
     admin
       .from("review")
-      .select("review_id, order_id, rating, comment, created_at, updated_at, reviewimage ( image_url, sequence )")
+      .select("review_id, order_id, rating, comment, created_at, updated_at")
       .eq("order_id", orderId)
       .maybeSingle(),
   ]);
@@ -133,6 +133,15 @@ export default async function LenderOrderDetailPage({
   const avatarUrl = renter?.avatar_url || null;
 
   const revData = reviewRes.data as any;
+  let reviewImages: string[] = [];
+  if (revData?.review_id) {
+    const { data: revImgs } = await admin
+      .from("reviewimage")
+      .select("image_url, created_at")
+      .eq("review_id", revData.review_id)
+      .order("created_at", { ascending: true });
+    reviewImages = (revImgs || []).map((img: any) => img.image_url);
+  }
   const orderReview = revData
     ? {
         review_id: revData.review_id,
@@ -141,9 +150,7 @@ export default async function LenderOrderDetailPage({
         comment: revData.comment || "",
         created_at: revData.created_at,
         updated_at: revData.updated_at,
-        imageUrls: [...(revData.reviewimage || [])]
-          .sort((a: any, b: any) => (a.sequence ?? 0) - (b.sequence ?? 0))
-          .map((img: any) => img.image_url),
+        imageUrls: reviewImages,
       }
     : null;
 
