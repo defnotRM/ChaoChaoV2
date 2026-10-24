@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,6 +10,7 @@ import {
   FileText,
   Save,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   ArrowLeft,
   Camera,
@@ -19,10 +19,9 @@ import {
   KeyRound,
   ImageIcon,
   Phone,
-  UserPlus,
-  Power,
 } from "lucide-react";
 import Link from "next/link";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -35,78 +34,14 @@ export default function ProfilePage() {
 
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone1, setPhone1] = useState("");
+  const [phone2, setPhone2] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [bannerUrl, setBannerUrl] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [status, setStatus] = useState("Active");
-
-  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
-  const [addRoleTarget, setAddRoleTarget] = useState<
-    "renter" | "lender" | null
-  >(null);
-  const [needsKyc, setNeedsKyc] = useState(false);
-  const [kycIdCard, setKycIdCard] = useState<string | null>(null);
-  const [kycSelfie, setKycSelfie] = useState<string | null>(null);
-  const [kycBankName, setKycBankName] = useState("");
-  const [kycAccountNumber, setKycAccountNumber] = useState("");
-  const [kycAccountName, setKycAccountName] = useState("");
-  const [addRoleSubmitting, setAddRoleSubmitting] = useState(false);
-  const [addRoleError, setAddRoleError] = useState<string | null>(null);
-  const [addRoleSuccess, setAddRoleSuccess] = useState<string | null>(null);
-
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
-  const [deactivating, setDeactivating] = useState(false);
-
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [bankVerificationStatus, setBankVerificationStatus] = useState<
-    string | null
-  >(null);
-  const [savingBank, setSavingBank] = useState(false);
-  const [bankSuccess, setBankSuccess] = useState<string | null>(null);
-  const [bankError, setBankError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/profile/bank-account")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.bank) {
-          setBankName(data.bank.bank_name || "");
-          setAccountNumber(data.bank.account_number || "");
-          setAccountName(data.bank.account_name || "");
-          setBankVerificationStatus(data.bank.verification_status || null);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  async function handleSaveBankAccount() {
-    setSavingBank(true);
-    setBankError(null);
-    setBankSuccess(null);
-    try {
-      const res = await fetch("/api/profile/bank-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bankName, accountNumber, accountName }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        setBankError(payload?.message ?? "บันทึกไม่สำเร็จ");
-        return;
-      }
-      setBankSuccess(payload.message);
-      setBankVerificationStatus("pending");
-    } catch {
-      setBankError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
-    } finally {
-      setSavingBank(false);
-    }
-  }
 
   // Notifications
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -115,6 +50,12 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
+
+  // Delete Account State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -141,7 +82,8 @@ export default function ProfilePage() {
           setStatus(data.user.status || "Active");
 
           if (Array.isArray(data.user.phones)) {
-            setPhone(data.user.phones[0] || "");
+            setPhone1(data.user.phones[0] || "");
+            setPhone2(data.user.phones[1] || "");
           }
         } else {
           setGeneralError(data.message || "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้");
@@ -159,7 +101,7 @@ export default function ProfilePage() {
 
   // Upload Avatar
   const handleAvatarFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -207,62 +149,6 @@ export default function ProfilePage() {
     }
   };
 
-  const hasRole = (name: "renter" | "lender") =>
-    roles.some(
-      (r) =>
-        r === name ||
-        r === "both" ||
-        (name === "lender" ? r === "ผู้ให้เช่า" : r === "ผู้เช่า"),
-    );
-
-  async function submitAddRole() {
-    if (!addRoleTarget) return;
-    setAddRoleSubmitting(true);
-    setAddRoleError(null);
-    try {
-      const res = await fetch("/api/profile/add-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetRole: addRoleTarget,
-          idCardUrl: kycIdCard,
-          idCardSelfieUrl: kycSelfie,
-          bankName: kycBankName,
-          accountNumber: kycAccountNumber,
-          accountName: kycAccountName,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (payload.needsKyc) setNeedsKyc(true);
-        setAddRoleError(payload?.message ?? "ดำเนินการไม่สำเร็จ");
-        return;
-      }
-      setAddRoleSuccess(payload.message);
-      setShowAddRoleModal(false);
-      router.refresh();
-    } catch {
-      setAddRoleError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
-    } finally {
-      setAddRoleSubmitting(false);
-    }
-  }
-
-  async function handleDeactivate() {
-    setDeactivating(true);
-    try {
-      await fetch("/api/profile/deactivate", { method: "POST" });
-      router.push("/login");
-    } catch {
-      setDeactivating(false);
-    }
-  }
-
-  function readFileAsDataUrl(file: File, cb: (url: string) => void) {
-    const reader = new FileReader();
-    reader.onloadend = () => cb(reader.result as string);
-    reader.readAsDataURL(file);
-  }
   // Remove Avatar
   const handleRemoveAvatar = async () => {
     setAvatarNotice(null);
@@ -300,7 +186,7 @@ export default function ProfilePage() {
 
   // Upload Banner
   const handleBannerFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -398,18 +284,24 @@ export default function ProfilePage() {
       return;
     }
 
-    const p1 = phone.trim().replace(/\D/g, "");
+    const p1 = phone1.trim().replace(/\D/g, "");
+    const p2 = phone2.trim().replace(/\D/g, "");
 
-    if (phone.trim()) {
+    if (phone1.trim()) {
       if (p1.length !== 10) {
-        setGeneralError(
-          "เบอร์โทรศัพท์ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0812345678)",
-        );
+        setGeneralError("เบอร์โทรศัพท์ 1 ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0812345678)");
         return;
       }
     }
 
-    const phones = [p1].filter(Boolean);
+    if (phone2.trim()) {
+      if (p2.length !== 10) {
+        setGeneralError("เบอร์โทรศัพท์ 2 ต้องมีความยาว 10 หลักพอดี (เฉพาะตัวเลข เช่น 0898765432)");
+        return;
+      }
+    }
+
+    const phones = [p1, p2].filter(Boolean);
 
     setSavingGeneral(true);
 
@@ -465,9 +357,7 @@ export default function ProfilePage() {
       !/[a-z]/.test(newPassword) ||
       !/[0-9]/.test(newPassword)
     ) {
-      setPasswordError(
-        "รหัสผ่านต้องประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข",
-      );
+      setPasswordError("รหัสผ่านต้องประกอบด้วยตัวพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข");
       return;
     }
 
@@ -507,6 +397,48 @@ export default function ProfilePage() {
     }
   };
 
+  // 3. Delete Account (Soft Delete)
+  const handleDeleteAccount = async () => {
+    setDeleteError(null);
+    setIsDeletingAccount(true);
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setDeleteError(data.message || "ไม่สามารถลบบัญชีผู้ใช้ได้");
+        setIsDeletingAccount(false);
+        return;
+      }
+
+      // Sign out from Supabase client
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-state-change"));
+      }
+
+      alert("ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว ระบบจะนำคุณกลับสู่หน้าแรก");
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setDeleteError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+      setIsDeletingAccount(false);
+    }
+  };
+
+  const roleLabels: Record<string, string> = {
+    renter: "ผู้เช่า",
+    lender: "ผู้ให้เช่า",
+    admin: "ผู้ดูแลระบบ",
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[70vh] items-center justify-center">
@@ -541,13 +473,10 @@ export default function ProfilePage() {
           {/* Narrow Banner with Upload Button */}
           <div className="group relative h-28 sm:h-36 w-full overflow-hidden bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]">
             {bannerUrl ? (
-              <Image
+              <img
                 src={bannerUrl}
-                alt="ภาพหน้าปกโปรไฟล์"
-                fill
-                sizes="100vw"
-                className="object-cover"
-                unoptimized={bannerUrl.startsWith("data:") || bannerUrl.startsWith("blob:")}
+                alt="Cover Banner"
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]" />
@@ -560,9 +489,7 @@ export default function ProfilePage() {
                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-black/50 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95 shadow-sm"
               >
                 <ImageIcon className="h-3.5 w-3.5" />
-                <span>
-                  {uploadingBanner ? "กำลังอัปโหลด..." : "เปลี่ยนภาพแบนเนอร์"}
-                </span>
+                <span>{uploadingBanner ? "กำลังอัปโหลด..." : "เปลี่ยนภาพแบนเนอร์"}</span>
               </label>
 
               {bannerUrl && (
@@ -596,13 +523,10 @@ export default function ProfilePage() {
                 {/* Avatar with Camera Trigger */}
                 <div className="group relative -mt-12 sm:-mt-16 flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-2xl sm:text-3xl font-bold text-white shadow-xl ring-4 ring-white">
                   {avatarUrl ? (
-                    <Image
+                    <img
                       src={avatarUrl}
-                      alt={username || "อวตารผู้ใช้"}
-                      fill
-                      sizes="(max-width: 640px) 96px, 112px"
-                      className="object-cover"
-                      unoptimized={avatarUrl.startsWith("data:") || avatarUrl.startsWith("blob:")}
+                      alt={username}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <span>{initialLetter}</span>
@@ -634,17 +558,15 @@ export default function ProfilePage() {
                     <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
                       {username || "ผู้ใช้งาน"}
                     </h1>
-
+                    
                     {/* Role Badges */}
                     {(() => {
                       const expandedRoles: string[] = [];
                       if (roles && roles.length > 0) {
                         roles.forEach((r) => {
                           if (r === "both" || r === "ผู้ให้เช่า / ผู้เช่า") {
-                            if (!expandedRoles.includes("lender"))
-                              expandedRoles.push("lender");
-                            if (!expandedRoles.includes("renter"))
-                              expandedRoles.push("renter");
+                            if (!expandedRoles.includes("lender")) expandedRoles.push("lender");
+                            if (!expandedRoles.includes("renter")) expandedRoles.push("renter");
                           } else if (!expandedRoles.includes(r)) {
                             expandedRoles.push(r);
                           }
@@ -662,10 +584,10 @@ export default function ProfilePage() {
                         const label = isAdmin
                           ? "ผู้ดูแลระบบ"
                           : isLender
-                            ? "ผู้ให้เช่า"
-                            : isRenter
-                              ? "ผู้เช่า"
-                              : r;
+                          ? "ผู้ให้เช่า"
+                          : isRenter
+                          ? "ผู้เช่า"
+                          : r;
 
                         return (
                           <span
@@ -701,9 +623,7 @@ export default function ProfilePage() {
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
                 >
                   <Upload className="h-3.5 w-3.5 text-[#3f6593]" />
-                  <span>
-                    {uploadingAvatar ? "กำลังอัปโหลด..." : "อัปโหลดรูปโปรไฟล์"}
-                  </span>
+                  <span>{uploadingAvatar ? "กำลังอัปโหลด..." : "อัปโหลดรูปโปรไฟล์"}</span>
                 </label>
 
                 {avatarUrl && (
@@ -751,8 +671,7 @@ export default function ProfilePage() {
                 ข้อมูลทั่วไป (ชื่อผู้ใช้, ประวัติย่อ และเบอร์โทรศัพท์)
               </h2>
               <p className="mt-0.5 text-xs text-[#5b86b6]">
-                แก้ไขชื่อผู้ใช้ ประวัติย่อ และเบอร์โทรติดต่อ
-                โดยไม่ต้องเปลี่ยนรหัสผ่าน
+                แก้ไขชื่อผู้ใช้ ประวัติย่อ และเบอร์โทรติดต่อ โดยไม่ต้องเปลี่ยนรหัสผ่าน
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
@@ -797,31 +716,59 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Phone Number */}
-            <div>
-              <label
-                htmlFor="phone"
-                className="mb-1.5 block text-sm font-medium text-[#1b3554]"
-              >
-                เบอร์โทรศัพท์
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
-                <input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) =>
-                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
-                  }
-                  placeholder="เช่น 0812345678"
-                  maxLength={10}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
-                />
+            {/* Phone Numbers (Max 2) */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="phone1"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  เบอร์โทรศัพท์ 1 (หลัก)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="phone1"
+                    type="tel"
+                    value={phone1}
+                    onChange={(e) =>
+                      setPhone1(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    placeholder="เช่น 0812345678"
+                    maxLength={10}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-slate-400">
+                  เบอร์ติดต่อหลัก (ความยาว 10 หลัก)
+                </p>
               </div>
-              <p className="mt-1 text-xs text-slate-400">
-                เบอร์ติดต่อ (ความยาว 10 หลัก)
-              </p>
+
+              <div>
+                <label
+                  htmlFor="phone2"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  เบอร์โทรศัพท์ 2 (สำรอง - ไม่บังคับ)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="phone2"
+                    type="tel"
+                    value={phone2}
+                    onChange={(e) =>
+                      setPhone2(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    placeholder="เช่น 0898765432 (ถ้ามี)"
+                    maxLength={10}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-slate-400">
+                  เบอร์ติดต่อสำรอง (ความยาว 10 หลัก)
+                </p>
+              </div>
             </div>
 
             {/* Bio */}
@@ -983,261 +930,115 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
-      </div>
-      {/* Settings: สมัคร role เพิ่ม / ปิดบัญชี */}
-      <div className="mx-auto mt-6 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-base font-bold text-slate-900">การตั้งค่าบัญชี</h2>
 
-        {addRoleSuccess && (
-          <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700">
-            {addRoleSuccess}
-          </div>
-        )}
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          {!hasRole("lender") && (
+        {/* ========================================================================= */}
+        {/* SECTION 3: Danger Zone (ลบบัญชีผู้ใช้งาน - Soft Delete) */}
+        {/* ========================================================================= */}
+        <div className="rounded-3xl border border-red-200 bg-red-50/30 p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-red-100 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-red-700">
+                ลบบัญชีผู้ใช้งาน (Delete Account)
+              </h2>
+              <p className="mt-0.5 text-xs text-red-600/80">
+                เมื่อลบบัญชี ระบบจะปิดการใช้งานบัญชี ซ่อนสินค้าของคุณทั้งหมด และไม่สามารถเข้าสู่ระบบได้อีก
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => {
-                setAddRoleTarget("lender");
-                setNeedsKyc(false);
-                setAddRoleError(null);
-                setShowAddRoleModal(true);
+                setShowDeleteModal(true);
+                setDeleteError(null);
+                setDeleteConfirmText("");
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-sky-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 active:scale-95"
             >
-              <UserPlus className="h-4 w-4" />
-              สมัครเป็นผู้ให้เช่าเพิ่ม
+              <Trash2 className="h-4 w-4" />
+              <span>ลบบัญชีของฉัน</span>
             </button>
-          )}
-          {!hasRole("renter") && (
-            <button
-              type="button"
-              onClick={() => {
-                setAddRoleTarget("renter");
-                setNeedsKyc(false);
-                setAddRoleError(null);
-                setShowAddRoleModal(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-sky-50"
-            >
-              <UserPlus className="h-4 w-4" />
-              สมัครเป็นผู้เช่าเพิ่ม
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowDeactivateModal(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-100"
-          >
-            <Power className="h-4 w-4" />
-            ปิดการใช้งานบัญชี
-          </button>
-        </div>
-      </div>
-
-      {/* FR-07: แก้ไขบัญชีธนาคาร */}
-      <div className="mx-auto mt-6 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-base font-bold text-slate-900">บัญชีธนาคาร</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          เปลี่ยนบัญชีธนาคารเมื่อไหร่ แอดมินจะตรวจสอบยืนยันตัวตนใหม่ทุกครั้ง
-        </p>
-
-        {bankVerificationStatus && (
-          <span
-            className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-              bankVerificationStatus === "verified"
-                ? "bg-emerald-50 text-emerald-700"
-                : bankVerificationStatus === "rejected"
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-amber-50 text-amber-700"
-            }`}
-          >
-            สถานะ:{" "}
-            {bankVerificationStatus === "verified"
-              ? "ยืนยันแล้ว"
-              : bankVerificationStatus === "rejected"
-                ? "ถูกปฏิเสธ"
-                : "รอตรวจสอบ"}
-          </span>
-        )}
-
-        {bankSuccess && (
-          <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700">
-            {bankSuccess}
           </div>
-        )}
-        {bankError && (
-          <div className="mt-3 rounded-xl bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700">
-            {bankError}
-          </div>
-        )}
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <input
-            type="text"
-            placeholder="ธนาคาร"
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
-          />
-          <input
-            type="text"
-            placeholder="เลขบัญชี"
-            value={accountNumber}
-            onChange={(e) => setAccountNumber(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
-          />
-          <input
-            type="text"
-            placeholder="ชื่อบัญชี"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
-          />
         </div>
 
-        <button
-          type="button"
-          onClick={handleSaveBankAccount}
-          disabled={savingBank || !bankName || !accountNumber || !accountName}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1b3554] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#000f22] disabled:opacity-50"
-        >
-          {savingBank ? "กำลังบันทึก..." : "บันทึกบัญชีธนาคาร"}
-        </button>
-      </div>
-
-      {/* Modal: สมัคร role เพิ่ม */}
-      {showAddRoleModal && addRoleTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">
-              สมัครเป็น{addRoleTarget === "lender" ? "ผู้ให้เช่า" : "ผู้เช่า"}
-              เพิ่ม
-            </h3>
-
-            {needsKyc && (
-              <div className="mt-4 space-y-3">
-                <p className="text-xs text-slate-500">
-                  ยังไม่มีข้อมูลยืนยันตัวตนในระบบ กรุณากรอกให้ครบก่อน
-                </p>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    รูปบัตรประชาชน
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) readFileAsDataUrl(f, setKycIdCard);
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-                  />
+        {/* Modal ยืนยันการลบบัญชี */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    รูปถ่ายคู่บัตรประชาชน
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) readFileAsDataUrl(f, setKycSelfie);
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b3554] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-                  />
+                  <h3 className="text-lg font-bold text-slate-900">
+                    ยืนยันการลบบัญชีผู้ใช้?
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    การดำเนินการนี้ไม่สามารถยกเลิกได้ในภายหลัง
+                  </p>
                 </div>
+              </div>
+
+              {deleteError && (
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="mt-4 space-y-2 text-xs text-slate-600">
+                <p>⚠️ <strong>เมื่อกดยืนยัน:</strong></p>
+                <ul className="list-disc pl-5 space-y-1 text-slate-500">
+                  <li>บัญชีของคุณจะถูกปิดการใช้งาน (Deactivated) ทันที</li>
+                  <li>สินค้าที่คุณลงประกาศไว้ทั้งหมดจะถูกซ่อนออกจากหน้าร้าน</li>
+                  <li>เอกสารยืนยันตัวตน (KYC) และข้อมูลส่วนตัวจะถูกลบ</li>
+                  <li>ประวัติการเช่าในอดีตจะคงอยู่เพื่อความโปร่งใสทางบัญชี</li>
+                </ul>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  พิมพ์คำว่า <span className="font-bold text-red-600">DELETE</span> เพื่อยืนยัน:
+                </label>
                 <input
                   type="text"
-                  placeholder="ธนาคาร"
-                  value={kycBankName}
-                  onChange={(e) => setKycBankName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="เลขบัญชี"
-                  value={kycAccountNumber}
-                  onChange={(e) => setKycAccountNumber(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="ชื่อบัญชี"
-                  value={kycAccountName}
-                  onChange={(e) => setKycAccountName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-sm outline-none focus:border-[#3f6593] focus:bg-white"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="พิมพ์ DELETE ที่นี่"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100"
                 />
               </div>
-            )}
 
-            {!needsKyc && (
-              <p className="mt-3 text-xs text-slate-500">
-                กดยืนยันเพื่อสมัครบทบาทนี้เพิ่ม
-                (ระบบจะเช็คข้อมูลยืนยันตัวตนที่มีอยู่ให้อัตโนมัติ)
-              </p>
-            )}
-
-            {addRoleError && (
-              <p className="mt-3 text-xs font-semibold text-rose-600">
-                {addRoleError}
-              </p>
-            )}
-
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowAddRoleModal(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                ปิด
-              </button>
-              <button
-                type="button"
-                onClick={submitAddRole}
-                disabled={addRoleSubmitting}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1b3554] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#000f22] disabled:opacity-50"
-              >
-                {addRoleSubmitting ? "กำลังดำเนินการ..." : "ยืนยัน"}
-              </button>
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={isDeletingAccount}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText.trim().toUpperCase() !== "DELETE" || isDeletingAccount}
+                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isDeletingAccount ? (
+                    <>
+                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <span>กำลังลบบัญชี...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>ยืนยันลบบัญชีถาวร</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Modal: ปิดบัญชี */}
-      {showDeactivateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">
-              ยืนยันปิดการใช้งานบัญชี?
-            </h3>
-            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-              คุณจะไม่สามารถเข้าสู่ระบบได้อีก
-              จนกว่าจะติดต่อแอดมินให้เปิดบัญชีคืน
-            </p>
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDeactivateModal(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleDeactivate}
-                disabled={deactivating}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-rose-700 disabled:opacity-50"
-              >
-                {deactivating ? "กำลังปิดบัญชี..." : "ยืนยันปิดบัญชี"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -337,3 +337,172 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+export async function DELETE() {
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
+        { status: 401 }
+      );
+    }
+
+    const admin = createAdminClient();
+    const activeStatuses = [
+      "requested",
+      "awaiting_payment",
+      "paid",
+      "item_sent",
+      "item_received",
+      "awaiting_additional_payment",
+    ];
+
+    // 1. ตรวจสอบว่าผู้เช่ามีออเดอร์ที่ยังดำเนินอยู่หรือไม่
+    const { data: renterOrders, error: renterErr } = await admin
+      .from("rentalorder")
+      .select("order_id, status")
+      .eq("user_id", user.id)
+      .in("status", activeStatuses)
+      .limit(1);
+
+    if (renterErr) {
+      console.error("Error checking renter active orders:", renterErr);
+      return NextResponse.json(
+        { message: "เกิดข้อผิดพลาดในการตรวจสอบรายการเช่า" },
+        { status: 500 }
+      );
+    }
+
+    if (renterOrders && renterOrders.length > 0) {
+      return NextResponse.json(
+        {
+          message:
+            "ไม่สามารถลบบัญชีได้ เนื่องจากคุณมีรายการเช่าที่กำลังดำเนินการอยู่ กรุณาดำเนินการคืนสินค้าหรือรอคำสั่งซื้อเสร็จสิ้นก่อน",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. ตรวจสอบว่าผู้ให้เช่ามีออเดอร์ที่ยังดำเนินอยู่บนสินค้าของตนเองหรือไม่
+    const { data: userItems, error: itemsErr } = await admin
+      .from("item")
+      .select("item_id")
+      .eq("user_id", user.id);
+
+    if (itemsErr) {
+      console.error("Error fetching user items:", itemsErr);
+    }
+
+    if (userItems && userItems.length > 0) {
+      const itemIds = userItems.map((it) => it.item_id);
+      const { data: lenderOrders, error: lenderOrdersErr } = await admin
+        .from("rentalorder")
+        .select("order_id, status")
+        .in("item_id", itemIds)
+        .in("status", activeStatuses)
+        .limit(1);
+
+      if (lenderOrdersErr) {
+        console.error("Error checking lender active orders:", lenderOrdersErr);
+        return NextResponse.json(
+          { message: "เกิดข้อผิดพลาดในการตรวจสอบรายการเช่าของสินค้าคุณ" },
+          { status: 500 }
+        );
+      }
+
+      if (lenderOrders && lenderOrders.length > 0) {
+        return NextResponse.json(
+          {
+            message:
+              "ไม่สามารถลบบัญชีได้ เนื่องจากมีผู้เช่ากำลังเช่าสินค้าของคุณอยู่ กรุณารอให้ออเดอร์เสร็จสิ้นก่อน",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 3. ซ่อนสินค้าทั้งหมดของผู้ใช้นี้ (Soft delete items)
+    await admin
+      .from("item")
+      .update({
+        status: "inactive",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    // 4. ทำ Soft Delete ใน useraccount
+    // เปลี่ยนสถานะเป็น Deactivated, แปลง Username/Email และเคลียร์ข้อมูล KYC
+    const anonymizedUsername = `deleted_${user.id.slice(0, 8)}`;
+    const anonymizedEmail = `deleted_${user.id}@deleted.local`;
+
+    await admin
+      .from("useraccount")
+      .update({
+        status: "Deactivated",
+        username: anonymizedUsername,
+        email: anonymizedEmail,
+        national_id: null,
+        phone: null,
+        bio: null,
+        avatar_url: null,
+        banner_url: null,
+        id_card_url: null,
+        id_card_selfie_url: null,
+        identity_verification_status: "unverified",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    // 5. ลบข้อมูลส่วนตัวใน userphones และ bankaccount
+    await Promise.allSettled([
+      admin.from("userphones").delete().eq("user_id", user.id),
+      admin.from("bankaccount").delete().eq("user_id", user.id),
+    ]);
+
+    // 6. ลบไฟล์ส่วนตัวใน Supabase Storage (KYC และ Avatars)
+    try {
+      const { data: kycFiles } = await admin.storage
+        .from("chaochao")
+        .list(`kyc/${user.id}`);
+      if (kycFiles && kycFiles.length > 0) {
+        await admin.storage
+          .from("chaochao")
+          .remove(kycFiles.map((f) => `kyc/${user.id}/${f.name}`));
+      }
+      const { data: kycLegacyFiles } = await admin.storage
+        .from("kyc")
+        .list(user.id);
+      if (kycLegacyFiles && kycLegacyFiles.length > 0) {
+        await admin.storage
+          .from("kyc")
+          .remove(kycLegacyFiles.map((f) => `${user.id}/${f.name}`));
+      }
+    } catch (e) {
+      console.warn("Storage cleanup error during account deactivation:", e);
+    }
+
+    // 7. ลบบัญชีใน Supabase Auth เพื่อตัดสิทธิ์การล็อกอิน
+    try {
+      await admin.auth.admin.deleteUser(user.id);
+    } catch (e) {
+      console.warn("Supabase Auth delete error:", e);
+    }
+
+    return NextResponse.json({
+      message: "ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Account delete error:", error);
+    return NextResponse.json(
+      { message: "เกิดข้อผิดพลาดในการลบบัญชีผู้ใช้งาน" },
+      { status: 500 }
+    );
+  }
+}
