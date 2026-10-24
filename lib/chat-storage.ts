@@ -116,11 +116,14 @@ export async function getRoomMessages(roomId: string): Promise<RoomChatLog> {
           messages: [...cached.messages],
         };
       }
-      return {
+      // หากยังไม่มีไฟล์ใน Storage ให้ใช้ updatedAt เป็นค่าว่าง "" เพื่อไม่ให้เวลาของห้องแชทขยับเองทุกครั้งที่ดึงข้อมูล
+      const emptyLog: RoomChatLog = {
         roomId,
-        updatedAt: new Date().toISOString(),
+        updatedAt: "",
         messages: [],
       };
+      memoryLogCache.set(roomId, emptyLog);
+      return emptyLog;
     }
 
     const text = await data.text();
@@ -136,7 +139,7 @@ export async function getRoomMessages(roomId: string): Promise<RoomChatLog> {
     const latestUpdatedAt =
       mergedMessages.length > 0
         ? mergedMessages[mergedMessages.length - 1].createdAt
-        : parsed.updatedAt || cached?.updatedAt || new Date().toISOString();
+        : parsed.updatedAt || cached?.updatedAt || "";
 
     const result: RoomChatLog = {
       roomId,
@@ -161,7 +164,7 @@ export async function getRoomMessages(roomId: string): Promise<RoomChatLog> {
     }
     return {
       roomId,
-      updatedAt: new Date().toISOString(),
+      updatedAt: "",
       messages: [],
     };
   }
@@ -232,6 +235,11 @@ export async function markRoomMessagesAsRead(
   readerUserId: string,
 ): Promise<void> {
   return withRoomLock(roomId, async () => {
+    const cached = memoryLogCache.get(roomId);
+    if (cached && cached.messages.length === 0) {
+      return;
+    }
+
     const admin = createAdminClient();
     const filePath = `${roomId}.json`;
 
@@ -301,7 +309,7 @@ export async function getRoomsSummary(
 
       summaryMap.set(roomId, {
         lastMessage: last?.content || "",
-        lastCreatedAt: last?.createdAt || log.updatedAt,
+        lastCreatedAt: last?.createdAt || "",
         unreadCount: unread,
       });
     }),

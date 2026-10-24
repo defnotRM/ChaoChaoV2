@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isOrderChatClosed } from "@/lib/chat-statuses";
 import { getRoomsSummary } from "@/lib/chat-storage";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const supabase = await createServerClient();
@@ -21,7 +23,7 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    // 1. ดึงห้องแชททั้งหมดที่ user เป็นคู่สนทนา พร้อม join รายละเอียดสินค้า (ถ้ามี)
+    // 1. ดึงห้องแชททั้งหมดที่ผูกกับออเดอร์และ user เป็นคู่สนทนา พร้อม join รายละเอียดสินค้า
     const { data: rooms, error: roomsError } = await admin
       .from("chatroom")
       .select(`
@@ -46,6 +48,7 @@ export async function GET() {
           )
         )
       `)
+      .not("order_id", "is", null)
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
 
     if (roomsError) {
@@ -79,22 +82,7 @@ export async function GET() {
       .in("user_id", partnerIds);
     const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
-    // 3. role ของคู่สนทนา
-    const { data: roleAssignments } = await admin
-      .from("user_role_assignment")
-      .select("user_id, role ( role_type )")
-      .in("user_id", partnerIds);
-    const rolesMap = new Map<string, string[]>();
-    (roleAssignments || []).forEach(
-      (ra: { user_id: string; role?: { role_type?: string } | { role_type?: string }[] | null }) => {
-        const current = rolesMap.get(ra.user_id) || [];
-        const roleType = Array.isArray(ra.role) ? ra.role[0]?.role_type : ra.role?.role_type;
-        if (roleType) current.push(roleType);
-        rolesMap.set(ra.user_id, current);
-      },
-    );
-
-    // 4. ดึงข้อมูลข้อความล่าสุดและจำนวนที่ยังไม่อ่านจาก Storage Bucket (chat-logs/{roomId}.json)
+    // 3. ดึงข้อมูลข้อความล่าสุดและจำนวนที่ยังไม่อ่านจาก Storage Bucket (chat-logs/{roomId}.json)
     const roomIds = rooms.map((r) => r.chat_room_id);
     const roomsSummary = await getRoomsSummary(roomIds, user.id);
 
@@ -114,9 +102,10 @@ export async function GET() {
       // Contextual role in this rental
       const contextualRole = isRenter ? "ผู้ให้เช่า" : "ผู้เช่า";
 
+      // ใช้ค่าคงที่ 1 แทน Date.now() หากไม่มี updated_at เพื่อไม่ให้ URL รูปอวตารเปลี่ยนทุกครั้งที่ Poll
       const v = partnerProfile?.updated_at
         ? new Date(partnerProfile.updated_at).getTime()
-        : Date.now();
+        : 1;
 
       const itemData = Array.isArray(orderData?.item)
         ? orderData.item[0]
@@ -147,23 +136,28 @@ export async function GET() {
           role: contextualRole,
           status: partnerProfile?.status || "Active",
         },
-        order: r.order_id && orderData ? {
-          id: orderData.order_id || r.order_id,
-          status: orderStatus,
-          startDate: orderData.start_date || "",
-          endDate: orderData.end_date || "",
-          itemId: itemData?.item_id || "",
-          itemName: itemData?.item_name || "สินค้าให้เช่า",
-          itemImageUrl: primaryImage,
-        } : null,
+        order:
+          r.order_id && orderData
+            ? {
+                id: orderData.order_id || r.order_id,
+                status: orderStatus,
+                startDate: orderData.start_date || "",
+                endDate: orderData.end_date || "",
+                itemId: itemData?.item_id || "",
+                itemName: itemData?.item_name || "สินค้าให้เช่า",
+                itemImageUrl: primaryImage,
+              }
+            : null,
       };
     });
 
-    // เรียงห้องที่มีข้อความล่าสุดก่อน
-    formattedRooms.sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+    // เรียงห้องที่มีข้อความล่าสุดก่อน (พร้อม tie-breaker ด้วย id เพื่อไม่ให้ลำดับสลับไปมา)
+    formattedRooms.sort((a, b) => {
+      const timeDiff =
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return b.id.localeCompare(a.id);
+    });
 
     return NextResponse.json(
       { rooms: formattedRooms },

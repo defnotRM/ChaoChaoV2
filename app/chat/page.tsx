@@ -234,7 +234,15 @@ function ChatContent() {
       if (res.ok) {
         const data = await res.json();
         const incomingRooms: ChatRoom[] = data.rooms || [];
-        setRooms(incomingRooms);
+        setRooms((prev) => {
+          if (
+            prev.length === incomingRooms.length &&
+            JSON.stringify(prev) === JSON.stringify(incomingRooms)
+          ) {
+            return prev;
+          }
+          return incomingRooms;
+        });
         return incomingRooms;
       }
       return [];
@@ -324,9 +332,13 @@ function ChatContent() {
             return merged;
           });
 
-          setRooms((prev) =>
-            prev.map((r) => (r.id === roomId ? { ...r, unreadCount: 0 } : r)),
-          );
+          setRooms((prev) => {
+            const target = prev.find((r) => r.id === roomId);
+            if (!target || target.unreadCount === 0) return prev;
+            return prev.map((r) =>
+              r.id === roomId ? { ...r, unreadCount: 0 } : r,
+            );
+          });
 
           if (autoScroll) {
             setTimeout(() => scrollToBottom(false), 50);
