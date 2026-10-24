@@ -2,10 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   CalendarDays,
+  Clock,
+  Eye,
+  EyeOff,
+  Loader2,
   Pencil,
   ShieldAlert,
   ShieldCheck,
@@ -29,6 +34,7 @@ export interface BookingWidgetProps {
   ownerIsVerified: boolean;
   ownerRating: number;
   ownerReviewCount: number;
+  productStatus?: string;
 }
 
 export default function BookingWidget({
@@ -41,12 +47,20 @@ export default function BookingWidget({
   ownerIsVerified,
   ownerRating,
   ownerReviewCount,
+  productStatus = "available",
 }: BookingWidgetProps) {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     role: string;
     roles: string[];
   } | null>(null);
+  const [status, setStatus] = useState(productStatus);
+  const [isTogglingHide, setIsTogglingHide] = useState(false);
+
+  useEffect(() => {
+    setStatus(productStatus);
+  }, [productStatus]);
 
   useEffect(() => {
     async function loadUser() {
@@ -62,6 +76,26 @@ export default function BookingWidget({
     }
     loadUser();
   }, []);
+
+  async function handleToggleHide() {
+    const nextStatus = status === "inactive" ? "available" : "inactive";
+    setIsTogglingHide(true);
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (res.ok) {
+        setStatus(nextStatus);
+        router.refresh();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsTogglingHide(false);
+    }
+  }
 
   const roles =
     currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
@@ -141,6 +175,17 @@ export default function BookingWidget({
             </p>
           </div>
         </div>
+      ) : status === "inactive" ? (
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            disabled
+            className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-5 py-3.5 text-sm font-semibold text-slate-400 opacity-80 shadow-none"
+          >
+            <EyeOff className="h-5 w-5 text-slate-400" />
+            <span>สินค้านี้ถูกซ่อนประกาศชั่วคราว</span>
+          </button>
+        </div>
       ) : isLenderOnly ? (
         <div className="mt-4 space-y-2">
           <button
@@ -174,65 +219,95 @@ export default function BookingWidget({
         </>
       )}
 
-      {/* การ์ดผู้ปล่อยเช่า */}
-      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-slate-200 p-3">
-        {ownerAvatarUrl ? (
-          <Image
-            src={ownerAvatarUrl}
-            alt={ownerName}
-            width={44}
-            height={44}
-            className="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm"
-            unoptimized={
-              ownerAvatarUrl.startsWith("data:") ||
-              ownerAvatarUrl.startsWith("blob:")
-            }
-          />
-        ) : (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-base font-bold text-white">
-            {ownerName.charAt(0).toUpperCase()}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-bold text-slate-900">
-              {ownerName}
-            </p>
-            {ownerIsVerified && (
-              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600">
-                <BadgeCheck className="h-4 w-4" />
-                ยืนยันตัวตน
-              </span>
-            )}
-          </div>
-          {ownerReviewCount > 0 && (
-            <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500">
+      {/* การ์ดความน่าเชื่อถือของผู้ให้เช่า (FR-19) */}
+      <div className="mt-5 rounded-2xl border border-slate-200 p-3.5">
+        <div className="flex items-center gap-3">
+          {ownerAvatarUrl ? (
+            <Image
+              src={ownerAvatarUrl}
+              alt={ownerName}
+              width={44}
+              height={44}
+              className="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm"
+              unoptimized={
+                ownerAvatarUrl.startsWith("data:") ||
+                ownerAvatarUrl.startsWith("blob:")
+              }
+            />
+          ) : (
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-base font-bold text-white">
+              {ownerName.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="truncate text-sm font-bold text-slate-900">
+                {ownerName}
+              </p>
+              {ownerIsVerified ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                  <BadgeCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  ยืนยันตัวตนแล้ว
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200">
+                  <Clock className="h-3.5 w-3.5 text-amber-600" />
+                  รอยืนยันตัวตน
+                </span>
+              )}
+            </div>
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               <span className="font-semibold text-slate-700">
                 {ownerRating.toFixed(1)}
               </span>
-              <span className="text-slate-400">({ownerReviewCount} รีวิว)</span>
+              <span className="text-slate-400">
+                คะแนนเฉลี่ยผู้ให้เช่า ({ownerReviewCount} รีวิว)
+              </span>
             </p>
-          )}
+          </div>
+          <Link
+            href={`/user/${ownerId}`}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
+          >
+            <User className="h-3.5 w-3.5" />
+            ดูโปรไฟล์
+          </Link>
         </div>
-        <Link
-          href={`/user/${ownerId}`}
-          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
-        >
-          <User className="h-3.5 w-3.5" />
-          ดูโปรไฟล์
-        </Link>
       </div>
 
-      {/* เจ้าของประกาศ: แสดงปุ่มแก้ไขประกาศ */}
+      {/* เจ้าของประกาศ: แสดงปุ่มแก้ไขประกาศ และปุ่มซ่อน/แสดงข้อมูลสินค้า */}
       {isOwner && (
-        <Link
-          href={`/lender/editmyproduct/${productId}`}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
-        >
-          <Pencil className="h-4 w-4" />
-          แก้ไขประกาศ
-        </Link>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Link
+            href={`/lender/editmyproduct/${productId}`}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
+          >
+            <Pencil className="h-4 w-4" />
+            แก้ไขประกาศ
+          </Link>
+          <button
+            type="button"
+            onClick={handleToggleHide}
+            disabled={isTogglingHide || status === "rented"}
+            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+              status === "inactive"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            {isTogglingHide ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : status === "inactive" ? (
+              <Eye className="h-4 w-4" />
+            ) : (
+              <EyeOff className="h-4 w-4" />
+            )}
+            <span>
+              {status === "inactive" ? "เปิดแสดงสินค้า" : "ซ่อนข้อมูลสินค้า"}
+            </span>
+          </button>
+        </div>
       )}
     </div>
   );

@@ -619,7 +619,7 @@ export default function EditProductClient({
                 <option value="maintenance">
                   อยู่ระหว่างซ่อมบำรุง (Maintenance)
                 </option>
-                <option value="inactive">ปิดประกาศ (Inactive)</option>
+                <option value="inactive">ซ่อนข้อมูลสินค้า / ปิดประกาศ (Inactive)</option>
               </select>
             </div>
           </div>

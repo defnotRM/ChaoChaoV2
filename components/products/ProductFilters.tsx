@@ -170,7 +170,7 @@ export default function ProductFilters({
             พร้อมให้เช่าเท่านั้น
           </span>
           <span className="mt-0.5 block text-xs text-slate-400">
-            ซ่อนสินค้าที่ถูกเช่า ซ่อมบำรุง หรือปิดประกาศ
+            ซ่อนสินค้าที่กำลังถูกเช่าหรืออยู่ระหว่างซ่อมบำรุง
           </span>
         </span>
       </label>

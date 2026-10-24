@@ -114,13 +114,15 @@ export async function getProducts(): Promise<Product[]> {
   const { data: items } = await admin
     .from("item")
     .select("*")
+    .neq("status", "inactive")
     .order("created_at", { ascending: false });
 
   if (!items || items.length === 0) return [];
 
   const ids = items.map((it) => it.item_id);
+  const ownerIds = [...new Set(items.map((it) => it.user_id).filter(Boolean))];
 
-  const [catRes, imgRes, locRes, availRes, reviewRes] = await Promise.all([
+  const [catRes, imgRes, locRes, availRes, reviewRes, ownersRes] = await Promise.all([
     admin.from("itemcategory").select("category_id, category_name"),
     admin
       .from("itemimage")
@@ -138,6 +140,12 @@ export async function getProducts(): Promise<Product[]> {
     admin
       .from("review")
       .select("rating, order:order_id!inner ( item_id )"),
+    ownerIds.length > 0
+      ? admin
+          .from("useraccount")
+          .select("user_id, username, firstname, lastname, avatar_url, identity_verification_status, created_at")
+          .in("user_id", ownerIds)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const categoryMap = new Map<string, string>(
@@ -183,8 +191,55 @@ export async function getProducts(): Promise<Product[]> {
     ratingAgg.set(itemId, cur);
   }
 
+  // aggregate เรตติ้งเฉลี่ยต่อผู้ให้เช่า (owner)
+  const itemOwnerMap = new Map<string, string>(
+    items.map((it) => [it.item_id, it.user_id])
+  );
+  const ownerRatingAgg = new Map<string, { sum: number; count: number }>();
+  for (const r of (reviewRes.data || []) as unknown as Array<{ rating: number; order: { item_id: string } | null }>) {
+    const itemId = r.order?.item_id;
+    if (!itemId) continue;
+    const ownerUserId = itemOwnerMap.get(itemId);
+    if (!ownerUserId) continue;
+    const cur = ownerRatingAgg.get(ownerUserId) || { sum: 0, count: 0 };
+    cur.sum += toNumber(r.rating);
+    cur.count += 1;
+    ownerRatingAgg.set(ownerUserId, cur);
+  }
+
+  const ownerMap = new Map<
+    string,
+    {
+      user_id: string;
+      username: string | null;
+      firstname: string | null;
+      lastname: string | null;
+      avatar_url: string | null;
+      identity_verification_status: string | null;
+      created_at: string | null;
+    }
+  >();
+  for (const u of (ownersRes.data || []) as Array<{
+    user_id: string;
+    username: string | null;
+    firstname: string | null;
+    lastname: string | null;
+    avatar_url: string | null;
+    identity_verification_status: string | null;
+    created_at: string | null;
+  }>) {
+    ownerMap.set(u.user_id, u);
+  }
+
   return items.map((it) => {
     const agg = ratingAgg.get(it.item_id);
+    const ownerRow = ownerMap.get(it.user_id);
+    const ownerAgg = ownerRatingAgg.get(it.user_id);
+    const ownerDisplayName =
+      ownerRow?.username ||
+      [ownerRow?.firstname, ownerRow?.lastname].filter(Boolean).join(" ").trim() ||
+      "ผู้ให้เช่า";
+
     return {
       id: it.item_id,
       title: it.item_name,
@@ -202,12 +257,13 @@ export async function getProducts(): Promise<Product[]> {
       ownerId: it.user_id,
       owner: {
         id: it.user_id,
-        displayName: "",
-        rating: 0,
-        reviewCount: 0,
+        displayName: ownerDisplayName,
+        avatarUrl: ownerRow?.avatar_url || null,
+        rating: ownerAgg ? ownerAgg.sum / ownerAgg.count : 0,
+        reviewCount: ownerAgg ? ownerAgg.count : 0,
         responseRate: 0,
-        isVerified: false,
-        joinedAt: it.created_at,
+        isVerified: ownerRow?.identity_verification_status === "verified",
+        joinedAt: ownerRow?.created_at || it.created_at,
       },
       rentalTerms: [],
       reviews: [],
@@ -257,7 +313,7 @@ export async function getProductById(id: string): Promise<Product | null> {
         .order("seq", { ascending: true }),
       admin
         .from("useraccount")
-        .select("user_id, firstname, lastname, username, avatar_url, updated_at, status, created_at")
+        .select("user_id, firstname, lastname, username, avatar_url, updated_at, status, created_at, identity_verification_status")
         .eq("user_id", it.user_id)
         .maybeSingle(),
       // คำสั่งเช่าทั้งหมดของอุปกรณ์ชิ้นนี้ (สำหรับดึงรีวิวและข้อมูลผู้เช่า)
@@ -425,6 +481,7 @@ export async function getProductById(id: string): Promise<Product | null> {
           updated_at: new Date().toISOString(),
           status: "Active",
           created_at: u.created_at,
+          identity_verification_status: "pending",
         };
       }
     } catch {
@@ -461,7 +518,7 @@ export async function getProductById(id: string): Promise<Product | null> {
       rating: ownerRating,
       reviewCount: ownerReviewCount,
       responseRate: 0, // ไม่มีใน DB
-      isVerified: owner?.status === "Active",
+      isVerified: owner?.identity_verification_status === "verified",
       joinedAt: owner?.created_at ?? it.created_at,
     },
     rentalTerms,

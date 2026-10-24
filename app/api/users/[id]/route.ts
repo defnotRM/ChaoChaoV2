@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { rolesFromMetadata } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
@@ -20,9 +19,9 @@ export async function GET(
     const admin = createAdminClient();
 
     // 1. Fetch user profile
-    const { data: userRow } = await admin
+    const { data: userRow, error: userError } = await admin
       .from("useraccount")
-      .select("user_id, username, bio, avatar_url, banner_url, status, updated_at, created_at")
+      .select("user_id, username, bio, avatar_url, banner_url, status, updated_at, created_at, identity_verification_status")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -31,7 +30,7 @@ export async function GET(
     // Fallback: If not found in useraccount, fetch from auth.users and auto-sync
     if (!user) {
       try {
-        const { data: authUser } = await admin.auth.admin.getUserById(userId);
+        const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
         if (authUser?.user) {
           const au = authUser.user;
           const uName =
@@ -61,9 +60,15 @@ export async function GET(
             status: "Active",
             updated_at: au.updated_at || new Date().toISOString(),
             created_at: au.created_at || new Date().toISOString(),
+            identity_verification_status: "pending",
           };
 
-          const rolesToAssign = rolesFromMetadata(au.user_metadata);
+          const uRole =
+            au.user_metadata?.signup_role ||
+            au.user_metadata?.role ||
+            "renter";
+          const rolesToAssign =
+            uRole === "both" ? ["renter", "lender"] : [uRole];
           const { data: roleRows } = await admin
             .from("role")
             .select("role_id, role_type")
@@ -111,7 +116,7 @@ export async function GET(
     });
 
     let roles = (roleAssignments || [])
-      .map((ra: { role_id: string }) => roleTypeById.get(ra.role_id))
+      .map((ra: any) => roleTypeById.get(ra.role_id))
       .filter((r): r is string => Boolean(r));
 
     // If user has listed items, guarantee lender role
@@ -123,7 +128,11 @@ export async function GET(
     if (roles.length === 0) {
       try {
         const { data: authUser } = await admin.auth.admin.getUserById(userId);
-        roles = rolesFromMetadata(authUser?.user?.user_metadata);
+        const uRole =
+          authUser?.user?.user_metadata?.signup_role ||
+          authUser?.user?.user_metadata?.role ||
+          "renter";
+        roles = uRole === "both" ? ["renter", "lender"] : [uRole];
       } catch {
         roles = ["renter"];
       }
@@ -141,24 +150,43 @@ export async function GET(
       ? "ผู้ให้เช่า"
       : "ผู้เช่า";
 
-    // 3. Fetch primary images for items
+    // 3. Fetch primary images & lender average rating for items
     const itemIds = (items || []).map((it) => it.item_id);
-    const imagesMap = new Map<string, string>();
+    let imagesMap = new Map<string, string>();
+    let averageRating = 0;
+    let reviewCount = 0;
 
     if (itemIds.length > 0) {
-      const { data: images } = await admin
-        .from("itemimage")
-        .select("item_id, image_url, is_primary")
-        .in("item_id", itemIds);
+      const [{ data: images }, { data: ownerReviews }] = await Promise.all([
+        admin
+          .from("itemimage")
+          .select("item_id, image_url, is_primary")
+          .in("item_id", itemIds),
+        admin
+          .from("review")
+          .select("rating, order:order_id!inner ( item_id )")
+          .in("order.item_id", itemIds),
+      ]);
 
       (images || []).forEach((img) => {
         if (img.is_primary || !imagesMap.has(img.item_id)) {
           imagesMap.set(img.item_id, img.image_url);
         }
       });
+
+      const revRows = (ownerReviews || []) as Array<{ rating: number }>;
+      reviewCount = revRows.length;
+      averageRating =
+        revRows.length > 0
+          ? revRows.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) /
+            revRows.length
+          : 0;
     }
 
-    const formattedItems = (items || []).map((it) => ({
+    // ซ่อนสินค้าที่ผู้ให้เช่าตั้งค่าซ่อนไว้ (status === 'inactive') จากหน้าโปรไฟล์สาธารณะ (FR-15)
+    const visibleItems = (items || []).filter((it) => it.status !== "inactive");
+
+    const formattedItems = visibleItems.map((it) => ({
       id: it.item_id,
       name: it.item_name,
       description: it.description || "",
@@ -180,6 +208,9 @@ export async function GET(
           role: roleLabel,
           isLender,
           isRenter,
+          isVerified: user.identity_verification_status === "verified",
+          rating: averageRating,
+          reviewCount,
           createdAt: user.created_at,
         },
         items: formattedItems,

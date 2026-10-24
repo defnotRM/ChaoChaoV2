@@ -40,7 +40,7 @@ const statusContent: Record<
   available: { label: "พร้อมให้เช่า", tone: "success" },
   rented: { label: "กำลังถูกเช่า", tone: "rented" },
   maintenance: { label: "อยู่ระหว่างซ่อมบำรุง", tone: "maintenance" },
-  inactive: { label: "ปิดประกาศ", tone: "inactive" },
+  inactive: { label: "ซ่อนประกาศชั่วคราว", tone: "inactive" },
 };
 
 function formatDate(date: string) {
@@ -240,14 +240,89 @@ export default async function ProductDetailPage({
               </section>
             )}
 
+            {/* ข้อมูลความน่าเชื่อถือของผู้ให้เช่า (FR-19) */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    ข้อมูลความน่าเชื่อถือของผู้ให้เช่า
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    การยืนยันตัวตนและคะแนนรีวิวเฉลี่ยของผู้ปล่อยเช่าอุปกรณ์ชิ้นนี้
+                  </p>
+                </div>
+                <Link
+                  href={`/user/${product.owner.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-[#1b3554] transition hover:border-[#3f6593] hover:bg-sky-50"
+                >
+                  <span>ดูโปรไฟล์ผู้ให้เช่า ({product.owner.displayName})</span>
+                </Link>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                  <span className="text-xs font-medium text-slate-500">
+                    การยืนยันตัวตนของผู้ให้เช่า
+                  </span>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    {product.owner.isVerified ? (
+                      <>
+                        <BadgeCheck className="h-5 w-5 text-emerald-600" />
+                        <strong className="text-sm font-bold text-emerald-700">
+                          ยืนยันตัวตนแล้ว
+                        </strong>
+                      </>
+                    ) : (
+                      <>
+                        <Clock3 className="h-5 w-5 text-amber-500" />
+                        <strong className="text-sm font-bold text-amber-700">
+                          รอการยืนยันตัวตน
+                        </strong>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                  <span className="text-xs font-medium text-slate-500">
+                    คะแนนรีวิวเฉลี่ยของผู้ให้เช่า
+                  </span>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                    <strong className="text-base font-bold text-slate-900">
+                      {product.owner.rating.toFixed(1)}
+                    </strong>
+                    <span className="text-xs text-slate-500">
+                      / 5.0 ({product.owner.reviewCount} รีวิวรวม)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                  <span className="text-xs font-medium text-slate-500">
+                    รีวิวของสินค้าชิ้นนี้
+                  </span>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-5 w-5 text-sky-600" />
+                    <strong className="text-base font-bold text-slate-900">
+                      {product.reviewCount} รายการ
+                    </strong>
+                    <span className="text-xs text-slate-500">
+                      (เฉลี่ย {product.rating.toFixed(1)} ดาว)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
               <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
-                    รีวิวจากผู้เช่าจริง
+                    รีวิวการเช่าสินค้านี้จากผู้เช่าคนอื่นๆ
                   </h2>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    ความเห็นจากผู้ใช้งานที่เคยเช่าอุปกรณ์ชิ้นนี้
+                    ความคิดเห็นและคะแนนจากผู้เช่าที่เคยเช่าอุปกรณ์ชิ้นนี้จริง
                   </p>
                 </div>
                 <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-1.5">
@@ -362,6 +437,7 @@ export default async function ProductDetailPage({
               ownerIsVerified={product.owner.isVerified}
               ownerRating={product.owner.rating}
               ownerReviewCount={product.owner.reviewCount}
+              productStatus={product.status}
             />
           </aside>
         </div>

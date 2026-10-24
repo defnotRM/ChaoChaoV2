@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { BadgeCheck, MapPin, Star } from "lucide-react";
 
 import type { Product } from "@/lib/types/product";
 import { PlaceholderImage, Rating, StatusChip } from "./designSystem";
@@ -68,6 +68,26 @@ export function ProductCard({
               <Rating value={listing.rating} count={listing.reviewCount} />
               <ListingStatus status={listing.status} />
             </div>
+            {listing.owner?.displayName && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span className="truncate font-medium text-slate-700">
+                  ผู้ให้เช่า: {listing.owner.displayName}
+                </span>
+                {listing.owner.isVerified && (
+                  <span
+                    className="inline-flex items-center gap-0.5 text-emerald-600 font-semibold"
+                    title="ผู้ให้เช่ายืนยันตัวตนแล้ว"
+                  >
+                    <BadgeCheck className="h-3.5 w-3.5" />
+                    ยืนยันตัวตน
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-0.5 text-slate-500">
+                  • <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  <span>{listing.owner.rating.toFixed(1)}</span>
+                </span>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap items-baseline gap-1">
               <span className="text-lg font-bold text-[#1b3554]">
                 {thb(listing.pricePerDay)}
@@ -113,6 +133,23 @@ export function ProductCard({
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <Rating value={listing.rating} count={listing.reviewCount} />
           </div>
+          {listing.owner?.displayName && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500">
+              <span className="truncate font-medium text-slate-600">
+                {listing.owner.displayName}
+              </span>
+              {listing.owner.isVerified && (
+                <BadgeCheck
+                  className="h-3.5 w-3.5 shrink-0 text-emerald-600"
+                  aria-label="ผู้ให้เช่ายืนยันตัวตนแล้ว"
+                />
+              )}
+              <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-slate-500">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                <span>{listing.owner.rating.toFixed(1)}</span>
+              </span>
+            </div>
+          )}
           <div className="mt-2 flex items-baseline gap-1 border-t border-slate-200 pt-2">
             <span className="text-lg font-bold text-[#1b3554]">
               {thb(listing.pricePerDay)}

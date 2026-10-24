@@ -17,6 +17,8 @@ import {
   Loader2,
   User,
   Layers,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { EmptyState } from '@/components/StateHandling';
 
@@ -75,6 +77,7 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
     estimatedIncome: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
 
   const loadData = useCallback(
     async (silent = false) => {
@@ -109,6 +112,30 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
     },
     [userId]
   );
+
+  const handleToggleHideItem = async (item: LenderItem) => {
+    const nextStatus = item.status === 'inactive' ? 'available' : 'inactive';
+    setTogglingItemId(item.item_id);
+    try {
+      const res = await fetch(`/api/products/${item.item_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.item_id === item.item_id ? { ...it, status: nextStatus } : it
+          )
+        );
+        await loadData(true);
+      }
+    } catch (err) {
+      console.error('Failed to toggle item visibility:', err);
+    } finally {
+      setTogglingItemId(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +190,12 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
           label: 'ซ่อมบำรุง',
           className: 'bg-amber-500/15 text-amber-800 border-amber-200',
           dot: 'bg-amber-500',
+        };
+      case 'inactive':
+        return {
+          label: 'ซ่อนสินค้าอยู่',
+          className: 'bg-slate-100 text-slate-600 border-slate-200',
+          dot: 'bg-slate-400',
         };
       default:
         return {
@@ -397,7 +430,7 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">สินค้าที่คุณลงประกาศไว้</h2>
-              <p className="text-xs text-slate-500">จัดการข้อมูล แก้ไขราคา และสถานะความพร้อมให้เช่า</p>
+              <p className="text-xs text-slate-500">จัดการข้อมูล แก้ไขราคา และซ่อนหรือเปิดแสดงสถานะสินค้า</p>
             </div>
           </div>
 
@@ -462,7 +495,7 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
                     </div>
                   </div>
 
-                  <div className="mt-5 border-t border-slate-100 pt-4 flex items-center justify-between">
+                  <div className="mt-5 border-t border-slate-100 pt-4 flex items-center justify-between gap-2">
                     <div>
                       <span className="text-[10px] text-slate-400 block font-medium">ค่าเช่าต่อวัน</span>
                       <span className="text-sm font-bold text-[#1b3554]">
@@ -470,13 +503,46 @@ export function LenderDashboardView({ userId }: { userId?: string } = {}) {
                       </span>
                     </div>
 
-                    <Link
-                      href={`/lender/editmyproduct/${item.item_id}`}
-                      className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      <span>แก้ไข</span>
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHideItem(item)}
+                        disabled={
+                          togglingItemId === item.item_id ||
+                          item.status === 'rented' ||
+                          Boolean(item.isRentedOut)
+                        }
+                        title={
+                          item.status === 'rented' || item.isRentedOut
+                            ? 'ไม่สามารถซ่อนสินค้าระหว่างกำลังถูกเช่า'
+                            : item.status === 'inactive'
+                            ? 'เปิดแสดงสินค้าให้ผู้เช่าเห็น'
+                            : 'ซ่อนข้อมูลสินค้าจากการค้นหาของผู้เช่า'
+                        }
+                        className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          item.status === 'inactive'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {togglingItemId === item.item_id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : item.status === 'inactive' ? (
+                          <Eye className="h-3.5 w-3.5" />
+                        ) : (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        )}
+                        <span>{item.status === 'inactive' ? 'แสดงสินค้า' : 'ซ่อนสินค้า'}</span>
+                      </button>
+
+                      <Link
+                        href={`/lender/editmyproduct/${item.item_id}`}
+                        className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        <span>แก้ไข</span>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );
