@@ -383,9 +383,12 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
       }
 
       // ส่งคำขอเช่าสำเร็จ นำผู้เช่าไปจัดการสถานะต่อใน Dashboard
-      const targetUserId =
-        result.userId || "8a88d60a-e2cf-43a6-b4ea-baa9347bfee1";
-      router.push(`/dashboard/${targetUserId}/rent/${result.orderId}`);
+      const targetUserId = result.userId;
+      if (targetUserId) {
+        router.push(`/dashboard/${targetUserId}/rent/${result.orderId}`);
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err) {
       console.error("Submit booking error:", err);
       setShowTermsModal(false)

@@ -16,9 +16,12 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    let userId = requestedUserId || user?.id;
+    const userId = requestedUserId || user?.id;
     if (!userId) {
-      userId = "8a88d60a-e2cf-43a6-b4ea-baa9347bfee1"; // Default to romanlnw68
+      return NextResponse.json(
+        { message: "กรุณาระบุ userId หรือเข้าสู่ระบบ" },
+        { status: 401 }
+      );
     }
 
     // 1. ดึงรายการคำสั่งเช่าของผู้เช่าคนนี้

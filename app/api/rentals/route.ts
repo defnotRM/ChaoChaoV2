@@ -90,8 +90,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Default to romanlnw68 if not logged in
-    const renterUserId = user?.id || "8a88d60a-e2cf-43a6-b4ea-baa9347bfee1";
+    if (!user?.id) {
+      return NextResponse.json(
+        { message: "กรุณาเข้าสู่ระบบก่อนทำการเช่าสินค้า" },
+        { status: 401 }
+      );
+    }
+    const renterUserId = user.id;
 
     // 2) ตรวจสินค้ามีจริงและพร้อมให้เช่า
     const { data: item, error: itemError } = await admin
