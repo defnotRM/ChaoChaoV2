@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       `
         order_id, user_id, item_id, meetup_location, return_location,
         start_date, end_date, meetup_time, return_time, rental_fee, deposit, total_paid,
-        fee, net_income, status, created_at, updated_at
+        fee, net_income, status, created_at, updated_at, cancel_reason, cancel_reason_image_url
       `
     )
     .eq("order_id", id)
@@ -36,19 +36,42 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return apiError("ไม่พบรายการเช่านี้", 404);
   }
 
-  const [{ data: item }, { data: itemImages }, { data: payments }, { data: evidence }] = await Promise.all([
+  const [
+    { data: item },
+    { data: itemImages },
+    { data: payments },
+    { data: evidence },
+    { data: reports },
+  ] = await Promise.all([
     order.item_id
-      ? admin.from("item").select("item_id, item_name, user_id, rental_fee_per_day, deposit").eq("item_id", order.item_id).maybeSingle()
+      ? admin
+          .from("item")
+          .select("item_id, item_name, user_id, rental_fee_per_day, deposit")
+          .eq("item_id", order.item_id)
+          .maybeSingle()
       : { data: null },
     order.item_id
-      ? admin.from("itemimage").select("image_url, is_primary").eq("item_id", order.item_id)
+      ? admin
+          .from("itemimage")
+          .select("image_url, is_primary")
+          .eq("item_id", order.item_id)
       : { data: [] },
-    admin.from("payment").select("payment_id, amount, status, slip_image_url, date").eq("order_id", id),
+    admin
+      .from("payment")
+      .select("payment_id, amount, status, slip_image_url, date")
+      .eq("order_id", id),
     admin
       .from("rentalevidenceimage")
       .select("evidence_id, evidence_type, image_url, created_at, uploaded_by")
       .eq("order_id", id)
       .order("created_at", { ascending: true }),
+    admin
+      .from("rentalreport")
+      .select(
+        "report_id, description, verdict, status, created_at, rentalreportimage(image_url)"
+      )
+      .eq("order_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const fullData = {
@@ -56,6 +79,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     item: item ? { ...item, itemimage: itemImages || [] } : null,
     payment: payments || [],
     evidence: evidence || [],
+    reports: reports || [],
   };
 
   return apiSuccess(fullData);

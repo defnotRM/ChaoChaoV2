@@ -86,6 +86,8 @@ export interface RentalOrder {
   status: RentalOrderStatus;
   created_at: string;
   updated_at: string;
+  cancel_reason?: string | null;
+  cancel_reason_image_url?: string | null;
 }
 
 export interface Payment {

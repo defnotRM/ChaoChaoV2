@@ -132,6 +132,11 @@ export async function POST(
       outcomeMessage = `ยกเลิกกะทันหันสำเร็จ ระบบได้คืนเงินประกัน 100% (${deposit.toLocaleString()} บาท) ให้แก่คุณ และโอนค่าเช่าหลังหักค่าธรรมเนียม (${netIncome.toLocaleString()} บาท) ให้แก่ผู้ให้เช่าเป็นค่าเสียโอกาส`;
     }
 
+    const nowIso = timeInfo.simulatedNowIso;
+    const cancelReason = isAdvance
+      ? "ผู้เช่ายกเลิกล่วงหน้า (> 2 วันก่อนวันนัดรับ)"
+      : "ผู้เช่ายกเลิกกะทันหัน (<= 2 วันก่อนวันนัดรับ)";
+
     // 4. บันทึกรายการคืนเงินในตาราง Payment
     if (renterRefundAmount > 0) {
       await admin.from("payment").insert({
@@ -139,7 +144,7 @@ export async function POST(
         user_id: user.id,
         amount: renterRefundAmount,
         status: "refunded",
-        date: new Date().toISOString(),
+        date: nowIso,
         transaction_ref: `REFUND-RENTER-CANCEL-${Date.now().toString().slice(-8)}`,
       });
     }
@@ -151,7 +156,8 @@ export async function POST(
         status: "cancelled",
         fee,
         net_income: netIncome,
-        updated_at: new Date().toISOString(),
+        cancel_reason: cancelReason,
+        updated_at: nowIso,
       })
       .eq("order_id", orderId)
       .select()

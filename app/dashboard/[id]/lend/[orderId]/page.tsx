@@ -19,7 +19,7 @@ export default async function LenderOrderDetailPage({
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
-      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, meetup_time, return_time, rental_fee, deposit, total_paid, fee, net_income, status, created_at, updated_at"
+      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, meetup_time, return_time, rental_fee, deposit, total_paid, fee, net_income, status, created_at, updated_at, cancel_reason, cancel_reason_image_url"
     )
     .eq("order_id", orderId)
     .maybeSingle();
@@ -28,8 +28,17 @@ export default async function LenderOrderDetailPage({
     notFound();
   }
 
-  // 2. ดึงข้อมูลสินค้า, รูปสินค้า, ผู้เช่า, เบอร์โทรผู้เช่า, การชำระเงิน, รูปหลักฐาน, และรีวิว
-  const [itemRes, imageRes, renterRes, phoneRes, paymentsRes, evidenceRes, reviewRes] = await Promise.all([
+  // 2. ดึงข้อมูลสินค้า, รูปสินค้า, ผู้เช่า, เบอร์โทรผู้เช่า, การชำระเงิน, รูปหลักฐาน, รีวิว, และรายงาน
+  const [
+    itemRes,
+    imageRes,
+    renterRes,
+    phoneRes,
+    paymentsRes,
+    evidenceRes,
+    reviewRes,
+    reportRes,
+  ] = await Promise.all([
     admin
       .from("item")
       .select("item_id, item_name, rental_fee_per_day, deposit, user_id")
@@ -63,6 +72,13 @@ export default async function LenderOrderDetailPage({
       .select("review_id, order_id, rating, comment, created_at, updated_at")
       .eq("order_id", orderId)
       .maybeSingle(),
+    admin
+      .from("rentalreport")
+      .select(
+        "report_id, description, verdict, status, created_at, rentalreportimage(image_url)"
+      )
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false }),
   ]);
 
   const item = itemRes.data;
@@ -154,6 +170,34 @@ export default async function LenderOrderDetailPage({
       }
     : null;
 
+  const reportList = (reportRes?.data || []) as any[];
+  const lenderCancelReport = reportList.find((r) =>
+    r.description?.includes("[ผู้ให้เช่ายกเลิกคำสั่งเช่า]")
+  ) || reportList[0];
+
+  const cancellationReport = lenderCancelReport
+    ? {
+        reason:
+          lenderCancelReport.description?.replace(
+            /^\[ผู้ให้เช่ายกเลิกคำสั่งเช่า\]:\s*/,
+            ""
+          ) || order.cancel_reason,
+        images:
+          (lenderCancelReport.rentalreportimage as any[])?.map(
+            (img: any) => img.image_url
+          ) || (order.cancel_reason_image_url ? [order.cancel_reason_image_url] : []),
+        verdict: lenderCancelReport.verdict,
+        createdAt: lenderCancelReport.created_at,
+      }
+    : order.cancel_reason
+      ? {
+          reason: order.cancel_reason,
+          images: order.cancel_reason_image_url ? [order.cancel_reason_image_url] : [],
+          verdict: null,
+          createdAt: order.updated_at,
+        }
+      : null;
+
   const data: LendOrderData = {
     order: {
       order_id: order.order_id,
@@ -173,7 +217,10 @@ export default async function LenderOrderDetailPage({
       status: order.status,
       created_at: order.created_at,
       updated_at: order.updated_at,
+      cancel_reason: order.cancel_reason,
+      cancel_reason_image_url: order.cancel_reason_image_url,
     },
+    cancellationReport,
     item: {
       id: item.item_id,
       name: item.item_name,

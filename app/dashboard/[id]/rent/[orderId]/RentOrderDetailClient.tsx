@@ -63,7 +63,15 @@ export interface RentOrderDetailData {
     status: string;
     created_at: string;
     updated_at: string;
+    cancel_reason?: string | null;
+    cancel_reason_image_url?: string | null;
   };
+  cancellationReport?: {
+    reason: string;
+    images: string[];
+    verdict?: string | null;
+    createdAt?: string;
+  } | null;
   item: {
     id: string;
     name: string;
@@ -195,7 +203,7 @@ export default function RentOrderDetailClient({
   timeouts?: any;
 }) {
   const router = useRouter();
-  const { order, item, owner, renter } = data;
+  const { order, item, owner, renter, cancellationReport } = data;
   const myAccountName =
     renter?.username || renter?.fullName || "ผู้เช่า";
   const myAvatarUrl = renter?.avatarUrl || null;
@@ -705,6 +713,41 @@ export default function RentOrderDetailClient({
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
                       ตามเงื่อนไข FR-28 กรณีที่ 3: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) รวม {thb.format(deposit + rentalFee * 0.2)} ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
                     </p>
+                  )}
+                  {cancellationReport && (
+                    <div className="rounded-xl border border-rose-200 bg-white p-3.5 shadow-2xs space-y-2 mt-2">
+                      <div className="flex items-center gap-2 font-semibold text-rose-900 text-xs">
+                        <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                        <span>เหตุผลและหลักฐานการยกเลิก:</span>
+                      </div>
+                      <p className="text-xs text-slate-700 bg-rose-50/50 rounded-lg p-2.5 border border-rose-100 whitespace-pre-wrap">
+                        {cancellationReport.reason}
+                      </p>
+                      {cancellationReport.images && cancellationReport.images.length > 0 && (
+                        <div>
+                          <p className="text-[11px] font-medium text-slate-500 mb-1.5">
+                            รูปภาพหลักฐานประกอบ ({cancellationReport.images.length} รูป):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {cancellationReport.images.map((imgUrl, idx) => (
+                              <a
+                                key={idx}
+                                href={imgUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group relative h-20 w-20 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 hover:border-rose-400 transition"
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt={`หลักฐานการยกเลิกรูปที่ ${idx + 1}`}
+                                  className="h-full w-full object-cover group-hover:scale-105 transition duration-200"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (

@@ -171,24 +171,28 @@ export async function POST(
       }
     }
 
+    const nowIso = timeInfo.simulatedNowIso;
+
     // 5. บันทึกรายการคืนเงินเต็มจำนวน (100%) ให้แก่ผู้เช่า
     await admin.from("payment").insert({
       order_id: orderId,
       user_id: order.user_id,
       amount: totalPaid,
       status: "refunded",
-      date: new Date().toISOString(),
+      date: nowIso,
       transaction_ref: `REFUND-LENDER-CANCEL-${Date.now().toString().slice(-8)}`,
     });
 
-    // 6. อัปเดตสถานะคำสั่งเช่าเป็น cancelled
+    // 6. อัปเดตสถานะคำสั่งเช่าเป็น cancelled พร้อมเก็บเหตุผลและรูปหลักฐานลง rentalorder โดยตรง
     const { data: updatedOrder, error: updateError } = await admin
       .from("rentalorder")
       .update({
         status: "cancelled",
         fee: 0,
         net_income: 0,
-        updated_at: new Date().toISOString(),
+        cancel_reason: reason,
+        cancel_reason_image_url: uploadedUrls.length > 0 ? uploadedUrls[0] : null,
+        updated_at: nowIso,
       })
       .eq("order_id", orderId)
       .select()
