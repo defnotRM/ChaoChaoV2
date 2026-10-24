@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   images: {
+    localPatterns: [
+      {
+        pathname: "/api/**",
+      },
+    ],
     remotePatterns: [
       {
         protocol: "https",

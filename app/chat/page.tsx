@@ -487,10 +487,7 @@ function ChatContent() {
                             fill
                             sizes="56px"
                             className="object-cover"
-                            unoptimized={
-                              room.order.itemImageUrl.startsWith("data:") ||
-                              room.order.itemImageUrl.startsWith("blob:")
-                            }
+                            unoptimized={true}
                           />
                         ) : (
                           <Package className="h-6 w-6 text-slate-400" />
@@ -506,10 +503,7 @@ function ChatContent() {
                             fill
                             sizes="24px"
                             className="object-cover"
-                            unoptimized={
-                              room.partner.avatarUrl.startsWith("data:") ||
-                              room.partner.avatarUrl.startsWith("blob:")
-                            }
+                            unoptimized={true}
                           />
                         ) : (
                           <span className="text-[10px] font-bold text-slate-600">
@@ -596,10 +590,7 @@ function ChatContent() {
                         fill
                         sizes="48px"
                         className="object-cover"
-                        unoptimized={
-                          activeRoom.order.itemImageUrl.startsWith("data:") ||
-                          activeRoom.order.itemImageUrl.startsWith("blob:")
-                        }
+                        unoptimized={true}
                       />
                     ) : (
                       <Package className="h-6 w-6 text-slate-400" />
@@ -701,10 +692,7 @@ function ChatContent() {
                           fill
                           sizes="48px"
                           className="object-cover"
-                          unoptimized={
-                            activeRoom.order.itemImageUrl.startsWith("data:") ||
-                            activeRoom.order.itemImageUrl.startsWith("blob:")
-                          }
+                          unoptimized={true}
                         />
                       ) : (
                         <Package className="h-5 w-5 text-slate-400" />
@@ -776,10 +764,7 @@ function ChatContent() {
                                   fill
                                   sizes="28px"
                                   className="object-cover"
-                                  unoptimized={
-                                    activeRoom.partner.avatarUrl.startsWith("data:") ||
-                                    activeRoom.partner.avatarUrl.startsWith("blob:")
-                                  }
+                                  unoptimized={true}
                                 />
                               ) : (
                                 <span>
