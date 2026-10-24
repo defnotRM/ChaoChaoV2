@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminSimulatedClock from "@/components/admin/AdminSimulatedClock";
+import AdminCancellationsList, {
+  type CancelledOrderItem,
+} from "@/components/admin/AdminCancellationsList";
 import {
   TrendingUp,
   Scale,
@@ -34,6 +37,8 @@ export default async function AdminDashboardPage() {
     { count: pendingDisputesCount },
     { data: recentDisputes },
     { data: recentKycUsers },
+    { data: cancelledOrders },
+    { data: cancellationReports },
   ] = await Promise.all([
     admin
       .from("rentalorder")
@@ -85,6 +90,58 @@ export default async function AdminDashboardPage() {
       .eq("identity_verification_status", "pending")
       .order("created_at", { ascending: false })
       .limit(4),
+    admin
+      .from("rentalorder")
+      .select(
+        `
+        order_id,
+        rental_fee,
+        deposit,
+        total_paid,
+        cancel_reason,
+        cancel_reason_image_url,
+        updated_at,
+        item:item_id (
+          item_name,
+          lender:user_id ( username )
+        ),
+        renter:user_id ( username )
+      `
+      )
+      .eq("status", "cancelled")
+      .not("cancel_reason", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(6),
+    admin
+      .from("rentalreport")
+      .select(
+        `
+        report_id,
+        order_id,
+        description,
+        verdict,
+        status,
+        created_at,
+        rentalreportimage ( image_url ),
+        reporter:useraccount!rentalreport_reporter_id_fkey ( username ),
+        reported_user:useraccount!rentalreport_reported_user_id_fkey ( username ),
+        rentalorder:order_id (
+          order_id,
+          rental_fee,
+          deposit,
+          total_paid,
+          cancel_reason,
+          cancel_reason_image_url,
+          updated_at,
+          item:item_id (
+            item_name
+          )
+        )
+      `
+      )
+      .like("description", "[ผู้ให้เช่ายกเลิกคำสั่งเช่า]%")
+      .order("created_at", { ascending: false })
+      .limit(6),
   ]);
 
   const totalRevenue = (feeOrders || []).reduce((sum, order) => {
@@ -99,6 +156,61 @@ export default async function AdminDashboardPage() {
       : 0;
 
   const pendingKycTotal = (pendingIdCount || 0) + (pendingBankCount || 0);
+
+  // รวบรวมข้อมูลการยกเลิกคำสั่งเช่าพร้อมรูปหลักฐาน (FR-35)
+  const cancellationsList: CancelledOrderItem[] = [];
+  const seenOrderIds = new Set<string>();
+
+  for (const rep of (cancellationReports || []) as any[]) {
+    const ord = rep.rentalorder;
+    const orderId = rep.order_id || ord?.order_id;
+    if (!orderId) continue;
+    seenOrderIds.add(orderId);
+
+    const images = (rep.rentalreportimage || []).map((img: any) => img.image_url);
+    if (images.length === 0 && ord?.cancel_reason_image_url) {
+      images.push(ord.cancel_reason_image_url);
+    }
+
+    cancellationsList.push({
+      order_id: orderId,
+      item_name: ord?.item?.item_name || "สินค้าเช่า",
+      lender_name: rep.reporter?.username || "ผู้ให้เช่า",
+      renter_name: rep.reported_user?.username || "ผู้เช่า",
+      total_paid: Number(ord?.total_paid) || 0,
+      rental_fee: Number(ord?.rental_fee) || 0,
+      deposit: Number(ord?.deposit) || 0,
+      cancel_reason:
+        rep.description?.replace(/^\[ผู้ให้เช่ายกเลิกคำสั่งเช่า\]:\s*/, "") ||
+        ord?.cancel_reason ||
+        "-",
+      images,
+      updated_at: rep.created_at || ord?.updated_at || new Date().toISOString(),
+    });
+  }
+
+  for (const ord of (cancelledOrders || []) as any[]) {
+    if (seenOrderIds.has(ord.order_id)) continue;
+    seenOrderIds.add(ord.order_id);
+
+    const lenderObj = Array.isArray(ord.item?.lender)
+      ? ord.item?.lender[0]
+      : ord.item?.lender;
+    const renterObj = Array.isArray(ord.renter) ? ord.renter[0] : ord.renter;
+
+    cancellationsList.push({
+      order_id: ord.order_id,
+      item_name: ord.item?.item_name || "สินค้าเช่า",
+      lender_name: lenderObj?.username || "ผู้ให้เช่า",
+      renter_name: renterObj?.username || "ผู้เช่า",
+      total_paid: Number(ord.total_paid) || 0,
+      rental_fee: Number(ord.rental_fee) || 0,
+      deposit: Number(ord.deposit) || 0,
+      cancel_reason: ord.cancel_reason || "-",
+      images: ord.cancel_reason_image_url ? [ord.cancel_reason_image_url] : [],
+      updated_at: ord.updated_at || new Date().toISOString(),
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -364,6 +476,9 @@ export default async function AdminDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ส่วนแสดงรายการยกเลิกคำสั่งเช่าพร้อมรูปหลักฐาน (FR-35) */}
+      <AdminCancellationsList cancellations={cancellationsList} />
     </div>
   );
 }
