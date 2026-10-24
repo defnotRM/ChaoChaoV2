@@ -27,6 +27,8 @@ import {
   ExternalLink,
   X,
   Edit3,
+  Mail,
+  PlusCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -41,6 +43,9 @@ export default function ProfilePage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [username, setUsername] = useState("");
+  const [firstname, setFirstname] = useState("");
+  const [lastname, setLastname] = useState("");
+  const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [phone1, setPhone1] = useState("");
   const [phone2, setPhone2] = useState("");
@@ -78,6 +83,10 @@ export default function ProfilePage() {
 
   // KYC Modal State
   const [showKycModal, setShowKycModal] = useState(false);
+  const [kycForLenderUpgrade, setKycForLenderUpgrade] = useState(false);
+  const [addingRole, setAddingRole] = useState(false);
+  const [roleUpgradeNotice, setRoleUpgradeNotice] = useState<string | null>(null);
+  const [roleUpgradeError, setRoleUpgradeError] = useState<string | null>(null);
   const [kycNationalId, setKycNationalId] = useState("");
   const [kycBankName, setKycBankName] = useState("");
   const [kycAccountNumber, setKycAccountNumber] = useState("");
@@ -131,6 +140,9 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok && data.user) {
         setUsername(data.user.username || "");
+        setFirstname(data.user.firstname || "");
+        setLastname(data.user.lastname || "");
+        setEmail(data.user.email || "");
         setBio(data.user.bio || "");
         setAvatarUrl(data.user.avatarUrl || "");
         setBannerUrl(data.user.bannerUrl || "");
@@ -325,7 +337,7 @@ export default function ProfilePage() {
     }
   };
 
-  // 1. Save ONLY Username, Bio & Phones
+  // 1. Save ONLY Username, Personal Info, Bio & Phones
   const handleSaveGeneralInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
@@ -343,6 +355,11 @@ export default function ProfilePage() {
 
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       setGeneralError("ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _");
+      return;
+    }
+
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setGeneralError("รูปแบบอีเมลไม่ถูกต้อง");
       return;
     }
 
@@ -373,6 +390,9 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: username.trim(),
+          firstname: firstname.trim(),
+          lastname: lastname.trim(),
+          email: email.trim(),
           bio: bio.trim(),
           phones,
         }),
@@ -385,7 +405,7 @@ export default function ProfilePage() {
         return;
       }
 
-      setGeneralSuccess("บันทึกข้อมูลทั่วไปและเบอร์โทรศัพท์เรียบร้อยแล้ว!");
+      setGeneralSuccess("บันทึกข้อมูลส่วนตัวและเบอร์โทรศัพท์เรียบร้อยแล้ว!");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-state-change"));
       }
@@ -506,7 +526,8 @@ export default function ProfilePage() {
     return `${acc.slice(0, 3)}-X-XX${acc.slice(-3)}`;
   };
 
-  const handleOpenKycModal = () => {
+  const handleOpenKycModal = (forLenderUpgrade = false) => {
+    setKycForLenderUpgrade(forLenderUpgrade);
     setKycNationalId(nationalId || "");
     setKycBankName(bankAccount?.bankName || "");
     setKycAccountNumber(bankAccount?.accountNumber || "");
@@ -515,6 +536,59 @@ export default function ProfilePage() {
     setKycSelfieFile(null);
     setKycModalError(null);
     setShowKycModal(true);
+  };
+
+  // สมัครบทบาทเพิ่ม (FR-02 / FR-06)
+  const handleAddRole = async (targetRole: "renter" | "lender") => {
+    setRoleUpgradeError(null);
+    setRoleUpgradeNotice(null);
+    setAddingRole(true);
+
+    try {
+      const res = await fetch("/api/profile/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetRole }),
+      });
+
+      const result = await res.json();
+
+      if (res.status === 400 && result.code === "KYC_MISSING") {
+        handleOpenKycModal(true);
+        setKycModalError(
+          result.message ||
+            "กรุณาลงทะเบียนรูปถ่ายบัตรประชาชน รูปถ่ายบุคคลคู่กับบัตรประชาชน และบัญชีธนาคารให้ครบถ้วน เพื่อส่งให้แอดมินตรวจสอบก่อนสมัครบทบาทผู้ให้เช่า"
+        );
+        return;
+      }
+
+      if (res.status === 202 && result.code === "KYC_PENDING_ADMIN") {
+        setRoleUpgradeNotice(
+          result.message ||
+            "ข้อมูลยืนยันตัวตนและบัญชีธนาคารของคุณอยู่ระหว่างรอแอดมินตรวจสอบ เมื่ออนุมัติแล้วระบบจะเปิดบทบาทผู้ให้เช่าให้"
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        setRoleUpgradeError(result.message || "ไม่สามารถสมัครบทบาทเพิ่มได้");
+        return;
+      }
+
+      if (Array.isArray(result.roles)) {
+        setRoles(result.roles);
+      }
+      setRoleUpgradeNotice(result.message || "สมัครบทบาทเพิ่มเรียบร้อยแล้ว!");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth-state-change"));
+      }
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setRoleUpgradeError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
+    } finally {
+      setAddingRole(false);
+    }
   };
 
   const handleSubmitKyc = async (e: React.FormEvent) => {
@@ -531,6 +605,25 @@ export default function ProfilePage() {
       return;
     }
 
+    if (kycForLenderUpgrade) {
+      if (!idCardUrl && !kycIdCardFile) {
+        setKycModalError("กรุณาอัปโหลดรูปถ่ายบัตรประชาชน");
+        return;
+      }
+      if (!idCardSelfieUrl && !kycSelfieFile) {
+        setKycModalError("กรุณาอัปโหลดรูปถ่ายบุคคลคู่กับบัตรประชาชน");
+        return;
+      }
+      if (
+        !kycBankName.trim() ||
+        !kycAccountNumber.trim() ||
+        !kycAccountName.trim()
+      ) {
+        setKycModalError("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน");
+        return;
+      }
+    }
+
     setKycSubmitting(true);
     try {
       const formData = new FormData();
@@ -540,6 +633,7 @@ export default function ProfilePage() {
       if (kycAccountName) formData.append("accountName", kycAccountName);
       if (kycIdCardFile) formData.append("idCard", kycIdCardFile);
       if (kycSelfieFile) formData.append("selfie", kycSelfieFile);
+      if (kycForLenderUpgrade) formData.append("requestLenderRole", "true");
 
       const res = await fetch("/api/profile/kyc", {
         method: "POST",
@@ -552,8 +646,17 @@ export default function ProfilePage() {
         return;
       }
 
-      setKycSuccessNotice("ส่งข้อมูลยืนยันตัวตนเรียบร้อยแล้ว รอการตรวจสอบจากผู้ดูแลระบบ");
+      setKycSuccessNotice(
+        result.message ||
+          "ส่งข้อมูลยืนยันตัวตนเรียบร้อยแล้ว รอการตรวจสอบจากผู้ดูแลระบบ"
+      );
+      if (kycForLenderUpgrade) {
+        setRoleUpgradeNotice(
+          "ส่งข้อมูลรูปถ่ายบัตรประชาชน รูปคู่บัตร และบัญชีธนาคารเรียบร้อยแล้ว รอแอดมินตรวจสอบตัวตนก่อนเปิดใช้งานบทบาทผู้ให้เช่า"
+        );
+      }
       setShowKycModal(false);
+      setKycForLenderUpgrade(false);
       await fetchProfile();
     } catch (err) {
       console.error(err);
@@ -691,7 +794,7 @@ export default function ProfilePage() {
                       {username || "ผู้ใช้งาน"}
                     </h1>
                     
-                    {/* Role Badges */}
+                    {/* Role Badges & Add Role Buttons (FR-02 / FR-06) */}
                     {(() => {
                       const expandedRoles: string[] = [];
                       if (roles && roles.length > 0) {
@@ -708,28 +811,74 @@ export default function ProfilePage() {
                         expandedRoles.push("renter");
                       }
 
-                      return expandedRoles.map((r) => {
-                        const isLender = r === "lender" || r === "ผู้ให้เช่า";
-                        const isRenter = r === "renter" || r === "ผู้เช่า";
-                        const isAdmin = r === "admin" || r === "ผู้ดูแลระบบ";
+                      const hasRenter = expandedRoles.some(
+                        (r) => r === "renter" || r === "ผู้เช่า"
+                      );
+                      const hasLender = expandedRoles.some(
+                        (r) => r === "lender" || r === "ผู้ให้เช่า"
+                      );
+                      const isAdminUser = expandedRoles.some(
+                        (r) => r === "admin" || r === "ผู้ดูแลระบบ"
+                      );
 
-                        const label = isAdmin
-                          ? "ผู้ดูแลระบบ"
-                          : isLender
-                          ? "ผู้ให้เช่า"
-                          : isRenter
-                          ? "ผู้เช่า"
-                          : r;
+                      return (
+                        <>
+                          {expandedRoles.map((r) => {
+                            const isLender = r === "lender" || r === "ผู้ให้เช่า";
+                            const isRenter = r === "renter" || r === "ผู้เช่า";
+                            const isAdmin = r === "admin" || r === "ผู้ดูแลระบบ";
 
-                        return (
-                          <span
-                            key={r}
-                            className="inline-flex items-center rounded-full border border-[#80aad3]/40 bg-[#c0e6fd]/40 px-3 py-0.5 text-xs font-semibold text-[#1b3554] shadow-2xs"
-                          >
-                            {label}
-                          </span>
-                        );
-                      });
+                            const label = isAdmin
+                              ? "ผู้ดูแลระบบ"
+                              : isLender
+                              ? "ผู้ให้เช่า"
+                              : isRenter
+                              ? "ผู้เช่า"
+                              : r;
+
+                            return (
+                              <span
+                                key={r}
+                                className="inline-flex items-center rounded-full border border-[#80aad3]/40 bg-[#c0e6fd]/40 px-3 py-0.5 text-xs font-semibold text-[#1b3554] shadow-2xs"
+                              >
+                                {label}
+                              </span>
+                            );
+                          })}
+
+                          {!isAdminUser && !hasRenter && (
+                            <button
+                              type="button"
+                              disabled={addingRole}
+                              onClick={() => handleAddRole("renter")}
+                              className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-0.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              <PlusCircle className="h-3.5 w-3.5" />
+                              <span>
+                                {addingRole
+                                  ? "กำลังดำเนินการ..."
+                                  : "สมัครบทบาทผู้เช่าเพิ่ม"}
+                              </span>
+                            </button>
+                          )}
+
+                          {!isAdminUser && !hasLender && (
+                            <button
+                              type="button"
+                              disabled={addingRole}
+                              onClick={() => handleAddRole("lender")}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#3f6593]/40 bg-[#1b3554] px-3 py-0.5 text-xs font-semibold text-white transition hover:bg-[#3f6593] disabled:opacity-50"
+                            >
+                              <PlusCircle className="h-3.5 w-3.5" />
+                              <span>
+                                {addingRole
+                                  ? "กำลังตรวจสอบ..."
+                                  : "สมัครบทบาทผู้ให้เช่าเพิ่ม"}
+                              </span>
+                            </button>
+                          )}
+                        </>
+                      );
                     })()}
                   </div>
 
@@ -772,8 +921,8 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Banner / Avatar Notices */}
-            {(avatarNotice || bannerNotice) && (
+            {/* Banner / Avatar / Role Upgrade Notices */}
+            {(avatarNotice || bannerNotice || roleUpgradeNotice || roleUpgradeError) && (
               <div className="mt-4 space-y-2">
                 {avatarNotice && (
                   <div className="rounded-xl bg-sky-50 p-2.5 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
@@ -783,6 +932,18 @@ export default function ProfilePage() {
                 {bannerNotice && (
                   <div className="rounded-xl bg-indigo-50 p-2.5 text-xs font-medium text-indigo-800 ring-1 ring-indigo-200">
                     {bannerNotice}
+                  </div>
+                )}
+                {roleUpgradeNotice && (
+                  <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{roleUpgradeNotice}</span>
+                  </div>
+                )}
+                {roleUpgradeError && (
+                  <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700 ring-1 ring-red-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <span>{roleUpgradeError}</span>
                   </div>
                 )}
               </div>
@@ -800,10 +961,10 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-lg font-bold text-[#000f22]">
-                ข้อมูลทั่วไป (ชื่อผู้ใช้, ประวัติย่อ และเบอร์โทรศัพท์)
+                ข้อมูลส่วนตัวและข้อมูลทั่วไป (ชื่อ-นามสกุล, ชื่อผู้ใช้, อีเมล, เบอร์โทร, ประวัติย่อ)
               </h2>
               <p className="mt-0.5 text-xs text-[#5b86b6]">
-                แก้ไขชื่อผู้ใช้ ประวัติย่อ และเบอร์โทรติดต่อ โดยไม่ต้องเปลี่ยนรหัสผ่าน
+                แก้ไขข้อมูลส่วนตัว ชื่อผู้ใช้ อีเมล ประวัติย่อ และเบอร์โทรติดต่อ โดยไม่ต้องเปลี่ยนรหัสผ่าน
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c0e6fd]/30 text-[#1b3554]">
@@ -827,24 +988,99 @@ export default function ProfilePage() {
           )}
 
           <div className="mt-6 space-y-5">
-            {/* Username */}
-            <div>
-              <label
-                htmlFor="username"
-                className="mb-1.5 block text-sm font-medium text-[#1b3554]"
-              >
-                ชื่อผู้ใช้ (Username)
-              </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="กรอกชื่อผู้ใช้..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
-                />
+            {/* ชื่อ-นามสกุล (FR-09) */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="firstname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  ชื่อจริง
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="firstname"
+                    type="text"
+                    autoComplete="given-name"
+                    value={firstname}
+                    onChange={(e) => setFirstname(e.target.value)}
+                    placeholder="กรอกชื่อจริง..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="lastname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  นามสกุล
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="lastname"
+                    type="text"
+                    autoComplete="family-name"
+                    value={lastname}
+                    onChange={(e) => setLastname(e.target.value)}
+                    placeholder="กรอกนามสกุล..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Username & Email */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="username"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  ชื่อผู้ใช้ (Username)
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="กรอกชื่อผู้ใช้..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="email"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  อีเมล (Email)
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-4 text-sm text-[#000f22] outline-none transition focus:border-[#3f6593] focus:bg-white focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
               </div>
             </div>
 
@@ -978,7 +1214,7 @@ export default function ProfilePage() {
             </div>
             <button
               type="button"
-              onClick={handleOpenKycModal}
+              onClick={() => handleOpenKycModal(false)}
               className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-slate-50 active:scale-95"
             >
               <Edit3 className="h-3.5 w-3.5 text-[#3f6593]" />
@@ -1113,7 +1349,7 @@ export default function ProfilePage() {
                 <div className="mt-4 pt-3 border-t border-slate-200/60">
                   <button
                     type="button"
-                    onClick={handleOpenKycModal}
+                    onClick={() => handleOpenKycModal(false)}
                     className="w-full rounded-xl bg-gradient-to-r from-[#3f6593] to-[#1b3554] py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95"
                   >
                     {identityStatus === "rejected" ? "อัปโหลดเอกสารบัตรใหม่" : "ส่งเอกสารยืนยันตัวตน"}
@@ -1194,7 +1430,7 @@ export default function ProfilePage() {
               <div className="mt-4 pt-3 border-t border-slate-200/60">
                 <button
                   type="button"
-                  onClick={handleOpenKycModal}
+                  onClick={() => handleOpenKycModal(false)}
                   className="w-full rounded-xl border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 active:scale-95"
                 >
                   {bankAccount ? "แก้ไขข้อมูลบัญชีธนาคาร" : "เพิ่มบัญชีธนาคาร"}
@@ -1434,15 +1670,22 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-[#000f22]">
-                    ส่งข้อมูลยืนยันตัวตน & บัญชีรับเงิน
+                    {kycForLenderUpgrade
+                      ? "ลงทะเบียนข้อมูลเพิ่มเติมเพื่อสมัครบทบาทผู้ให้เช่า"
+                      : "ส่งข้อมูลยืนยันตัวตน & บัญชีรับเงิน"}
                   </h3>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    อัปเดตบัตรประชาชนและบัญชีธนาคารสำหรับรับเงินโอนค่าเช่า
+                    {kycForLenderUpgrade
+                      ? "กรุณาอัปโหลดรูปบัตรประชาชน รูปคู่บัตรประชาชน และข้อมูลบัญชีธนาคาร เพื่อให้แอดมินตรวจสอบตัวตนก่อนเปิดบทบาทผู้ให้เช่า"
+                      : "อัปเดตบัตรประชาชนและบัญชีธนาคาร (การแก้ไขบัญชีธนาคารจะต้องให้แอดมินตรวจสอบใหม่ทุกครั้ง)"}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowKycModal(false)}
+                  onClick={() => {
+                    setShowKycModal(false);
+                    setKycForLenderUpgrade(false);
+                  }}
                   className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                 >
                   <X className="h-5 w-5" />

@@ -13,18 +13,15 @@ import {
   AlertCircle,
   AlertTriangle,
   ShieldCheck,
-  Sparkles,
-  Zap,
-  CheckCircle2,
   Upload,
   Trash2,
   Camera,
   Landmark,
-  Image as ImageIcon,
+  Mail,
+  Phone,
 } from "lucide-react";
 import {
   registerSchema,
-  roleLabels,
   type RegisterFormData,
 } from "@/lib/validations/register";
 
@@ -44,6 +41,15 @@ export default function RegisterForm() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      firstname: "",
+      lastname: "",
+      username: "",
+      phone: "",
+      email: "",
+      password: "",
+      nationalId: "",
+    },
   });
 
   const selectedRole = watch("role");
@@ -66,14 +72,14 @@ export default function RegisterForm() {
     reader.onload = () => {
       const result = reader.result as string;
       setAvatarPreview(result);
-      setValue("avatarImageUrl", result);
+      setValue("avatarImageUrl", result, { shouldValidate: true });
     };
     reader.readAsDataURL(file);
   };
 
   const handleRemoveAvatar = () => {
     setAvatarPreview(null);
-    setValue("avatarImageUrl", undefined);
+    setValue("avatarImageUrl", undefined, { shouldValidate: true });
   };
 
   const handleIdCardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +99,7 @@ export default function RegisterForm() {
     reader.onload = () => {
       const result = reader.result as string;
       setIdCardPreview(result);
-      setValue("idCardImageUrl", result);
+      setValue("idCardImageUrl", result, { shouldValidate: true });
     };
     reader.readAsDataURL(file);
   };
@@ -115,19 +121,19 @@ export default function RegisterForm() {
     reader.onload = () => {
       const result = reader.result as string;
       setSelfiePreview(result);
-      setValue("idCardSelfieImageUrl", result);
+      setValue("idCardSelfieImageUrl", result, { shouldValidate: true });
     };
     reader.readAsDataURL(file);
   };
 
   const handleRemoveIdCard = () => {
     setIdCardPreview(null);
-    setValue("idCardImageUrl", undefined);
+    setValue("idCardImageUrl", undefined, { shouldValidate: true });
   };
 
   const handleRemoveSelfie = () => {
     setSelfiePreview(null);
-    setValue("idCardSelfieImageUrl", undefined);
+    setValue("idCardSelfieImageUrl", undefined, { shouldValidate: true });
   };
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -218,7 +224,7 @@ export default function RegisterForm() {
 
           <form
             onSubmit={handleSubmit(onSubmit)}
-            className="space-y-5"
+            className="space-y-4"
             noValidate
           >
             {/* Avatar Upload (Optional) */}
@@ -271,20 +277,87 @@ export default function RegisterForm() {
               </label>
             </div>
 
+            {/* ชื่อ-นามสกุล (FR-03 / FR-05) */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="firstname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  ชื่อจริง
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="firstname"
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="กรอกชื่อจริง..."
+                    {...register("firstname")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.firstname
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.firstname && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {errors.firstname.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="lastname"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  นามสกุล
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="lastname"
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="กรอกนามสกุล..."
+                    {...register("lastname")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.lastname
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.lastname && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {errors.lastname.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Username */}
             <div>
               <label
                 htmlFor="username"
                 className="mb-1.5 block text-sm font-medium text-[#1b3554]"
               >
-                ชื่อผู้ใช้
+                ชื่อผู้ใช้ (Username)
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
                 <input
                   id="username"
                   type="text"
-                  placeholder="กรอกชื่อผู้ใช้..."
+                  autoComplete="username"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  placeholder="กรอกชื่อผู้ใช้ (a-z, 0-9, _)"
                   {...register("username")}
                   className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
                     errors.username
@@ -301,6 +374,74 @@ export default function RegisterForm() {
               )}
             </div>
 
+            {/* เบอร์โทรศัพท์ & อีเมล (FR-03 / FR-05) */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="phone"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  เบอร์โทรศัพท์
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={10}
+                    placeholder="เช่น 0812345678"
+                    {...register("phone")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.phone
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.phone && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {errors.phone.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="email"
+                  className="mb-1.5 block text-sm font-medium text-[#1b3554]"
+                >
+                  อีเมล
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b86b6]" />
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    placeholder="name@example.com"
+                    {...register("email")}
+                    className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-3 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                      errors.email
+                        ? "border-red-500 focus:ring-red-100"
+                        : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                    }`}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Password */}
             <div>
               <label
@@ -314,7 +455,8 @@ export default function RegisterForm() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="รหัสผ่าน"
+                  autoComplete="new-password"
+                  placeholder="อย่างน้อย 8 ตัวอักษร (A-Z, a-z, 0-9)"
                   {...register("password")}
                   className={`w-full rounded-xl border-2 bg-[#c0e6fd]/10 py-3 pl-10 pr-11 text-sm text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
                     errors.password
@@ -402,7 +544,7 @@ export default function RegisterForm() {
                     ผู้ให้เช่า
                   </div>
                 </label>
-                
+
                 <label className="relative col-span-2 cursor-pointer">
                   <input
                     type="radio"
@@ -423,17 +565,17 @@ export default function RegisterForm() {
               )}
             </div>
 
-            {/* KYC Documents for Lenders */}
+            {/* KYC Documents for Lenders (FR-05) */}
             {isLenderRole && (
               <div className="space-y-4 rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-[#1b3554]" />
                   <div>
                     <h3 className="text-sm font-bold text-[#000f22]">
-                      เอกสารยืนยันตัวตนผู้ให้เช่า (KYC)
+                      เอกสารยืนยันตัวตนผู้ให้เช่า (KYC) *
                     </h3>
                     <p className="text-xs text-slate-500">
-                      รูปภาพจะถูกจัดเก็บใน Supabase Storage โฟลเดอร์ KYC อย่างปลอดภัย
+                      ข้อมูลจะถูกส่งให้แอดมินตรวจสอบตัวตนของผู้ให้เช่าอย่างปลอดภัย
                     </p>
                   </div>
                 </div>
@@ -441,7 +583,7 @@ export default function RegisterForm() {
                 {/* 1. รูปบัตรประชาชน */}
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1b3554]">
-                    1. ภาพถ่ายบัตรประชาชน (เห็นข้อมูลชัดเจน)
+                    1. ภาพถ่ายบัตรประชาชน (เห็นข้อมูลชัดเจน) *
                   </label>
                   {idCardPreview ? (
                     <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-2">
@@ -462,7 +604,11 @@ export default function RegisterForm() {
                   ) : (
                     <label
                       htmlFor="id-card-input"
-                      className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c0e6fd] bg-white/80 py-4 transition hover:border-[#3f6593] hover:bg-white"
+                      className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-white/80 py-4 transition hover:border-[#3f6593] hover:bg-white ${
+                        errors.idCardImageUrl
+                          ? "border-red-400"
+                          : "border-[#c0e6fd]"
+                      }`}
                     >
                       <Upload className="h-6 w-6 text-[#5b86b6]" />
                       <span className="mt-1 text-xs font-medium text-[#3f6593]">
@@ -480,12 +626,18 @@ export default function RegisterForm() {
                       />
                     </label>
                   )}
+                  {errors.idCardImageUrl && (
+                    <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      {errors.idCardImageUrl.message}
+                    </p>
+                  )}
                 </div>
 
                 {/* 2. รูปเซลฟี่คู่กับบัตรประชาชน */}
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1b3554]">
-                    2. ภาพถ่ายเซลฟี่คู่กับบัตรประชาชน
+                    2. ภาพถ่ายบุคคลคู่กับบัตรประชาชน *
                   </label>
                   {selfiePreview ? (
                     <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-2">
@@ -506,11 +658,15 @@ export default function RegisterForm() {
                   ) : (
                     <label
                       htmlFor="selfie-input"
-                      className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c0e6fd] bg-white/80 py-4 transition hover:border-[#3f6593] hover:bg-white"
+                      className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-white/80 py-4 transition hover:border-[#3f6593] hover:bg-white ${
+                        errors.idCardSelfieImageUrl
+                          ? "border-red-400"
+                          : "border-[#c0e6fd]"
+                      }`}
                     >
                       <Camera className="h-6 w-6 text-[#5b86b6]" />
                       <span className="mt-1 text-xs font-medium text-[#3f6593]">
-                        คลิกเพื่ออัปโหลดรูปเซลฟี่คู่กับบัตร
+                        คลิกเพื่ออัปโหลดรูปบุคคลคู่กับบัตรประชาชน
                       </span>
                       <span className="text-[10px] text-slate-400">
                         PNG, JPG หรือ WEBP (ไม่เกิน 10MB)
@@ -524,6 +680,12 @@ export default function RegisterForm() {
                       />
                     </label>
                   )}
+                  {errors.idCardSelfieImageUrl && (
+                    <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      {errors.idCardSelfieImageUrl.message}
+                    </p>
+                  )}
                 </div>
 
                 {/* 3. ข้อมูลบัญชีธนาคารสำหรับรับเงินโอนค่าเช่า */}
@@ -532,10 +694,10 @@ export default function RegisterForm() {
                     <Landmark className="h-4 w-4 text-[#1b3554]" />
                     <div>
                       <h4 className="text-xs font-bold text-[#000f22]">
-                        3. บัญชีธนาคาร (สำหรับรับเงินโอนค่าเช่า)
+                        3. บัญชีธนาคาร (สำหรับรับเงินโอนค่าเช่า) *
                       </h4>
                       <p className="text-[10px] text-slate-500">
-                        รายได้จากการปล่อยเช่าจะถูกโอนเข้าบัญชีนี้
+                        รายได้จากการปล่อยเช่าจะถูกโอนเข้าบัญชีนี้หลังแอดมินตรวจสอบ
                       </p>
                     </div>
                   </div>
@@ -544,12 +706,16 @@ export default function RegisterForm() {
                     {/* Bank Name */}
                     <div>
                       <label htmlFor="bankName" className="mb-1 block text-xs font-semibold text-[#1b3554]">
-                        ธนาคาร
+                        ธนาคาร *
                       </label>
                       <select
                         id="bankName"
                         {...register("bankName")}
-                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                        className={`w-full rounded-xl border-2 bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition focus:ring-2 ${
+                          errors.bankName
+                            ? "border-red-500 focus:ring-red-100"
+                            : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                        }`}
                       >
                         <option value="">-- เลือกธนาคาร --</option>
                         <option value="กสิกรไทย">ธนาคารกสิกรไทย (KBANK)</option>
@@ -563,12 +729,18 @@ export default function RegisterForm() {
                         <option value="ยูโอบี">ธนาคารยูโอบี (UOB)</option>
                         <option value="อื่นๆ">ธนาคารอื่นๆ</option>
                       </select>
+                      {errors.bankName && (
+                        <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {errors.bankName.message}
+                        </p>
+                      )}
                     </div>
 
                     {/* Account Number */}
                     <div>
                       <label htmlFor="accountNumber" className="mb-1 block text-xs font-semibold text-[#1b3554]">
-                        เลขที่บัญชี
+                        เลขที่บัญชี *
                       </label>
                       <input
                         id="accountNumber"
@@ -577,22 +749,42 @@ export default function RegisterForm() {
                         maxLength={15}
                         placeholder="กรอกเลขที่บัญชีธนาคาร (เฉพาะตัวเลข เช่น 1234567890)"
                         {...register("accountNumber")}
-                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                        className={`w-full rounded-xl border-2 bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                          errors.accountNumber
+                            ? "border-red-500 focus:ring-red-100"
+                            : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                        }`}
                       />
+                      {errors.accountNumber && (
+                        <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {errors.accountNumber.message}
+                        </p>
+                      )}
                     </div>
 
                     {/* Account Name */}
                     <div>
                       <label htmlFor="accountName" className="mb-1 block text-xs font-semibold text-[#1b3554]">
-                        ชื่อบัญชี (ตรงตามสมุดบัญชี)
+                        ชื่อบัญชี (ตรงตามสมุดบัญชี) *
                       </label>
                       <input
                         id="accountName"
                         type="text"
                         placeholder="เช่น นาย สมชาย ใจดี"
                         {...register("accountName")}
-                        className="w-full rounded-xl border-2 border-[#c0e6fd] bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                        className={`w-full rounded-xl border-2 bg-white py-2.5 px-3 text-xs text-[#000f22] outline-none transition placeholder:text-[#80aad3] focus:ring-2 ${
+                          errors.accountName
+                            ? "border-red-500 focus:ring-red-100"
+                            : "border-[#c0e6fd] focus:border-[#3f6593] focus:ring-[#c0e6fd]/50"
+                        }`}
                       />
+                      {errors.accountName && (
+                        <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {errors.accountName.message}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

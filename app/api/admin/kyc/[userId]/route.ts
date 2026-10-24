@@ -40,6 +40,55 @@ export async function PATCH(
 
     const admin = auth.admin;
 
+    async function tryAutoUpgradeLenderRole() {
+      try {
+        const [{ data: acc }, { data: bank }, { data: authUser }] =
+          await Promise.all([
+            admin
+              .from("useraccount")
+              .select("identity_verification_status")
+              .eq("user_id", userId)
+              .maybeSingle(),
+            admin
+              .from("bankaccount")
+              .select("verification_status")
+              .eq("user_id", userId)
+              .maybeSingle(),
+            admin.auth.admin.getUserById(userId),
+          ]);
+
+        if (
+          acc?.identity_verification_status === "verified" &&
+          bank?.verification_status === "verified" &&
+          authUser?.user?.user_metadata?.pending_lender_role_upgrade
+        ) {
+          const { data: lenderRole } = await admin
+            .from("role")
+            .select("role_id")
+            .eq("role_type", "lender")
+            .maybeSingle();
+
+          if (lenderRole) {
+            await admin
+              .from("user_role_assignment")
+              .upsert(
+                { user_id: userId, role_id: lenderRole.role_id },
+                { onConflict: "user_id,role_id" }
+              );
+            await admin.auth.admin.updateUserById(userId, {
+              user_metadata: {
+                ...(authUser.user.user_metadata || {}),
+                role: "both",
+                pending_lender_role_upgrade: false,
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Auto lender role upgrade check error:", err);
+      }
+    }
+
     if (target === "identity") {
       const { error: updateError } = await admin
         .from("useraccount")
@@ -75,6 +124,10 @@ export async function PATCH(
         });
       } catch (notifErr) {
         console.warn("Failed to create KYC notification:", notifErr);
+      }
+
+      if (status === "verified") {
+        await tryAutoUpgradeLenderRole();
       }
 
       return NextResponse.json({
@@ -124,6 +177,10 @@ export async function PATCH(
         });
       } catch (notifErr) {
         console.warn("Failed to create bank verification notification:", notifErr);
+      }
+
+      if (status === "verified") {
+        await tryAutoUpgradeLenderRole();
       }
 
       return NextResponse.json({

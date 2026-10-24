@@ -19,6 +19,10 @@ import {
   Send,
   ShieldCheck,
   Star,
+  AlertCircle,
+  Upload,
+  X,
+  PlusCircle,
 } from "lucide-react";
 
 import type { BookingDraft, BookingPageData, DateRange } from "./types";
@@ -313,20 +317,179 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     roles: string[];
   } | null>(null);
 
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          setCurrentUser(data.user || null);
-        }
-      } catch {
-        // ignore
+  // Renter KYC & Bank Account State (FR-04)
+  const [renterKyc, setRenterKyc] = useState<{
+    loaded: boolean;
+    nationalId: string;
+    idCardUrl: string | null;
+    idCardSelfieUrl: string | null;
+    identityVerificationStatus: string;
+    bankAccount: {
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
+      verificationStatus: string;
+    } | null;
+  }>({
+    loaded: false,
+    nationalId: "",
+    idCardUrl: null,
+    idCardSelfieUrl: null,
+    identityVerificationStatus: "unverified",
+    bankAccount: null,
+  });
+
+  const [showRenterKycModal, setShowRenterKycModal] = useState(false);
+  const [kycNationalId, setKycNationalId] = useState("");
+  const [kycBankName, setKycBankName] = useState("");
+  const [kycAccountNumber, setKycAccountNumber] = useState("");
+  const [kycAccountName, setKycAccountName] = useState("");
+  const [kycIdCardFile, setKycIdCardFile] = useState<File | null>(null);
+  const [kycSelfieFile, setKycSelfieFile] = useState<File | null>(null);
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [kycModalError, setKycModalError] = useState<string | null>(null);
+  const [kycSuccessNotice, setKycSuccessNotice] = useState<string | null>(null);
+  const [addingRenterRole, setAddingRenterRole] = useState(false);
+
+  async function refreshUserAndKyc() {
+    try {
+      const [meRes, profileRes] = await Promise.all([
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/profile", { cache: "no-store" }),
+      ]);
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        setCurrentUser(meData.user || null);
       }
+      if (profileRes.ok) {
+        const pData = await profileRes.json();
+        if (pData.user) {
+          setRenterKyc({
+            loaded: true,
+            nationalId: pData.user.nationalId || "",
+            idCardUrl: pData.user.idCardUrl || null,
+            idCardSelfieUrl: pData.user.idCardSelfieUrl || null,
+            identityVerificationStatus:
+              pData.user.identityVerificationStatus || "unverified",
+            bankAccount: pData.user.bankAccount || null,
+          });
+          setKycNationalId(pData.user.nationalId || "");
+          setKycBankName(pData.user.bankAccount?.bankName || "");
+          setKycAccountNumber(pData.user.bankAccount?.accountNumber || "");
+          setKycAccountName(pData.user.bankAccount?.accountName || "");
+        }
+      }
+    } catch {
+      // ignore
     }
-    loadUser();
+  }
+
+  useEffect(() => {
+    refreshUserAndKyc();
   }, []);
+
+  const hasAllRenterKycDocs = Boolean(
+    renterKyc.idCardUrl &&
+      renterKyc.idCardSelfieUrl &&
+      renterKyc.bankAccount?.bankName &&
+      renterKyc.bankAccount?.accountNumber &&
+      renterKyc.bankAccount?.accountName
+  );
+  const isRenterKycRejected =
+    renterKyc.identityVerificationStatus === "rejected" ||
+    renterKyc.bankAccount?.verificationStatus === "rejected";
+  const isRenterKycVerified =
+    hasAllRenterKycDocs &&
+    renterKyc.identityVerificationStatus === "verified" &&
+    renterKyc.bankAccount?.verificationStatus === "verified";
+
+  async function handleSubmitRenterKyc(e: React.FormEvent) {
+    e.preventDefault();
+    setKycModalError(null);
+
+    if (kycNationalId && kycNationalId.length !== 13) {
+      setKycModalError("เลขประจำตัวประชาชนต้องมี 13 หลัก");
+      return;
+    }
+    if (!renterKyc.idCardUrl && !kycIdCardFile) {
+      setKycModalError("กรุณาอัปโหลดรูปถ่ายบัตรประชาชน");
+      return;
+    }
+    if (!renterKyc.idCardSelfieUrl && !kycSelfieFile) {
+      setKycModalError("กรุณาอัปโหลดรูปถ่ายบุคคลคู่กับบัตรประชาชน");
+      return;
+    }
+    if (
+      !kycBankName.trim() ||
+      !kycAccountNumber.trim() ||
+      !kycAccountName.trim()
+    ) {
+      setKycModalError("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน");
+      return;
+    }
+    if (!/^\d{8,15}$/.test(kycAccountNumber.trim())) {
+      setKycModalError("เลขที่บัญชีธนาคารต้องเป็นตัวเลข 8-15 หลัก");
+      return;
+    }
+
+    setKycSubmitting(true);
+    try {
+      const formData = new FormData();
+      if (kycNationalId) formData.append("nationalId", kycNationalId);
+      formData.append("bankName", kycBankName.trim());
+      formData.append("accountNumber", kycAccountNumber.trim());
+      formData.append("accountName", kycAccountName.trim());
+      if (kycIdCardFile) formData.append("idCard", kycIdCardFile);
+      if (kycSelfieFile) formData.append("selfie", kycSelfieFile);
+
+      const res = await fetch("/api/profile/kyc", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setKycModalError(result.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+        return;
+      }
+
+      setKycSuccessNotice(
+        "ลงทะเบียนรูปถ่ายบัตรประชาชน รูปคู่บัตร และบัญชีธนาคารเรียบร้อยแล้ว กรุณารอแอดมินตรวจสอบตัวตนก่อนส่งคำขอเช่า"
+      );
+      setShowRenterKycModal(false);
+      await refreshUserAndKyc();
+    } catch {
+      setKycModalError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setKycSubmitting(false);
+    }
+  }
+
+  async function handleQuickAddRenterRole() {
+    setAddingRenterRole(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/profile/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetRole: "renter" }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await refreshUserAndKyc();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("auth-state-change"));
+        }
+        router.refresh();
+      } else {
+        setSubmitError(result.message || "ไม่สามารถสมัครบทบาทผู้เช่าเพิ่มได้");
+      }
+    } catch {
+      setSubmitError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setAddingRenterRole(false);
+    }
+  }
 
   const roles =
     currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
@@ -380,6 +543,9 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
       const result = await res.json();
       if (!res.ok) {
         setShowTermsModal(false);
+        if (result.code === "KYC_REQUIRED") {
+          setShowRenterKycModal(true);
+        }
         setSubmitError(
           result.message || "ส่งคำขอเช่าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
         );
@@ -869,7 +1035,7 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
               </div>
 
               {isLenderOnly ? (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <button
                     type="button"
                     disabled
@@ -879,29 +1045,116 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                     <Send className="h-5 w-5 text-slate-400" />
                     <span>ไม่สามารถส่งคำขอได้ (บัญชีผู้ให้เช่า)</span>
                   </button>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 space-y-2">
                     <p className="font-medium">
                       บัญชีของคุณเป็นผู้ให้เช่าเท่านั้น หากต้องการเช่าอุปกรณ์
-                      กรุณาเพิ่มบทบาทผู้เช่าหรือสลับบัญชี
+                      กรุณาสมัครบทบาทผู้เช่าเพิ่ม
                     </p>
+                    <button
+                      type="button"
+                      disabled={addingRenterRole}
+                      onClick={handleQuickAddRenterRole}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#1b3554] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#3f6593] disabled:opacity-50"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      <span>
+                        {addingRenterRole
+                          ? "กำลังเพิ่มบทบาท..."
+                          : "สมัครบทบาทผู้เช่าเพิ่มทันที"}
+                      </span>
+                    </button>
                   </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowTermsModal(true)}
-                  disabled={!canContinue || isSubmitting}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3.5 text-base font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
+                <div className="space-y-3">
+                  {/* FR-04: ตรวจสอบข้อมูลรูปบัตรประชาชน + รูปคู่บัตร + บัญชีธนาคาร ของผู้เช่า */}
+                  {currentUser && renterKyc.loaded && !isRenterKycVerified && (
+                    <div
+                      className={`rounded-2xl border p-3.5 text-xs ${
+                        !hasAllRenterKycDocs || isRenterKycRejected
+                          ? "border-amber-200 bg-amber-50/90 text-amber-900"
+                          : "border-sky-200 bg-sky-50/90 text-sky-900"
+                      }`}
+                    >
+                      {!hasAllRenterKycDocs || isRenterKycRejected ? (
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                            <div>
+                              <p className="font-bold">
+                                ลงทะเบียนยืนยันตัวตนก่อนส่งคำขอเช่าครั้งแรก
+                              </p>
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800">
+                                กรุณาอัปโหลดรูปถ่ายบัตรประชาชน รูปถ่ายบุคคลคู่กับบัตรประชาชน และข้อมูลบัญชีธนาคาร เพื่อให้แอดมินตรวจสอบตัวตนก่อนส่งคำขอเช่า
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowRenterKycModal(true)}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1b3554] px-3 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#3f6593]"
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                            <span>ลงทะเบียนบัตรประชาชนและบัญชีธนาคาร</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                            <div>
+                              <p className="font-bold">
+                                รอแอดมินตรวจสอบตัวตนของผู้เช่า
+                              </p>
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-sky-800">
+                                คุณได้ลงทะเบียนรูปบัตรประชาชน รูปคู่บัตร และบัญชีธนาคารแล้ว กรุณารอแอดมินอนุมัติตัวตนก่อนส่งคำขอเช่า
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowRenterKycModal(true)}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sky-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-[#1b3554] transition hover:bg-sky-50"
+                          >
+                            <span>ดู / แก้ไขข้อมูลที่ส่งไว้</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <span>
-                    {isSubmitting ? "กำลังส่งคำขอเช่า..." : "ส่งคำขอเช่า"}
-                  </span>
-                </button>
+
+                  {kycSuccessNotice && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+                      {kycSuccessNotice}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        currentUser &&
+                        renterKyc.loaded &&
+                        (!hasAllRenterKycDocs || isRenterKycRejected)
+                      ) {
+                        setShowRenterKycModal(true);
+                        return;
+                      }
+                      setShowTermsModal(true);
+                    }}
+                    disabled={!canContinue || isSubmitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3.5 text-base font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
+                    <span>
+                      {isSubmitting ? "กำลังส่งคำขอเช่า..." : "ส่งคำขอเช่า"}
+                    </span>
+                  </button>
+                </div>
               )}
 
               {submitError && (
@@ -936,6 +1189,180 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
         onCancel={() => setShowTermsModal(false)}
         onConfirm={handleSubmitBooking}
       />
+
+      {/* Modal ลงทะเบียนยืนยันตัวตนและบัญชีธนาคารสำหรับผู้เช่าที่ต้องการส่งคำขอเช่าครั้งแรก (FR-04) */}
+      {showRenterKycModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-[#000f22]">
+                  ลงทะเบียนยืนยันตัวตนผู้เช่า (สำหรับการเช่าครั้งแรก)
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  กรุณาอัปโหลดรูปถ่ายบัตรประชาชน รูปถ่ายบุคคลคู่กับบัตรประชาชน และบัญชีธนาคาร เพื่อให้แอดมินตรวจสอบตัวตนของผู้เช่า
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRenterKycModal(false)}
+                className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {kycModalError && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{kycModalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitRenterKyc} className="mt-5 space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                  เลขประจำตัวประชาชน (13 หลัก)
+                </label>
+                <input
+                  type="text"
+                  maxLength={13}
+                  inputMode="numeric"
+                  value={kycNationalId}
+                  onChange={(e) =>
+                    setKycNationalId(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="เช่น 1234567890123"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                  1. รูปถ่ายบัตรประชาชน *{" "}
+                  {renterKyc.idCardUrl && (
+                    <span className="font-normal text-emerald-600">
+                      (มีรูปเดิมในระบบแล้ว)
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) =>
+                    setKycIdCardFile(e.target.files?.[0] || null)
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-[#c0e6fd]/50 file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#1b3554]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1b3554]">
+                  2. รูปถ่ายบุคคลคู่กับบัตรประชาชน *{" "}
+                  {renterKyc.idCardSelfieUrl && (
+                    <span className="font-normal text-emerald-600">
+                      (มีรูปเดิมในระบบแล้ว)
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) =>
+                    setKycSelfieFile(e.target.files?.[0] || null)
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-[#c0e6fd]/50 file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#1b3554]"
+                />
+              </div>
+
+              <div className="border-t border-slate-100 pt-3">
+                <span className="mb-3 block text-xs font-bold text-[#1b3554]">
+                  3. ข้อมูลบัญชีธนาคาร (สำหรับรับเงินประกันคืน) *
+                </span>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      ธนาคาร *
+                    </label>
+                    <select
+                      value={kycBankName}
+                      onChange={(e) => setKycBankName(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                    >
+                      <option value="">-- เลือกธนาคาร --</option>
+                      <option value="กสิกรไทย">ธนาคารกสิกรไทย (KBANK)</option>
+                      <option value="ไทยพาณิชย์">ธนาคารไทยพาณิชย์ (SCB)</option>
+                      <option value="กรุงเทพ">ธนาคารกรุงเทพ (BBL)</option>
+                      <option value="กรุงไทย">ธนาคารกรุงไทย (KTB)</option>
+                      <option value="กรุงศรีอยุธยา">ธนาคารกรุงศรีอยุธยา (BAY)</option>
+                      <option value="ทหารไทยธนชาต">ธนาคารทหารไทยธนชาต (TTB)</option>
+                      <option value="ออมสิน">ธนาคารออมสิน (GSB)</option>
+                      <option value="ธ.ก.ส.">ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)</option>
+                      <option value="ยูโอบี">ธนาคารยูโอบี (UOB)</option>
+                      <option value="อื่นๆ">ธนาคารอื่นๆ</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      เลขที่บัญชีธนาคาร *
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={15}
+                      inputMode="numeric"
+                      value={kycAccountNumber}
+                      onChange={(e) =>
+                        setKycAccountNumber(e.target.value.replace(/\D/g, ""))
+                      }
+                      placeholder="กรอกเฉพาะตัวเลข เช่น 1234567890"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      ชื่อบัญชีธนาคาร (ตรงตามสมุดบัญชี) *
+                    </label>
+                    <input
+                      type="text"
+                      value={kycAccountName}
+                      onChange={(e) => setKycAccountName(e.target.value)}
+                      placeholder="เช่น นาย สมชาย ใจดี"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowRenterKycModal(false)}
+                  disabled={kycSubmitting}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={kycSubmitting}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#3f6593] to-[#1b3554] px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+                >
+                  {kycSubmitting ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>กำลังส่งข้อมูล...</span>
+                    </>
+                  ) : (
+                    <span>ส่งข้อมูลให้แอดมินตรวจสอบ</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

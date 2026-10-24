@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     const bankName = (formData.get("bankName") as string)?.trim();
     const accountNumber = (formData.get("accountNumber") as string)?.trim();
     const accountName = (formData.get("accountName") as string)?.trim();
+    const requestLenderRole = formData.get("requestLenderRole") === "true";
 
     const admin = createAdminClient();
     const updates: Record<string, unknown> = {
@@ -93,9 +94,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (requestLenderRole) {
+      await admin.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...(user.user_metadata || {}),
+          pending_lender_role_upgrade: true,
+        },
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      message: "ส่งข้อมูลยืนยันตัวตนเรียบร้อยแล้ว รอการตรวจสอบจากผู้ดูแลระบบ",
+      message: requestLenderRole
+        ? "ส่งข้อมูลยืนยันตัวตนเพื่อสมัครบทบาทผู้ให้เช่าเพิ่มเรียบร้อยแล้ว รอแอดมินตรวจสอบตัวตน"
+        : "ส่งข้อมูลยืนยันตัวตนเรียบร้อยแล้ว รอการตรวจสอบจากผู้ดูแลระบบ",
     });
   } catch (error: any) {
     console.error("KYC upload error:", error);

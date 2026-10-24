@@ -102,6 +102,60 @@ export async function POST(request: Request) {
     }
     const renterUserId = user.id;
 
+    // 1.1) ตรวจสอบการลงทะเบียนข้อมูลเพิ่มเติมของผู้เช่า (FR-04: รูปบัตรประชาชน + รูปคู่บัตร + บัญชีธนาคาร และผ่านการตรวจสอบจากแอดมิน)
+    const [{ data: renterProfile }, { data: renterBank }] = await Promise.all([
+      admin
+        .from("useraccount")
+        .select(
+          "id_card_url, id_card_selfie_url, identity_verification_status"
+        )
+        .eq("user_id", renterUserId)
+        .maybeSingle(),
+      admin
+        .from("bankaccount")
+        .select(
+          "bank_account_id, bank_name, account_number, account_name, verification_status"
+        )
+        .eq("user_id", renterUserId)
+        .maybeSingle(),
+    ]);
+
+    const missingRenterKyc =
+      !renterProfile?.id_card_url ||
+      !renterProfile?.id_card_selfie_url ||
+      !renterBank?.bank_name ||
+      !renterBank?.account_number ||
+      !renterBank?.account_name;
+
+    const isRenterKycRejected =
+      renterProfile?.identity_verification_status === "rejected" ||
+      renterBank?.verification_status === "rejected";
+
+    if (missingRenterKyc || isRenterKycRejected) {
+      return NextResponse.json(
+        {
+          code: "KYC_REQUIRED",
+          message:
+            "สำหรับการส่งคำขอเช่า กรุณาลงทะเบียนข้อมูลเพิ่มเติม ได้แก่ รูปถ่ายบัตรประชาชน รูปถ่ายบุคคลคู่กับบัตรประชาชน และบัญชีธนาคาร เพื่อให้แอดมินตรวจสอบตัวตนก่อน",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (
+      renterProfile.identity_verification_status !== "verified" ||
+      renterBank.verification_status !== "verified"
+    ) {
+      return NextResponse.json(
+        {
+          code: "KYC_PENDING",
+          message:
+            "ข้อมูลยืนยันตัวตนและบัญชีธนาคารของคุณอยู่ระหว่างรอแอดมินตรวจสอบ กรุณารอแอดมินอนุมัติก่อนส่งคำขอเช่า",
+        },
+        { status: 403 }
+      );
+    }
+
     // 2) ตรวจสินค้ามีจริงและพร้อมให้เช่า
     const { data: item, error: itemError } = await admin
       .from("item")

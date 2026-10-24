@@ -78,9 +78,18 @@ export async function POST(request: Request) {
       );
     }
 
-    if (profile.status === "Suspended" || profile.status === "Banned") {
+    if (
+      profile.status === "Suspended" ||
+      profile.status === "Banned" ||
+      profile.status === "Deactivated"
+    ) {
       return NextResponse.json(
-        { message: `บัญชีผู้ใช้ถูกระงับการใช้งาน (${profile.status})` },
+        {
+          message:
+            profile.status === "Deactivated"
+              ? "บัญชีผู้ใช้นี้ถูกยุติการใช้งานแล้ว"
+              : `บัญชีผู้ใช้ถูกระงับการใช้งาน (${profile.status})`,
+        },
         { status: 403 }
       );
     }
@@ -96,11 +105,8 @@ export async function POST(request: Request) {
     }
 
     let assignedRoles = (userRoles || [])
-      .map((item: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
-        const r = Array.isArray(item.role) ? item.role[0] : item.role;
-        return r?.role_type;
-      })
-      .filter((r): r is string => Boolean(r));
+      .map((item: any) => item.role?.role_type)
+      .filter(Boolean);
 
     if (assignedRoles.length === 0) {
       // Fallback: assign renter role if missing
@@ -135,10 +141,26 @@ export async function POST(request: Request) {
 
     // 4. Authenticate using Supabase Auth (stores session in cookies via @supabase/ssr)
     const supabase = await createServerClient();
-    const authRes = await supabase.auth.signInWithPassword({
+    let authRes = await supabase.auth.signInWithPassword({
       email: profile.email,
       password,
     });
+
+    if (authRes.error || !authRes.data.user) {
+      const { data: authLookup } = await admin.auth.admin.getUserById(
+        profile.user_id
+      );
+      const authActualEmail = authLookup?.user?.email;
+      if (
+        authActualEmail &&
+        authActualEmail.toLowerCase() !== profile.email?.toLowerCase()
+      ) {
+        authRes = await supabase.auth.signInWithPassword({
+          email: authActualEmail,
+          password,
+        });
+      }
+    }
 
     if (authRes.error || !authRes.data.user) {
       console.error("Auth sign-in error:", authRes.error);
@@ -148,8 +170,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Determine redirection path (เข้าสู่หน้าแรก)
-    const redirectTo = "/";
+    // 5. Determine redirection path (เข้าสู่หน้าแดชบอร์ดหลักทันที)
+    const redirectTo = "/dashboard";
 
     const response = NextResponse.json(
       {

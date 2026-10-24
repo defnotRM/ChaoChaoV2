@@ -15,15 +15,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: firstError }, { status: 400 });
     }
 
-    const { username, password, nationalId, role } = validation.data;
+    const {
+      firstname,
+      lastname,
+      username,
+      phone,
+      email: rawEmail,
+      password,
+      nationalId,
+      role,
+    } = validation.data;
     const admin = createAdminClient();
+    const cleanEmail = rawEmail
+      ? rawEmail.toLowerCase().trim()
+      : `${username.toLowerCase().trim()}@chaochao.local`;
 
-    // 2. Check if username or national_id already exists in useraccount
-    const { data: existingUser, error: checkError } = await admin
+    // 2. Check if username, national_id, or email already exists in useraccount
+    const { data: existingUsers, error: checkError } = await admin
       .from("useraccount")
-      .select("username, national_id")
-      .or(`username.eq.${username},national_id.eq.${nationalId}`)
-      .maybeSingle();
+      .select("username, national_id, email")
+      .or(
+        `username.eq.${username},national_id.eq.${nationalId},email.ilike.${cleanEmail}`
+      );
 
     if (checkError) {
       console.error("Error checking existing user:", checkError);
@@ -33,32 +46,40 @@ export async function POST(request: Request) {
       );
     }
 
-    if (existingUser) {
-      if (existingUser.username === username) {
-        return NextResponse.json(
-          { message: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว" },
-          { status: 409 }
-        );
-      }
-      if (existingUser.national_id === nationalId) {
-        return NextResponse.json(
-          { message: "เลขบัตรประชาชนนี้ถูกใช้งานแล้ว" },
-          { status: 409 }
-        );
+    if (existingUsers && existingUsers.length > 0) {
+      for (const existingUser of existingUsers) {
+        if (existingUser.username?.toLowerCase() === username.toLowerCase()) {
+          return NextResponse.json(
+            { message: "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว" },
+            { status: 409 }
+          );
+        }
+        if (existingUser.national_id === nationalId) {
+          return NextResponse.json(
+            { message: "เลขบัตรประชาชนนี้ถูกใช้งานแล้ว" },
+            { status: 409 }
+          );
+        }
+        if (existingUser.email?.toLowerCase() === cleanEmail) {
+          return NextResponse.json(
+            { message: "อีเมลนี้ถูกใช้งานแล้ว" },
+            { status: 409 }
+          );
+        }
       }
     }
 
-    // 3. Derive deterministic email identifier for Supabase Auth
-    const email = `${username.toLowerCase().trim()}@chaochao.local`;
-
-    // 4. Create user in Supabase Auth
+    // 3. Create user in Supabase Auth
     const { data: authData, error: authError } =
       await admin.auth.admin.createUser({
-        email,
+        email: cleanEmail,
         password,
         email_confirm: true,
         user_metadata: {
           username,
+          firstname: firstname.trim(),
+          lastname: lastname.trim(),
+          phone: phone.trim(),
           signup_role: role,
           role,
           national_id: nationalId,
@@ -120,16 +141,31 @@ export async function POST(request: Request) {
         {
           user_id: userId,
           username: username.trim(),
-          email,
+          firstname: firstname.trim(),
+          lastname: lastname.trim(),
+          email: cleanEmail,
           national_id: nationalId,
           avatar_url: finalAvatarUrl,
           id_card_url: finalIdCardUrl,
           id_card_selfie_url: finalSelfieUrl,
-          identity_verification_status: (finalIdCardUrl && finalSelfieUrl) ? "pending" : "unverified",
+          identity_verification_status:
+            finalIdCardUrl && finalSelfieUrl ? "pending" : "unverified",
           status: "Active",
         },
         { onConflict: "user_id" }
       );
+
+    // 5.1 Save phone number to public.userphones
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.replace(/\D/g, "").slice(0, 10);
+      if (cleanPhone.length === 10) {
+        await admin.from("userphones").delete().eq("user_id", userId);
+        await admin.from("userphones").insert({
+          user_id: userId,
+          phone: cleanPhone,
+        });
+      }
+    }
 
     if (finalAvatarUrl) {
       await admin.auth.admin.updateUserById(userId, {

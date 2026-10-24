@@ -15,6 +15,22 @@ const updateProfileSchema = z.object({
       /^[a-zA-Z0-9_]+$/,
       "ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร a-z, A-Z, 0-9 และ _"
     ),
+  firstname: z
+    .string()
+    .max(100, "ชื่อจริงต้องไม่เกิน 100 ตัวอักษร")
+    .optional()
+    .nullable(),
+  lastname: z
+    .string()
+    .max(100, "นามสกุลต้องไม่เกิน 100 ตัวอักษร")
+    .optional()
+    .nullable(),
+  email: z
+    .string()
+    .email("รูปแบบอีเมลไม่ถูกต้อง")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
   bio: z.string().max(500, "ประวัติย่อต้องไม่เกิน 500 ตัวอักษร").optional().nullable(),
   avatarUrl: z.string().optional().nullable(),
   bannerUrl: z.string().optional().nullable(),
@@ -59,7 +75,7 @@ export async function GET() {
       admin
         .from("useraccount")
         .select(
-          "user_id, username, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at, identity_verification_status, id_card_url, id_card_selfie_url"
+          "user_id, username, firstname, lastname, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at, identity_verification_status, id_card_url, id_card_selfie_url"
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -84,11 +100,15 @@ export async function GET() {
       const uName = user.user_metadata?.username || user.email?.split("@")[0] || "ผู้ใช้งาน";
       const uEmail = user.email || `${uName.toLowerCase()}@chaochao.local`;
       const uNatId = user.user_metadata?.national_id || null;
+      const uFirst = user.user_metadata?.firstname || null;
+      const uLast = user.user_metadata?.lastname || null;
 
       await admin.from("useraccount").upsert(
         {
           user_id: user.id,
           username: uName,
+          firstname: uFirst,
+          lastname: uLast,
           email: uEmail,
           national_id: uNatId,
           status: "Active",
@@ -99,6 +119,8 @@ export async function GET() {
       profile = {
         user_id: user.id,
         username: uName,
+        firstname: uFirst,
+        lastname: uLast,
         email: uEmail,
         national_id: uNatId,
         bio: "",
@@ -142,6 +164,8 @@ export async function GET() {
       user: {
         id: profile.user_id,
         username: profile.username,
+        firstname: profile.firstname ?? "",
+        lastname: profile.lastname ?? "",
         email: profile.email,
         nationalId: profile.national_id,
         bio: profile.bio ?? "",
@@ -198,7 +222,17 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: firstError }, { status: 400 });
     }
 
-    const { username, bio, avatarUrl, bannerUrl, phones, password } = validation.data;
+    const {
+      username,
+      firstname,
+      lastname,
+      email,
+      bio,
+      avatarUrl,
+      bannerUrl,
+      phones,
+      password,
+    } = validation.data;
     const admin = createAdminClient();
 
     // 1. Check if new username is already taken by another user
@@ -216,15 +250,48 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const newEmail = `${username.toLowerCase().trim()}@chaochao.local`;
+    // 1.1 Check if new email is provided and already taken by another user
+    const { data: currentAccount } = await admin
+      .from("useraccount")
+      .select("email")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    // 2. Update useraccount (username & email & bio & avatar_url & banner_url)
+    const cleanEmail =
+      email && email.trim()
+        ? email.toLowerCase().trim()
+        : currentAccount?.email || `${username.toLowerCase().trim()}@chaochao.local`;
+
+    if (email && email.trim()) {
+      const { data: existingEmailUser } = await admin
+        .from("useraccount")
+        .select("user_id")
+        .ilike("email", cleanEmail)
+        .neq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingEmailUser) {
+        return NextResponse.json(
+          { message: "อีเมลนี้ถูกใช้งานแล้ว กรุณาใช้อีเมลอื่น" },
+          { status: 409 }
+        );
+      }
+    }
+
+    // 2. Update useraccount (username & firstname & lastname & email & bio & avatar_url & banner_url)
     const updateData: Record<string, any> = {
       username,
-      email: newEmail,
+      email: cleanEmail,
       bio: bio ?? "",
       updated_at: new Date().toISOString(),
     };
+
+    if (firstname !== undefined) {
+      updateData.firstname = firstname?.trim() || null;
+    }
+    if (lastname !== undefined) {
+      updateData.lastname = lastname?.trim() || null;
+    }
 
     if (avatarUrl === "") {
       updateData.avatar_url = null;
@@ -315,11 +382,13 @@ export async function PATCH(request: Request) {
     const userMetadata = {
       ...(user.user_metadata || {}),
       username,
+      ...(firstname !== undefined ? { firstname: firstname?.trim() || "" } : {}),
+      ...(lastname !== undefined ? { lastname: lastname?.trim() || "" } : {}),
       avatar_url: finalAvatarUrl,
     };
 
     const authUpdatePayload: any = {
-      email: newEmail,
+      email: cleanEmail,
       email_confirm: true,
       user_metadata: userMetadata,
     };
@@ -343,6 +412,9 @@ export async function PATCH(request: Request) {
       user: {
         id: user.id,
         username,
+        firstname: updateData.firstname ?? "",
+        lastname: updateData.lastname ?? "",
+        email: cleanEmail,
         bio: bio ?? "",
         phones: updatedPhones,
         avatarUrl: avatarUrl === "" ? "" : (avatarUrl || updateData.avatar_url || ""),
