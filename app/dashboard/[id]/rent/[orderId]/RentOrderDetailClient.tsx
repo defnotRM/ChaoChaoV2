@@ -98,7 +98,7 @@ export interface RentOrderDetailData {
   review?: OrderReviewRecord | null;
 }
 
-const PAYMENT_WINDOW_HOURS = 24;
+const PAYMENT_WINDOW_HOURS = 8;
 
 const thb = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -501,10 +501,17 @@ export default function RentOrderDetailClient({
           </div>
         )}
 
-        {/* Countdown banner (กรณีรอชำระเงิน) */}
+        {/* Countdown banner (กรณีรอชำระเงิน FR-23: จำกัดเวลา 8 ชม.) */}
         {showCountdown && (
           <div className="mb-6">
-            <CountdownBanner deadlineISO={deadlineISO} />
+            <CountdownBanner
+              deadlineISO={deadlineISO}
+              orderId={order.order_id}
+              title="กรุณาชำระเงินภายในเวลา 8 ชั่วโมงหลังได้รับอนุมัติ มิฉะนั้นคำสั่งเช่าจะถูกยกเลิกอัตโนมัติ"
+              expiredTitle="เลยกำหนดเวลาชำระเงิน 8 ชั่วโมงแล้ว — ระบบยกเลิกคำสั่งเช่านี้อัตโนมัติ"
+              variant="warning"
+              onExpired={fetchLatestOrder}
+            />
           </div>
         )}
 
@@ -997,22 +1004,33 @@ export default function RentOrderDetailClient({
                       <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
                       <span>ส่งคำขอเช่าแล้ว · รอผู้ให้เช่าอนุมัติ</span>
                     </p>
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      ผู้ให้เช่ามีเวลาพิจารณาและอนุมัติคำขอภายใน 8 ชั่วโมง
+                    </p>
                   </div>
                 ) : currentStatus === "awaiting_payment" ? (
                   canPay ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentModal(true)}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98]"
-                    >
-                      <Wallet className="h-4 w-4" />
-                      <span>ชำระเงิน / อัปโหลดสลิป</span>
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentModal(true)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-[0.98]"
+                      >
+                        <Wallet className="h-4 w-4" />
+                        <span>ชำระเงิน / อัปโหลดสลิป</span>
+                      </button>
+                      <p className="text-center text-[11px] text-slate-500">
+                        มีเวลาชำระเงินภายใน 8 ชั่วโมงหลังได้รับอนุมัติ
+                      </p>
+                    </div>
                   ) : (
                     <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200">
                       <p className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
                         <Clock3 className="h-4 w-4 text-sky-600 shrink-0" />
                         <span>อัปโหลดสลิปแล้ว · รอผู้ให้เช่าตรวจสอบ</span>
+                      </p>
+                      <p className="text-[11px] text-sky-700 mt-1">
+                        ผู้ให้เช่ามีเวลาตรวจสอบสลิปภายใน 8 ชั่วโมง (หากเกินเวลา ระบบจะอนุมัติให้อัตโนมัติ)
                       </p>
                     </div>
                   )

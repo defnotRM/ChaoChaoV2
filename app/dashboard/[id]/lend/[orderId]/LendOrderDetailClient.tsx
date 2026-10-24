@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
+import CountdownBanner from "@/components/orders/CountdownBanner";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
 import OrderReviewSection, {
   type OrderReviewRecord,
@@ -352,6 +353,20 @@ export default function LendOrderDetailClient({
     lenderAfter !== null ||
     renterAfter !== null;
 
+  // FR-22 & FR-24: กำหนดเวลาพิจารณาคำขอและตรวจสลิป 8 ชั่วโมง
+  const APPROVAL_WINDOW_HOURS = 8;
+  const SLIP_REVIEW_WINDOW_HOURS = 8;
+
+  const approvalDeadlineISO = new Date(
+    new Date(order.created_at).getTime() + APPROVAL_WINDOW_HOURS * 3_600_000
+  ).toISOString();
+
+  const pendingPayment = paymentsList.find((p) => p.status === "pending");
+  const slipTime = pendingPayment?.date || order.updated_at;
+  const slipDeadlineISO = new Date(
+    new Date(slipTime).getTime() + SLIP_REVIEW_WINDOW_HOURS * 3_600_000
+  ).toISOString();
+
   async function handleApprovePayment() {
     try {
       setIsUpdating(true);
@@ -484,6 +499,34 @@ export default function LendOrderDetailClient({
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800">
             <AlertCircle className="h-5 w-5 shrink-0 text-rose-600" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Countdown banner (FR-22: กรณีรอผู้ให้เช่าอนุมัติคำขอเช่า ไม่เกิน 8 ชั่วโมง) */}
+        {currentStatus === "requested" && (
+          <div className="mb-6">
+            <CountdownBanner
+              deadlineISO={approvalDeadlineISO}
+              orderId={order.order_id}
+              title="กรุณาอนุมัติหรือปฏิเสธคำขอเช่าภายในเวลา 8 ชั่วโมงหลังได้รับคำขอ มิฉะนั้นคำขอจะถูกยกเลิกอัตโนมัติ"
+              expiredTitle="เลยกำหนดเวลาตอบรับคำขอเช่า 8 ชั่วโมงแล้ว — ระบบยกเลิกคำขอเช่านี้แล้ว"
+              variant="warning"
+              onExpired={fetchLatestOrder}
+            />
+          </div>
+        )}
+
+        {/* Countdown banner (FR-24: กรณีรอผู้ให้เช่าตรวจสอบสลิป ไม่เกิน 8 ชั่วโมง) */}
+        {currentStatus === "awaiting_payment" && hasPending && (
+          <div className="mb-6">
+            <CountdownBanner
+              deadlineISO={slipDeadlineISO}
+              orderId={order.order_id}
+              title="กรุณาตรวจสอบสลิปและยืนยันการชำระเงินภายในเวลา 8 ชั่วโมง มิฉะนั้นระบบจะอนุมัติให้อัตโนมัติ"
+              expiredTitle="เลยกำหนดเวลาตรวจสอบสลิป 8 ชั่วโมงแล้ว — ระบบอนุมัติการชำระเงินให้อัตโนมัติ"
+              variant="warning"
+              onExpired={fetchLatestOrder}
+            />
           </div>
         )}
 
@@ -904,11 +947,12 @@ export default function LendOrderDetailClient({
               {currentStatus === "requested" ? (
                 <div className="space-y-3">
                   <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
-                    <p className="text-xs font-semibold text-amber-900">
-                      มีคำขอเช่าใหม่ส่งเข้ามา
+                    <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+                      <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>มีคำขอเช่าใหม่ส่งเข้ามา (จำกัดเวลา 8 ชม.)</span>
                     </p>
                     <p className="text-[11px] text-amber-700 mt-1">
-                      กรุณาตรวจสอบวันและจุดนัดหมาย จากนั้นกดอนุมัติเพื่อให้ผู้เช่าดำเนินการชำระเงิน
+                      กรุณาตรวจสอบวันและจุดนัดหมาย จากนั้นกดอนุมัติหรือปฏิเสธคำขอภายใน 8 ชั่วโมงหลังได้รับคำขอ
                     </p>
                   </div>
 
@@ -942,10 +986,10 @@ export default function LendOrderDetailClient({
                     <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
                       <p className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
                         <Clock3 className="h-4 w-4 text-amber-600 shrink-0" />
-                        <span>ผู้เช่าอัปโหลดสลิปแล้ว (ยอด {thb.format(totalPaid)})</span>
+                        <span>ผู้เช่าอัปโหลดสลิปแล้ว (จำกัดเวลาตรวจ 8 ชม.)</span>
                       </p>
                       <p className="text-[11px] text-amber-700 mt-1">
-                        กรุณาตรวจสอบยอดเงินในบัญชีธนาคาร จากนั้นกดปุ่มยืนยันการชำระเงิน
+                        กรุณาตรวจสอบยอดเงินในบัญชีธนาคาร และยืนยันภายใน 8 ชั่วโมง (หากเกินเวลาระบบจะอนุมัติให้อัตโนมัติ)
                       </p>
                       {paymentsList.find((p) => p.status === "pending")?.slip_image_url && (
                         <div className="mt-2">

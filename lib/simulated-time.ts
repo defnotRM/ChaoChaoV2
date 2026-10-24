@@ -10,6 +10,9 @@ export interface SimulatedTimeInfo {
   simulatedNowIso: string;
   realNowIso: string;
   graceHours: number;
+  approvalTimeoutHours: number;
+  paymentTimeoutHours: number;
+  slipReviewTimeoutHours: number;
 }
 
 export interface TimeWindowInfo {
@@ -63,24 +66,44 @@ export async function getSimulatedTimeInfo(
 
   let offsetSeconds = 0;
   let graceHours = DEFAULT_GRACE_HOURS;
+  let approvalTimeoutHours = 8;
+  let paymentTimeoutHours = 8;
+  let slipReviewTimeoutHours = 8;
 
   try {
     const { data: rows } = await admin
       .from("system_config")
       .select("config_key, config_value")
-      .in("config_key", [SIMULATED_OFFSET_KEY, "noshow_grace_hours"]);
+      .in("config_key", [
+        SIMULATED_OFFSET_KEY,
+        "noshow_grace_hours",
+        "approval_timeout_hours",
+        "payment_timeout_hours",
+        "slip_review_timeout_hours",
+      ]);
 
     if (rows) {
       for (const row of rows) {
+        const parsed = Number(row.config_value);
         if (row.config_key === SIMULATED_OFFSET_KEY) {
-          const parsed = Number(row.config_value);
           if (Number.isFinite(parsed)) {
             offsetSeconds = Math.round(parsed);
           }
         } else if (row.config_key === "noshow_grace_hours") {
-          const parsed = Number(row.config_value);
           if (Number.isFinite(parsed) && parsed > 0) {
             graceHours = parsed;
+          }
+        } else if (row.config_key === "approval_timeout_hours") {
+          if (Number.isFinite(parsed) && parsed > 0) {
+            approvalTimeoutHours = parsed;
+          }
+        } else if (row.config_key === "payment_timeout_hours") {
+          if (Number.isFinite(parsed) && parsed > 0) {
+            paymentTimeoutHours = parsed;
+          }
+        } else if (row.config_key === "slip_review_timeout_hours") {
+          if (Number.isFinite(parsed) && parsed > 0) {
+            slipReviewTimeoutHours = parsed;
           }
         }
       }
@@ -99,6 +122,9 @@ export async function getSimulatedTimeInfo(
     simulatedNowIso: new Date(nowMs).toISOString(),
     realNowIso: new Date(realNowMs).toISOString(),
     graceHours,
+    approvalTimeoutHours,
+    paymentTimeoutHours,
+    slipReviewTimeoutHours,
   };
 }
 
@@ -132,16 +158,28 @@ export async function processSimulatedExpiredOrders(
 }> {
   const admin = adminClient ?? createAdminClient();
   const timeInfo = await getSimulatedTimeInfo(admin);
-  const { nowMs, graceHours } = timeInfo;
+  const {
+    nowMs,
+    graceHours,
+    approvalTimeoutHours = 8,
+    paymentTimeoutHours = 8,
+    slipReviewTimeoutHours = 8,
+  } = timeInfo;
   const processed: ProcessedOrderResult[] = [];
 
   try {
     let query = admin
       .from("rentalorder")
       .select(
-        "order_id, item_id, user_id, start_date, end_date, meetup_time, return_time, status",
+        "order_id, item_id, user_id, start_date, end_date, meetup_time, return_time, status, created_at, updated_at",
       )
-      .in("status", ["paid", "item_sent", "item_returned"]);
+      .in("status", [
+        "requested",
+        "awaiting_payment",
+        "paid",
+        "item_sent",
+        "item_returned",
+      ]);
 
     if (targetOrderId) {
       query = query.eq("order_id", targetOrderId);
@@ -153,7 +191,97 @@ export async function processSimulatedExpiredOrders(
     }
 
     for (const ord of orders) {
-      if (ord.status === "paid") {
+      if (ord.status === "requested") {
+        // FR-22: จำกัดเวลาผู้ให้เช่าในการอนุมัติหรือปฏิเสธคำขอเช่า ไม่เกิน 8 ชั่วโมงหลังได้รับคำขอ
+        const createdMs = new Date(ord.created_at).getTime();
+        const approvalDeadlineMs =
+          createdMs + approvalTimeoutHours * 3600 * 1000;
+
+        if (nowMs > approvalDeadlineMs) {
+          const { error: upErr } = await admin
+            .from("rentalorder")
+            .update({
+              status: "rejected_by_lender",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("order_id", ord.order_id);
+
+          if (!upErr) {
+            processed.push({
+              orderId: ord.order_id,
+              previousStatus: ord.status,
+              newStatus: "rejected_by_lender",
+              outcome: "approval_timeout",
+            });
+          }
+        }
+      } else if (ord.status === "awaiting_payment") {
+        // ตรวจสอบว่ามีสลิปรอตรวจสอบอยู่หรือไม่
+        const { data: payments } = await admin
+          .from("payment")
+          .select("payment_id, date, status, created_at")
+          .eq("order_id", ord.order_id)
+          .order("date", { ascending: false });
+
+        const pendingPayment = payments?.find((p) => p.status === "pending");
+
+        if (!pendingPayment) {
+          // FR-23: จำกัดเวลาผู้เช่าในการชำระเงินทั้งหมดเข้าสู่บัญชีกลาง ไม่เกิน 8 ชั่วโมงหลังได้รับคำอนุมัติ
+          const approvedMs = new Date(ord.updated_at).getTime();
+          const paymentDeadlineMs =
+            approvedMs + paymentTimeoutHours * 3600 * 1000;
+
+          if (nowMs > paymentDeadlineMs) {
+            const { error: upErr } = await admin
+              .from("rentalorder")
+              .update({
+                status: "cancelled",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("order_id", ord.order_id);
+
+            if (!upErr) {
+              processed.push({
+                orderId: ord.order_id,
+                previousStatus: ord.status,
+                newStatus: "cancelled",
+                outcome: "payment_timeout",
+              });
+            }
+          }
+        } else {
+          // FR-24: จำกัดเวลาผู้ให้เช่าในการตรวจสอบสลิป ไม่เกิน 8 ชั่วโมง (เกินแล้วอนุมัติอัตโนมัติ)
+          const slipTimeStr = pendingPayment.date || ord.updated_at;
+          const slipMs = new Date(slipTimeStr).getTime();
+          const slipDeadlineMs =
+            slipMs + slipReviewTimeoutHours * 3600 * 1000;
+
+          if (nowMs > slipDeadlineMs) {
+            // อนุมัติสลิปอัตโนมัติ
+            await admin
+              .from("payment")
+              .update({ status: "paid" })
+              .eq("payment_id", pendingPayment.payment_id);
+
+            const { error: upErr } = await admin
+              .from("rentalorder")
+              .update({
+                status: "paid",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("order_id", ord.order_id);
+
+            if (!upErr) {
+              processed.push({
+                orderId: ord.order_id,
+                previousStatus: ord.status,
+                newStatus: "paid",
+                outcome: "slip_auto_approved",
+              });
+            }
+          }
+        }
+      } else if (ord.status === "paid") {
         const pickupWin = parseBangkokWindow(
           ord.start_date,
           ord.meetup_time,
