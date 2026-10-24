@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CLOSED_ORDER_STATUSES, isOrderChatClosed } from "@/lib/chat-statuses";
+import { isOrderChatClosed } from "@/lib/chat-statuses";
 import { getRoomsSummary } from "@/lib/chat-storage";
 
 export async function GET() {
@@ -21,7 +21,7 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    // 1. ดึงห้องแชททั้งหมดที่ผูกกับ order และ user เป็นคู่สนทนา พร้อม join รายละเอียดสินค้า
+    // 1. ดึงห้องแชททั้งหมดที่ user เป็นคู่สนทนา พร้อม join รายละเอียดสินค้า (ถ้ามี)
     const { data: rooms, error: roomsError } = await admin
       .from("chatroom")
       .select(`
@@ -46,7 +46,6 @@ export async function GET() {
           )
         )
       `)
-      .not("order_id", "is", null)
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
 
     if (roomsError) {
@@ -104,14 +103,13 @@ export async function GET() {
       const isRenter = r.user_a === user.id;
       const partnerId = isRenter ? r.user_b : r.user_a;
       const partnerProfile = profileMap.get(partnerId);
-      const partnerRoles = rolesMap.get(partnerId) || [];
       const summary = roomsSummary.get(r.chat_room_id);
 
       const orderData = Array.isArray(r.rentalorder)
         ? r.rentalorder[0]
         : r.rentalorder;
       const orderStatus = orderData?.status || "";
-      const isClosed = isOrderChatClosed(orderStatus);
+      const isClosed = orderStatus ? isOrderChatClosed(orderStatus) : false;
 
       // Contextual role in this rental
       const contextualRole = isRenter ? "ผู้ให้เช่า" : "ผู้เช่า";
@@ -131,7 +129,7 @@ export async function GET() {
 
       return {
         id: r.chat_room_id,
-        orderId: r.order_id,
+        orderId: r.order_id || null,
         isClosed,
         myRole: (isRenter ? "renter" : "lender") as "renter" | "lender",
         lastMessage: summary?.lastMessage || "",
@@ -149,15 +147,15 @@ export async function GET() {
           role: contextualRole,
           status: partnerProfile?.status || "Active",
         },
-        order: {
-          id: orderData?.order_id || r.order_id,
+        order: r.order_id && orderData ? {
+          id: orderData.order_id || r.order_id,
           status: orderStatus,
-          startDate: orderData?.start_date || "",
-          endDate: orderData?.end_date || "",
+          startDate: orderData.start_date || "",
+          endDate: orderData.end_date || "",
           itemId: itemData?.item_id || "",
           itemName: itemData?.item_name || "สินค้าให้เช่า",
           itemImageUrl: primaryImage,
-        },
+        } : null,
       };
     });
 

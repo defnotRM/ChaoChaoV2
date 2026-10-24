@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     // 1. ดึงประวัติข้อความจาก Storage Bucket (chat-logs/{roomId}.json)
     const chatLog = await getRoomMessages(roomId);
 
-    // 2. อัปเดตสถานะอ่านแล้วลงไฟล์ใน Storage แบบ Asynchronous
+    // 2. อัปเดตสถานะอ่านแล้วลงไฟล์ใน Storage แบบ Asynchronous (ควบคุม concurrency ด้วย room lock)
     void markRoomMessagesAsRead(roomId, user.id);
 
     // 3. จัดรูปแบบข้อความส่งกลับไปยัง Client
@@ -76,7 +76,15 @@ export async function GET(request: Request) {
       createdAt: m.createdAt,
     }));
 
-    return NextResponse.json({ messages: formattedMessages });
+    return NextResponse.json(
+      { messages: formattedMessages },
+      {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      },
+    );
   } catch (error) {
     console.error("Chat messages GET error:", error);
     return NextResponse.json(
@@ -126,13 +134,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!room.order_id) {
-      return NextResponse.json(
-        { message: "ระบบแชทรองรับเฉพาะแชทที่ผูกกับออเดอร์การเช่าเท่านั้น" },
-        { status: 403 },
-      );
-    }
-
     if (room.user_a !== user.id && room.user_b !== user.id) {
       return NextResponse.json(
         { message: "คุณไม่มีสิทธิ์ส่งข้อความในห้องนี้" },
@@ -140,18 +141,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const orderData = Array.isArray(room.rentalorder)
-      ? room.rentalorder[0]
-      : (room as any).rentalorder;
-    const orderStatus = orderData?.status;
+    // ตรวจสอบสถานะออเดอร์ (เฉพาะกรณีที่แชทผูกกับออเดอร์)
+    if (room.order_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const orderData = Array.isArray(room.rentalorder)
+        ? room.rentalorder[0]
+        : (room as any).rentalorder;
+      const orderStatus = orderData?.status;
 
-    // หากออเดอร์สิ้นสุดการเช่าแล้ว ปิดไมค์ไม่ให้ส่งข้อความใหม่
-    if (isOrderChatClosed(orderStatus)) {
-      return NextResponse.json(
-        { message: "การเช่านี้สิ้นสุดแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
-        { status: 403 },
-      );
+      // หากออเดอร์สิ้นสุดการเช่าแล้ว ปิดไมค์ไม่ให้ส่งข้อความใหม่
+      if (orderStatus && isOrderChatClosed(orderStatus)) {
+        return NextResponse.json(
+          { message: "การเช่านี้สิ้นสุดแล้ว ไม่สามารถส่งข้อความใหม่ได้" },
+          { status: 403 },
+        );
+      }
     }
 
     const cleanContent = content.trim();
@@ -176,7 +180,13 @@ export async function POST(request: Request) {
           isMe: true,
         },
       },
-      { status: 201 },
+      {
+        status: 201,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      },
     );
   } catch (error) {
     console.error("Chat messages POST error:", error);
