@@ -22,18 +22,19 @@ export interface UploadResult {
   bucket: string;
 }
 
-const PRIMARY_BUCKET = "chaochao";
-
-// Legacy bucket mapping for synchronization and backward compatibility
-const LEGACY_BUCKET_MAP: Record<StorageCategory, { bucket: string; subPathPrefix?: string }> = {
+// Map each logical upload category directly to its designated Supabase Storage bucket
+export const CATEGORY_BUCKET_MAP: Record<
+  StorageCategory,
+  { bucket: string; subPathPrefix?: string }
+> = {
   avatars: { bucket: "avatars" },
   banners: { bucket: "banners" },
   items: { bucket: "item-images" },
   slips: { bucket: "slips" },
-  "evidence/handover": { bucket: "rental-evidence" },
-  "evidence/return": { bucket: "rental-evidence" },
+  "evidence/handover": { bucket: "rental-evidence", subPathPrefix: "handover" },
+  "evidence/return": { bucket: "rental-evidence", subPathPrefix: "return" },
   kyc: { bucket: "kyc" },
-  disputes: { bucket: "rental-evidence" },
+  disputes: { bucket: "rental-evidence", subPathPrefix: "disputes" },
 };
 
 function getExtensionFromMime(mime: string): string {
@@ -66,8 +67,8 @@ function parseDataUri(dataUri: string): { mimeType: string; buffer: Buffer } | n
 }
 
 /**
- * Uploads a file (Buffer, File, or base64 Data URI) to Supabase Storage,
- * categorizing it into the appropriate folder.
+ * Uploads a file (Buffer, File, or base64 Data URI) to its dedicated Supabase Storage bucket,
+ * organized into subfolders (e.g. avatars/{userId}/avatar_123.png).
  */
 export async function uploadToStorage(
   category: StorageCategory,
@@ -77,6 +78,9 @@ export async function uploadToStorage(
 ): Promise<UploadResult> {
   const admin = createAdminClient();
   const cleanFolderId = folderId ? folderId.trim().replace(/[^a-zA-Z0-9_-]/g, "_") : "general";
+
+  const target = CATEGORY_BUCKET_MAP[category] || { bucket: category };
+  const bucketName = target.bucket;
 
   let buffer: Buffer;
   let mimeType = options.contentType || "image/png";
@@ -88,7 +92,7 @@ export async function uploadToStorage(
       return {
         publicUrl: input,
         path: input,
-        bucket: PRIMARY_BUCKET,
+        bucket: bucketName,
       };
     }
 
@@ -116,118 +120,52 @@ export async function uploadToStorage(
   const ext = originalExt ? `.${originalExt}` : `.${getExtensionFromMime(mimeType)}`;
   const fileName = options.fileName || `${category.replace(/\//g, "_")}_${timestamp}_${rand}${ext}`;
 
-  // Primary path in 'chaochao' bucket: e.g. "slips/order-123/slip_12345_abc.png"
-  const primaryPath = `${category}/${cleanFolderId}/${fileName}`;
+  // File path within the dedicated bucket:
+  // e.g. avatars/{userId}/avatar_123.png, slips/{orderId}/slip_123.png
+  const folderPath = target.subPathPrefix ? `${target.subPathPrefix}/${cleanFolderId}` : cleanFolderId;
+  const filePath = `${folderPath}/${fileName}`;
 
-  // 1. Upload to primary categorized bucket 'chaochao'
-  let primaryUploadSuccess = false;
-  let { error: primaryError } = await admin.storage
-    .from(PRIMARY_BUCKET)
-    .upload(primaryPath, buffer, {
+  // Upload directly to the dedicated bucket
+  let { error: uploadError } = await admin.storage
+    .from(bucketName)
+    .upload(filePath, buffer, {
       contentType: mimeType,
       upsert: options.upsert ?? true,
     });
 
+  // If bucket doesn't exist, auto-create it as public and retry
   if (
-    primaryError &&
-    (primaryError.message?.includes("Bucket not found") ||
-      (primaryError as any).error === "Bucket not found")
+    uploadError &&
+    (uploadError.message?.includes("Bucket not found") ||
+      (uploadError as any).error === "Bucket not found")
   ) {
     try {
-      await admin.storage.createBucket(PRIMARY_BUCKET, { public: true });
+      await admin.storage.createBucket(bucketName, { public: true });
       const retry = await admin.storage
-        .from(PRIMARY_BUCKET)
-        .upload(primaryPath, buffer, {
+        .from(bucketName)
+        .upload(filePath, buffer, {
           contentType: mimeType,
           upsert: options.upsert ?? true,
         });
-      primaryError = retry.error;
+      uploadError = retry.error;
     } catch (e) {
-      console.warn("Failed auto-creating primary bucket:", e);
+      console.warn(`Failed auto-creating bucket ${bucketName}:`, e);
     }
   }
 
-  if (!primaryError) {
-    primaryUploadSuccess = true;
-  } else {
-    console.error(
-      `Failed to upload to primary bucket ${PRIMARY_BUCKET} at ${primaryPath}:`,
-      primaryError
-    );
+  if (uploadError) {
+    console.error(`Failed to upload to bucket ${bucketName} at ${filePath}:`, uploadError);
+    throw new Error(`Upload to storage failed: ${uploadError.message}`);
   }
 
-  // 2. Also sync to legacy bucket if different, to maintain 100% backward compatibility
-  let legacyUploadSuccess = false;
-  const legacyConfig = LEGACY_BUCKET_MAP[category];
-  const legacyPath = `${cleanFolderId}/${fileName}`;
-  if (legacyConfig && legacyConfig.bucket !== PRIMARY_BUCKET) {
-    try {
-      let { error: legErr } = await admin.storage
-        .from(legacyConfig.bucket)
-        .upload(legacyPath, buffer, {
-          contentType: mimeType,
-          upsert: options.upsert ?? true,
-        });
-
-      if (
-        legErr &&
-        (legErr.message?.includes("Bucket not found") ||
-          (legErr as any).error === "Bucket not found")
-      ) {
-        await admin.storage.createBucket(legacyConfig.bucket, { public: true });
-        const retryLeg = await admin.storage
-          .from(legacyConfig.bucket)
-          .upload(legacyPath, buffer, {
-            contentType: mimeType,
-            upsert: options.upsert ?? true,
-          });
-        legErr = retryLeg.error;
-      }
-
-      if (!legErr) {
-        legacyUploadSuccess = true;
-      }
-    } catch (e) {
-      console.warn(
-        `Sync to legacy bucket ${legacyConfig.bucket} skipped or failed:`,
-        e
-      );
-    }
-  }
-
-  if (primaryUploadSuccess) {
-    const { data: primaryPubData } = admin.storage
-      .from(PRIMARY_BUCKET)
-      .getPublicUrl(primaryPath);
-
-    return {
-      publicUrl: primaryPubData.publicUrl,
-      path: primaryPath,
-      bucket: PRIMARY_BUCKET,
-    };
-  }
-
-  if (legacyUploadSuccess && legacyConfig) {
-    const { data: legPubData } = admin.storage
-      .from(legacyConfig.bucket)
-      .getPublicUrl(legacyPath);
-
-    return {
-      publicUrl: legPubData.publicUrl,
-      path: legacyPath,
-      bucket: legacyConfig.bucket,
-    };
-  }
-
-  // Fallback public url
-  const { data: primaryPubData } = admin.storage
-    .from(PRIMARY_BUCKET)
-    .getPublicUrl(primaryPath);
+  const { data: pubData } = admin.storage
+    .from(bucketName)
+    .getPublicUrl(filePath);
 
   return {
-    publicUrl: primaryPubData.publicUrl,
-    path: primaryPath,
-    bucket: PRIMARY_BUCKET,
+    publicUrl: pubData.publicUrl,
+    path: filePath,
+    bucket: bucketName,
   };
 }
 

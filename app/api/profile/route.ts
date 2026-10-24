@@ -465,23 +465,16 @@ export async function DELETE() {
       admin.from("bankaccount").delete().eq("user_id", user.id),
     ]);
 
-    // 6. ลบไฟล์ส่วนตัวใน Supabase Storage (KYC และ Avatars)
+    // 6. ลบไฟล์ส่วนตัวใน Supabase Storage (KYC, Avatars, Banners)
     try {
-      const { data: kycFiles } = await admin.storage
-        .from("chaochao")
-        .list(`kyc/${user.id}`);
-      if (kycFiles && kycFiles.length > 0) {
-        await admin.storage
-          .from("chaochao")
-          .remove(kycFiles.map((f) => `kyc/${user.id}/${f.name}`));
-      }
-      const { data: kycLegacyFiles } = await admin.storage
-        .from("kyc")
-        .list(user.id);
-      if (kycLegacyFiles && kycLegacyFiles.length > 0) {
-        await admin.storage
-          .from("kyc")
-          .remove(kycLegacyFiles.map((f) => `${user.id}/${f.name}`));
+      const bucketsToClean = ["kyc", "avatars", "banners"];
+      for (const b of bucketsToClean) {
+        const { data: files } = await admin.storage.from(b).list(user.id);
+        if (files && files.length > 0) {
+          await admin.storage
+            .from(b)
+            .remove(files.map((f) => `${user.id}/${f.name}`));
+        }
       }
     } catch (e) {
       console.warn("Storage cleanup error during account deactivation:", e);
