@@ -6,6 +6,12 @@ import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
 import {
+  OrderEvidenceModal,
+  OrderEvidencePanel,
+  summarizeEvidence,
+  type EvidenceRecord,
+} from "@/components/orders/OrderEvidenceSection";
+import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
@@ -75,6 +81,8 @@ export interface LendOrderData {
     slip_image_url?: string | null;
     date?: string;
   }>;
+  evidence?: EvidenceRecord[];
+  lenderAfterCount?: number;
 }
 
 const thb = new Intl.NumberFormat("th-TH", {
@@ -154,15 +162,20 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
 export default function LendOrderDetailClient({
   data,
   userId,
+  timeouts: _timeouts,
 }: {
   data: LendOrderData;
   userId: string;
+  timeouts?: any;
 }) {
   const router = useRouter();
   const { order, item, renter, payments } = data;
 
   const [currentStatus, setCurrentStatus] = useState<string>(order.status);
   const [paymentsList, setPaymentsList] = useState(payments);
+  const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>(
+    data.evidence || []
+  );
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputes, setDisputes] = useState<any[]>([]);
@@ -194,8 +207,6 @@ export default function LendOrderDetailClient({
   // Modals for Before & After evidence
   const [showBeforeModal, setShowBeforeModal] = useState<boolean>(false);
   const [showAfterModal, setShowAfterModal] = useState<boolean>(false);
-  const [beforePreview, setBeforePreview] = useState<string | null>(null);
-  const [afterPreview, setAfterPreview] = useState<string | null>(null);
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -214,6 +225,10 @@ export default function LendOrderDetailClient({
 
       if (Array.isArray(latestOrder.payment)) {
         setPaymentsList(latestOrder.payment);
+      }
+
+      if (Array.isArray(latestOrder.evidence)) {
+        setEvidenceList(latestOrder.evidence);
       }
     } catch {
       // ignore
@@ -251,6 +266,18 @@ export default function LendOrderDetailClient({
           fetchLatestOrder();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rentalevidenceimage",
+          filter: `order_id=eq.${order.order_id}`,
+        },
+        () => {
+          fetchLatestOrder();
+        }
+      )
       .subscribe();
 
     const interval = setInterval(fetchLatestOrder, 1500);
@@ -277,6 +304,24 @@ export default function LendOrderDetailClient({
   const step = statusStep(currentStatus, hasPending);
   const isCancelled = step === -1;
   const chip = STATUS_CHIP[currentStatus] ?? { label: currentStatus, cls: "bg-slate-100 text-slate-600" };
+
+  const lenderBefore = summarizeEvidence(evidenceList, "lender_before");
+  const renterBefore = summarizeEvidence(evidenceList, "renter_before");
+  const lenderAfter = summarizeEvidence(evidenceList, "lender_after");
+  const renterAfter = summarizeEvidence(evidenceList, "renter_after");
+  const showBeforeSection =
+    currentStatus === "paid" ||
+    currentStatus === "item_sent" ||
+    currentStatus === "item_returned" ||
+    currentStatus === "completed" ||
+    lenderBefore !== null ||
+    renterBefore !== null;
+  const showAfterSection =
+    currentStatus === "item_sent" ||
+    currentStatus === "item_returned" ||
+    currentStatus === "completed" ||
+    lenderAfter !== null ||
+    renterAfter !== null;
 
   async function handleApprovePayment() {
     try {
@@ -340,76 +385,15 @@ export default function LendOrderDetailClient({
     }
   }
 
-  // ส่งมอบอุปกรณ์ & บันทึกสภาพก่อนให้เช่า
-  async function handleSubmitBeforeHandover(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      setIsUpdating(true);
-      setErrorMsg(null);
-
-      const res = await fetch("/api/handover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.order_id,
-          userId,
-          evidenceType: "lender_before",
-          imageUrl: beforePreview || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
-        }),
-      });
-
-      const result = await res.json();
-      if (!res.ok) {
-        setErrorMsg(result.message || "บันทึกหลักฐานไม่สำเร็จ");
-        return;
-      }
-
-      setCurrentStatus("item_sent");
-      setShowBeforeModal(false);
-      setSuccessMsg("บันทึกหลักฐานสภาพก่อนให้เช่าและส่งมอบอุปกรณ์เรียบร้อยแล้ว");
-      router.refresh();
-    } catch (err) {
-      console.error("Handover submit error:", err);
-      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-      setIsUpdating(false);
-    }
-  }
-
-  // รับคืนอุปกรณ์ & บันทึกสภาพหลังการใช้งาน
-  async function handleSubmitAfterReturn(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      setIsUpdating(true);
-      setErrorMsg(null);
-
-      const res = await fetch("/api/return", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.order_id,
-          userId,
-          evidenceType: "lender_after",
-          imageUrl: afterPreview || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60",
-        }),
-      });
-
-      const result = await res.json();
-      if (!res.ok) {
-        setErrorMsg(result.message || "บันทึกหลักฐานไม่สำเร็จ");
-        return;
-      }
-
-      setCurrentStatus("completed");
-      setShowAfterModal(false);
-      setSuccessMsg("ตรวจสอบสภาพหลังการใช้งานและเสร็จสิ้นการเช่าเรียบร้อยแล้ว");
-      router.refresh();
-    } catch (err) {
-      console.error("Return submit error:", err);
-      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-      setIsUpdating(false);
-    }
+  function handleEvidenceSuccess(res: {
+    status?: string;
+    bothUploaded?: boolean;
+    message?: string;
+  }) {
+    if (res.status) setCurrentStatus(res.status);
+    if (res.message) setSuccessMsg(res.message);
+    fetchLatestOrder();
+    router.refresh();
   }
 
   return (
@@ -785,6 +769,43 @@ export default function LendOrderDetailClient({
                 </div>
               </div>
             </section>
+
+            {/* 5) หลักฐานตอนส่งมอบของ (ก่อนเริ่มเช่า - ทั้งสองฝ่ายต้องอัปโหลด) */}
+            {showBeforeSection && (
+              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <OrderEvidencePanel
+                  orderId={order.order_id}
+                  userId={userId}
+                  viewerRole="lender"
+                  myName="ผู้ให้เช่า"
+                  otherName={renter.username || renter.fullName || "ผู้เช่า"}
+                  phase="before"
+                  canUpload={currentStatus === "paid"}
+                  evidenceList={evidenceList}
+                  onSuccess={handleEvidenceSuccess}
+                />
+              </section>
+            )}
+
+            {/* 6) หลักฐานตอนรับของคืน (หลังใช้งาน - ทั้งสองฝ่ายต้องอัปโหลด) */}
+            {showAfterSection && (
+              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <OrderEvidencePanel
+                  orderId={order.order_id}
+                  userId={userId}
+                  viewerRole="lender"
+                  myName="ผู้ให้เช่า"
+                  otherName={renter.username || renter.fullName || "ผู้เช่า"}
+                  phase="after"
+                  canUpload={
+                    currentStatus === "item_sent" ||
+                    currentStatus === "item_returned"
+                  }
+                  evidenceList={evidenceList}
+                  onSuccess={handleEvidenceSuccess}
+                />
+              </section>
+            )}
           </div>
 
           {/* ───────────── ฝั่งขวา (การตัดสินใจ & สรุปยอดรายได้) ───────────── */}
@@ -883,13 +904,27 @@ export default function LendOrderDetailClient({
                 )
               ) : currentStatus === "paid" ? (
                 <div className="space-y-3">
-                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1">
+                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-2">
                     <p className="text-xs font-bold text-emerald-900">
-                      ผู้เช่าชำระเงินเรียบร้อยแล้ว
+                      ผู้เช่าชำระเงินเรียบร้อยแล้ว · ขั้นตอนส่งมอบของ
                     </p>
                     <p className="text-[11px] text-emerald-700">
-                      กรุณาถ่ายรูปบันทึกสภาพอุปกรณ์ก่อนส่งมอบ จากนั้นส่งมอบอุปกรณ์ให้ผู้เช่า
+                      ทั้งคุณและผู้เช่าต้องถ่ายรูปบันทึกหลักฐานสภาพอุปกรณ์ก่อนเริ่มเช่า (ฝ่ายละไม่เกิน 5 รูป) เมื่ออัปโหลดครบทั้งสองฝ่ายจะเริ่มเช่าทันที
                     </p>
+                    <div className="space-y-1.5 border-t border-emerald-200/70 pt-2 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">คุณ (ผู้ให้เช่า):</span>
+                        <span className={lenderBefore ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
+                          {lenderBefore ? `✓ อัปโหลดแล้ว (${lenderBefore.count} รูป)` : "• รออัปโหลด"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">{renter.username || "ผู้เช่า"} (ผู้เช่า):</span>
+                        <span className={renterBefore ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
+                          {renterBefore ? `✓ อัปโหลดแล้ว (${renterBefore.count} รูป)` : "• รออัปโหลด"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -897,18 +932,36 @@ export default function LendOrderDetailClient({
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
                   >
                     <Camera className="h-4 w-4" />
-                    <span>ถ่ายรูปสภาพก่อนให้เช่า &amp; ส่งมอบ</span>
+                    <span>
+                      {lenderBefore
+                        ? "ดูรูปหลักฐานส่งมอบของ"
+                        : "ถ่ายรูปสภาพก่อนให้เช่า & ส่งมอบ"}
+                    </span>
                   </button>
                 </div>
               ) : currentStatus === "item_sent" || currentStatus === "item_returned" ? (
                 <div className="space-y-3">
-                  <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-1">
+                  <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
                     <p className="text-xs font-bold text-sky-900">
-                      อุปกรณ์กำลังถูกเช่าใช้งาน
+                      อุปกรณ์กำลังถูกเช่าใช้งาน · ขั้นตอนคืนของ
                     </p>
                     <p className="text-[11px] text-sky-700">
-                      นัดหมายรับคืนในวันที่ {formatDate(order.end_date)} เมื่อได้รับของคืนแล้ว ให้ถ่ายรูปบันทึกสภาพหลังการใช้งาน
+                      นัดหมายรับคืนในวันที่ {formatDate(order.end_date)} ทั้งคุณและผู้เช่าต้องถ่ายรูปสภาพหลังใช้งาน (ฝ่ายละไม่เกิน 5 รูป) เมื่อครบทั้งสองฝ่ายการเช่าจะเสร็จสมบูรณ์
                     </p>
+                    <div className="space-y-1.5 border-t border-sky-200/70 pt-2 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">คุณ (ผู้ให้เช่า):</span>
+                        <span className={lenderAfter ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
+                          {lenderAfter ? `✓ อัปโหลดแล้ว (${lenderAfter.count} รูป)` : "• รออัปโหลด"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">{renter.username || "ผู้เช่า"} (ผู้เช่า):</span>
+                        <span className={renterAfter ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
+                          {renterAfter ? `✓ อัปโหลดแล้ว (${renterAfter.count} รูป)` : "• รออัปโหลด"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -916,7 +969,11 @@ export default function LendOrderDetailClient({
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 transition duration-200 hover:from-emerald-700 hover:to-teal-800 active:scale-95"
                   >
                     <Camera className="h-4 w-4" />
-                    <span>ถ่ายรูปสภาพหลังใช้งาน &amp; เสร็จสิ้นการเช่า</span>
+                    <span>
+                      {lenderAfter
+                        ? "ดูรูปหลักฐานการคืนของ"
+                        : "ถ่ายรูปสภาพหลังใช้งาน & รับคืน"}
+                    </span>
                   </button>
                 </div>
               ) : currentStatus === "completed" ? (
@@ -973,163 +1030,37 @@ export default function LendOrderDetailClient({
         }}
         userRole="lender"
       />
-      {/* Modal 1: ถ่ายรูปสภาพสินค้าก่อนให้เช่า (Step 5) */}
-      {showBeforeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setShowBeforeModal(false)}
-              className="absolute right-4 top-4 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
+      {/* Modal 1: ถ่ายรูปสภาพสินค้าก่อนให้เช่า (Step 5 - ทั้งสองฝ่ายต้องอัปโหลด) */}
+      <OrderEvidenceModal
+        isOpen={showBeforeModal}
+        onClose={() => setShowBeforeModal(false)}
+        orderId={order.order_id}
+        userId={userId}
+        viewerRole="lender"
+        myName="ผู้ให้เช่า"
+        otherName={renter.username || renter.fullName || "ผู้เช่า"}
+        phase="before"
+        canUpload={currentStatus === "paid"}
+        evidenceList={evidenceList}
+        onSuccess={handleEvidenceSuccess}
+      />
 
-            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#c0e6fd]/40 text-[#1b3554]">
-                <Camera className="h-5 w-5" />
-              </span>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">ถ่ายรูปสภาพอุปกรณ์ก่อนให้เช่า</h3>
-                <p className="text-xs text-slate-500">บันทึกเป็นหลักฐานก่อนส่งมอบอุปกรณ์ให้ผู้เช่า</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmitBeforeHandover} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  รูปถ่ายสภาพอุปกรณ์ (ทุกมุม/จุดสำคัญ) <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
-                  {beforePreview ? (
-                    <div className="space-y-2">
-                      <img src={beforePreview} alt="สภาพก่อนให้เช่า" className="max-h-48 rounded-xl object-contain mx-auto shadow-sm" />
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                        <Upload className="h-5 w-5" />
-                      </div>
-                      <p className="text-xs font-semibold text-slate-700">คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง</p>
-                      <p className="text-[11px] text-slate-400">แนะนำให้ถ่ายรูปตัวเครื่อง หน้าเลนส์ ปุ่ม และอุปกรณ์เสริม</p>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => setBeforePreview(reader.result as string);
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="mt-3 block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBeforeModal(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdating}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
-                >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  <span>ยืนยันส่งมอบอุปกรณ์</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 2: ถ่ายรูปสภาพสินค้าหลังการใช้งาน (Step 6) */}
-      {showAfterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setShowAfterModal(false)}
-              className="absolute right-4 top-4 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                <Camera className="h-5 w-5" />
-              </span>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">ถ่ายรูปสภาพอุปกรณ์หลังการใช้งาน</h3>
-                <p className="text-xs text-slate-500">บันทึกเป็นหลักฐานหลังรับอุปกรณ์คืนและเสร็จสิ้นการเช่า</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmitAfterReturn} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  รูปถ่ายสภาพอุปกรณ์หลังใช้งาน <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
-                  {afterPreview ? (
-                    <div className="space-y-2">
-                      <img src={afterPreview} alt="สภาพหลังใช้งาน" className="max-h-48 rounded-xl object-contain mx-auto shadow-sm" />
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                        <Upload className="h-5 w-5" />
-                      </div>
-                      <p className="text-xs font-semibold text-slate-700">คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวาง</p>
-                      <p className="text-[11px] text-slate-400">ตรวจสอบสภาพ ความสมบูรณ์ และการทำงานของอุปกรณ์</p>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => setAfterPreview(reader.result as string);
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="mt-3 block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-emerald-600 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-emerald-700"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAfterModal(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdating}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50"
-                >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  <span>ยืนยันตรวจรับคืน &amp; เสร็จสิ้นการเช่า</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal 2: ถ่ายรูปสภาพสินค้าหลังการใช้งาน (Step 6 - ทั้งสองฝ่ายต้องอัปโหลด) */}
+      <OrderEvidenceModal
+        isOpen={showAfterModal}
+        onClose={() => setShowAfterModal(false)}
+        orderId={order.order_id}
+        userId={userId}
+        viewerRole="lender"
+        myName="ผู้ให้เช่า"
+        otherName={renter.username || renter.fullName || "ผู้เช่า"}
+        phase="after"
+        canUpload={
+          currentStatus === "item_sent" || currentStatus === "item_returned"
+        }
+        evidenceList={evidenceList}
+        onSuccess={handleEvidenceSuccess}
+      />
     </div>
   );
 }

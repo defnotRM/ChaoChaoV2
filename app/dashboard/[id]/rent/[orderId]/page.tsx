@@ -1,10 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getOrderTimeouts } from "@/lib/system-config";
-import { createClient } from "@/lib/supabase/server";
-import RentOrderDetailClient, {
-  type RentOrderDetailData,
-} from "./RentOrderDetailClient";
+import RentOrderDetailClient, { type RentOrderDetailData } from "./RentOrderDetailClient";
 
 export const dynamic = "force-dynamic";
 
@@ -16,38 +12,11 @@ export default async function UserRentalOrderDetailPage({
   const { id: userId, orderId } = await params;
   const admin = createAdminClient();
 
-  // ต้องล็อกอิน และต้องเป็นเจ้าของ dashboard นี้เอง (หรือ admin) เท่านั้นถึงจะเข้าดูได้
-  const supabase = await createClient();
-  const {
-    data: { user: sessionUser },
-  } = await supabase.auth.getUser();
-
-  if (!sessionUser) {
-    redirect("/login");
-  }
-
-  let isAdmin = false;
-  if (sessionUser.id !== userId) {
-    const { data: sessionRoles } = await admin
-      .from("user_role_assignment")
-      .select("role ( role_type )")
-      .eq("user_id", sessionUser.id);
-    isAdmin = (sessionRoles || []).some(
-      (r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
-        const item = Array.isArray(r.role) ? r.role[0] : r.role;
-        return item?.role_type === "admin";
-      },
-    );
-    if (!isAdmin) {
-      notFound();
-    }
-  }
-
   // 1. ดึงข้อมูลคำสั่งเช่า
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
-      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at",
+      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at"
     )
     .eq("order_id", orderId)
     .maybeSingle();
@@ -56,13 +25,8 @@ export default async function UserRentalOrderDetailPage({
     notFound();
   }
 
-  // ตรวจว่า order นี้เป็นของผู้เช่าที่ล็อกอินอยู่จริง (กันเดา orderId ของ order คนอื่น)
-  if (!isAdmin && order.user_id !== userId) {
-    notFound();
-  }
-
-  // 2. ดึงข้อมูลสินค้า, รูปภาพสินค้า, เงื่อนไขสินค้า, และประวัติการชำระเงิน
-  const [itemRes, imageRes, condRes, paymentsRes] = await Promise.all([
+  // 2. ดึงข้อมูลสินค้า, รูปภาพสินค้า, เงื่อนไขสินค้า, ประวัติการชำระเงิน, และรูปหลักฐาน
+  const [itemRes, imageRes, condRes, paymentsRes, evidenceRes] = await Promise.all([
     admin
       .from("item")
       .select("item_name, rental_fee_per_day, deposit, user_id")
@@ -82,6 +46,11 @@ export default async function UserRentalOrderDetailPage({
       .from("payment")
       .select("payment_id, amount, status, slip_image_url, date")
       .eq("order_id", orderId),
+    admin
+      .from("rentalevidenceimage")
+      .select("evidence_id, evidence_type, image_url, created_at, uploaded_by")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true }),
   ]);
 
   const item = itemRes.data;
@@ -94,25 +63,24 @@ export default async function UserRentalOrderDetailPage({
     ownerId
       ? admin
           .from("useraccount")
-          .select(
-            "user_id, username, firstname, lastname, email, avatar_url, updated_at, status",
-          )
+          .select("user_id, username, firstname, lastname, email, avatar_url, updated_at, status")
           .eq("user_id", ownerId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     ownerId
-      ? admin.from("useraccount").select("phone").eq("user_id", ownerId)
+      ? admin
+          .from("userphones")
+          .select("phone")
+          .eq("user_id", ownerId)
       : Promise.resolve({ data: [] }),
   ]);
 
   const owner = ownerRes.data;
   const ownerFullName = owner?.username || "ผู้ให้เช่า";
 
-  const ownerPhoneData =
-    (ownerPhoneRes as { data?: { phone?: string }[] | null })?.data || [];
-  const ownerPhones = ownerPhoneData
-    .map((p) => p.phone)
-    .filter((p): p is string => Boolean(p));
+  const ownerPhones = ((ownerPhoneRes as any).data || [])
+    .map((p: any) => p.phone)
+    .filter(Boolean);
 
   const avatarUrl = owner?.avatar_url || null;
 
@@ -166,11 +134,14 @@ export default async function UserRentalOrderDetailPage({
       slip_image_url: p.slip_image_url || null,
       date: p.date,
     })),
+    evidence: (evidenceRes.data || []).map((e) => ({
+      evidence_id: e.evidence_id,
+      evidence_type: e.evidence_type,
+      image_url: e.image_url,
+      created_at: e.created_at,
+      uploaded_by: e.uploaded_by,
+    })),
   };
 
-  const timeouts = await getOrderTimeouts();
-
-  return (
-    <RentOrderDetailClient data={data} userId={userId} timeouts={timeouts} />
-  );
+  return <RentOrderDetailClient data={data} userId={userId} />;
 }

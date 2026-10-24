@@ -622,8 +622,8 @@ export default function HandoverClient({ data }: { data: HandoverPageData }) {
 /* ───────────── ชิ้นส่วนย่อย ───────────── */
 
 function Stepper() {
-  const steps = ["เลือกวัน–จุดนัด", "ส่งคำขอ", "ชำระเงิน", "รับของ", "คืนของ"];
-  const active = 3;
+  const steps = ["ส่งคำขอ", "ผู้ให้เช่าอนุมัติ", "รอชำระเงิน", "ตรวจการชำระ", "รับของ", "คืนของ"];
+  const active = 4;
   return (
     <div className="overflow-x-auto pb-1">
       <ol className="flex min-w-[680px] items-center">
