@@ -50,22 +50,6 @@ export default function ProfilePage() {
   const [bannerImgError, setBannerImgError] = useState(false);
   const [idCardImgError, setIdCardImgError] = useState(false);
   const [selfieImgError, setSelfieImgError] = useState(false);
-
-  useEffect(() => {
-    setAvatarImgError(false);
-  }, [avatarUrl]);
-
-  useEffect(() => {
-    setBannerImgError(false);
-  }, [bannerUrl]);
-
-  useEffect(() => {
-    setIdCardImgError(false);
-  }, [idCardUrl]);
-
-  useEffect(() => {
-    setSelfieImgError(false);
-  }, [idCardSelfieUrl]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
@@ -112,6 +96,23 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Reset image error states when URLs change
+  useEffect(() => {
+    setAvatarImgError(false);
+  }, [avatarUrl]);
+
+  useEffect(() => {
+    setBannerImgError(false);
+  }, [bannerUrl]);
+
+  useEffect(() => {
+    setIdCardImgError(false);
+  }, [idCardUrl]);
+
+  useEffect(() => {
+    setSelfieImgError(false);
+  }, [idCardSelfieUrl]);
 
   const fetchProfile = async () => {
     try {
