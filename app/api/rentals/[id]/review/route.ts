@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToStorage } from "@/lib/storage";
+import { getSimulatedTimeInfo } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -169,12 +170,13 @@ export async function POST(
     // ตรวจสอบว่ามีรีวิวเดิมหรือไม่
     const { data: existingRev } = await admin
       .from("review")
-      .select("review_id")
+      .select("review_id, created_at")
       .eq("order_id", orderId)
       .maybeSingle();
 
+    const timeInfo = await getSimulatedTimeInfo(admin);
+    const nowIso = timeInfo.simulatedNowIso;
     let reviewId = existingRev?.review_id as string | undefined;
-    const nowIso = new Date().toISOString();
 
     if (reviewId) {
       const { error: upErr } = await admin
@@ -199,8 +201,10 @@ export async function POST(
           order_id: orderId,
           rating,
           comment: comment || null,
+          created_at: nowIso,
+          updated_at: nowIso,
         })
-        .select("review_id")
+        .select("review_id, created_at")
         .single();
 
       if (insErr || !inserted) {
@@ -224,6 +228,7 @@ export async function POST(
         finalImageUrls.map((url) => ({
           review_id: reviewId,
           image_url: url,
+          created_at: nowIso,
         })),
       );
     }
@@ -271,7 +276,7 @@ export async function POST(
         order_id: orderId,
         rating,
         comment,
-        created_at: nowIso,
+        created_at: existingRev?.created_at || nowIso,
         updated_at: nowIso,
         imageUrls: finalImageUrls,
       },
