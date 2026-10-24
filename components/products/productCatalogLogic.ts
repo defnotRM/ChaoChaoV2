@@ -34,10 +34,13 @@ export type ProductCategoryOption = {
   count: number;
 };
 
-export function createInitialProductFilters(initialSearch = ""): ProductFilterState {
+export function createInitialProductFilters(
+  initialSearch = "",
+  initialCategoryIds: string[] = [],
+): ProductFilterState {
   return {
     searchQuery: initialSearch,
-    selectedCategoryIds: [],
+    selectedCategoryIds: initialCategoryIds,
     minPrice: "",
     maxPrice: "",
     minRating: 0,

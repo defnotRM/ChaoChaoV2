@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return apiError("ข้อมูลไม่ถูกต้อง", 400, parsed.error.flatten());
   }
 
-  const { damageCost } = parsed.data;
+  const damageCost = parsed.data.damageCost || parsed.data.damageFee || 0;
 
   const { data, error } = await supabase.rpc("settle_rental_order", {
     p_order_id: id,

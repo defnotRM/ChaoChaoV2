@@ -110,6 +110,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const allowedFrom: Record<string, string[]> = {
     awaiting_payment: ["requested"],
+    rejected_by_lender: ["requested"],
     rejected: ["requested"],
     cancelled: ["requested", "awaiting_payment"],
   };
@@ -176,7 +177,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           related_order_id: id,
           is_read: false,
         });
-      } else if (status === "rejected") {
+      } else if (
+        (status as string) === "rejected_by_lender" ||
+        (status as string) === "rejected"
+      ) {
         await admin.from("notification").insert({
           user_id: current.user_id,
           type: "order_rejected",
