@@ -97,9 +97,7 @@ export async function GET(request: Request) {
       )
       .order("created_at", { ascending: false });
 
-    if (status === "lender_cancellation") {
-      query = query.like("description", "[ผู้ให้เช่ายกเลิกคำสั่งเช่า]%");
-    } else if (status !== "all") {
+    if (status !== "all") {
       query = query.eq("status", status);
     }
 

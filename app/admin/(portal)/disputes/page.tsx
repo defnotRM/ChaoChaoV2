@@ -1,25 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useEffect, useState, useCallback } from "react";
 import {
   Scale,
-  AlertTriangle,
   CheckCircle2,
-  XCircle,
-  Clock,
   Eye,
   X,
   ExternalLink,
-  ShieldAlert,
-  Calendar,
-  DollarSign,
   User,
   Package,
-  FileText,
   RefreshCw,
   Search,
-  ChevronRight,
-  UserX,
 } from "lucide-react";
 
 interface ReportImage {
@@ -38,9 +30,7 @@ interface DisputeReport {
     | "pending_investigation"
     | "resolved_renter_fault"
     | "resolved_lender_fault"
-    | "dismissed"
-    | "resolved"
-    | string;
+    | "dismissed";
   verdict: string | null;
   damage_amount: number | null;
   created_at: string;
@@ -136,7 +126,7 @@ export default function AdminDisputesPage() {
     text: string;
   } | null>(null);
 
-  const fetchDisputes = async () => {
+  const fetchDisputes = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/disputes?status=${statusFilter}`);
@@ -152,11 +142,12 @@ export default function AdminDisputesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDisputes();
-  }, [statusFilter]);
+  }, [fetchDisputes]);
 
   const openResolveDialog = (dispute: DisputeReport) => {
     setSelectedDispute(dispute);
@@ -259,13 +250,7 @@ export default function AdminDisputesPage() {
     );
   });
 
-  const getReportTypeBadge = (typeName?: string, description?: string) => {
-    if (description?.startsWith("[ผู้ให้เช่ายกเลิกคำสั่งเช่า]")) {
-      return {
-        label: "ผู้ให้เช่ายกเลิกคำสั่งเช่า (FR-35)",
-        bg: "bg-rose-50 text-rose-800 border-rose-300 font-bold",
-      };
-    }
+  const getReportTypeBadge = (typeName?: string) => {
     switch (typeName) {
       case "damaged_item":
         return {
@@ -295,17 +280,7 @@ export default function AdminDisputesPage() {
     }
   };
 
-  const getStatusBadge = (status: string, description?: string) => {
-    if (
-      description?.startsWith("[ผู้ให้เช่ายกเลิกคำสั่งเช่า]") ||
-      status === "resolved"
-    ) {
-      return {
-        label: "คืนเงินผู้เช่าสำเร็จ (100%)",
-        bg: "bg-emerald-500/15 text-emerald-800",
-        dot: "bg-emerald-500",
-      };
-    }
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending_investigation":
         return {
@@ -381,7 +356,7 @@ export default function AdminDisputesPage() {
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
-        <div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1 flex-wrap">
+        <div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
           <button
             type="button"
             onClick={() => setStatusFilter("pending_investigation")}
@@ -392,17 +367,6 @@ export default function AdminDisputesPage() {
             }`}
           >
             รอการตัดสิน (Pending)
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("lender_cancellation")}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-              statusFilter === "lender_cancellation"
-                ? "bg-white text-[#1b3554] shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            ยกเลิกโดยผู้ให้เช่า (FR-35)
           </button>
           <button
             type="button"
@@ -461,13 +425,9 @@ export default function AdminDisputesPage() {
         <div className="space-y-6">
           {filteredReports.map((report) => {
             const typeInfo = getReportTypeBadge(
-              report.rentalreporttype?.type_name,
-              report.description
+              report.rentalreporttype?.type_name
             );
-            const statusInfo = getStatusBadge(
-              report.status,
-              report.description
-            );
+            const statusInfo = getStatusBadge(report.status);
             const order = report.rentalorder;
             const isPending = report.status === "pending_investigation";
 
@@ -557,12 +517,15 @@ export default function AdminDisputesPage() {
                                   onClick={() => setPreviewImage(img.image_url)}
                                   className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 transition hover:border-[#3f6593]"
                                 >
-                                  <img
+                                  <Image
                                     src={img.image_url}
-                                    alt="Evidence"
-                                    className="h-full w-full object-cover transition group-hover:scale-105"
+                                    alt="ภาพหลักฐานข้อพิพาท"
+                                    fill
+                                    sizes="80px"
+                                    className="object-cover transition group-hover:scale-105"
+                                    unoptimized={img.image_url.startsWith("data:") || img.image_url.startsWith("blob:")}
                                   />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                                     <Eye className="h-4 w-4 text-white" />
                                   </div>
                                 </div>
@@ -732,11 +695,14 @@ export default function AdminDisputesPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-3 flex max-h-[75vh] items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
-              <img
+            <div className="relative mt-3 flex min-h-[300px] max-h-[75vh] w-full items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
+              <Image
                 src={previewImage}
-                alt="Evidence"
+                alt="ภาพหลักฐานข้อพิพาทขนาดเต็ม"
+                width={800}
+                height={600}
                 className="max-h-[70vh] w-auto rounded-xl object-contain"
+                unoptimized={previewImage.startsWith("data:") || previewImage.startsWith("blob:")}
               />
             </div>
             <div className="mt-3 flex justify-end">
