@@ -28,8 +28,8 @@ export default async function UserRentalOrderDetailPage({
     notFound();
   }
 
-  // 2. ดึงข้อมูลสินค้า, รูปภาพสินค้า, เงื่อนไขสินค้า, ประวัติการชำระเงิน, และรูปหลักฐาน
-  const [itemRes, imageRes, condRes, paymentsRes, evidenceRes] = await Promise.all([
+  // 2. ดึงข้อมูลสินค้า, รูปภาพสินค้า, เงื่อนไขสินค้า, ประวัติการชำระเงิน, รูปหลักฐาน, และรีวิว
+  const [itemRes, imageRes, condRes, paymentsRes, evidenceRes, reviewRes] = await Promise.all([
     admin
       .from("item")
       .select("item_name, rental_fee_per_day, deposit, user_id")
@@ -54,6 +54,11 @@ export default async function UserRentalOrderDetailPage({
       .select("evidence_id, evidence_type, image_url, created_at, uploaded_by")
       .eq("order_id", orderId)
       .order("created_at", { ascending: true }),
+    admin
+      .from("review")
+      .select("review_id, order_id, rating, comment, created_at, updated_at, reviewimage ( image_url, sequence )")
+      .eq("order_id", orderId)
+      .maybeSingle(),
   ]);
 
   const item = itemRes.data;
@@ -108,6 +113,21 @@ export default async function UserRentalOrderDetailPage({
   const conditions = (condRes.data || [])
     .map((c) => c.condition)
     .filter((c): c is string => Boolean(c && c.trim()));
+
+  const revData = reviewRes.data as any;
+  const orderReview = revData
+    ? {
+        review_id: revData.review_id,
+        order_id: revData.order_id,
+        rating: Number(revData.rating) || 5,
+        comment: revData.comment || "",
+        created_at: revData.created_at,
+        updated_at: revData.updated_at,
+        imageUrls: [...(revData.reviewimage || [])]
+          .sort((a: any, b: any) => (a.sequence ?? 0) - (b.sequence ?? 0))
+          .map((img: any) => img.image_url),
+      }
+    : null;
 
   const data: RentOrderDetailData = {
     order: {
@@ -167,6 +187,7 @@ export default async function UserRentalOrderDetailPage({
       created_at: e.created_at,
       uploaded_by: e.uploaded_by,
     })),
+    review: orderReview,
   };
 
   return <RentOrderDetailClient data={data} userId={userId} />;

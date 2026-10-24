@@ -24,6 +24,7 @@ import {
   Phone,
   Printer,
   QrCode,
+  Star,
   Upload,
   User,
   Wallet,
@@ -32,6 +33,9 @@ import {
 } from "lucide-react";
 import CountdownBanner from "./CountdownBanner";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
+import OrderReviewSection, {
+  type OrderReviewRecord,
+} from "@/components/orders/OrderReviewSection";
 import {
   OrderEvidenceModal,
   OrderEvidencePanel,
@@ -91,6 +95,7 @@ export interface RentOrderDetailData {
     date?: string;
   }>;
   evidence?: EvidenceRecord[];
+  review?: OrderReviewRecord | null;
 }
 
 const PAYMENT_WINDOW_HOURS = 24;
@@ -201,6 +206,9 @@ export default function RentOrderDetailClient({
   const [paymentsList, setPaymentsList] = useState(data.payments);
   const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>(
     data.evidence || []
+  );
+  const [orderReview, setOrderReview] = useState<OrderReviewRecord | null>(
+    data.review ?? null
   );
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showBeforeModal, setShowBeforeModal] = useState(false);
@@ -915,6 +923,25 @@ export default function RentOrderDetailClient({
                 />
               </section>
             )}
+            {/* 7) รีวิวการเช่าอุปกรณ์ (แสดงหลังจากการเช่าเสร็จสมบูรณ์) */}
+            {currentStatus === "completed" && (
+              <OrderReviewSection
+                orderId={order.order_id}
+                itemId={order.item_id}
+                itemName={item.name}
+                userId={userId}
+                viewerRole="renter"
+                renterName={myAccountName}
+                renterAvatarUrl={myAvatarUrl}
+                lenderName={otherAccountName}
+                initialReview={orderReview}
+                onReviewSaved={(rev, msg) => {
+                  setOrderReview(rev);
+                  setSuccessMsg(msg);
+                  router.refresh();
+                }}
+              />
+            )}
           </div>
 
           {/* ───────────── ฝั่งขวา (สรุปค่าใช้จ่าย & การดำเนินการ) ───────────── */}
@@ -1066,12 +1093,27 @@ export default function RentOrderDetailClient({
                     </button>
                   </div>
                 ) : currentStatus === "completed" ? (
-                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
-                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
-                    </p>
-                    <p className="text-xs text-emerald-700">ขอบคุณที่ใช้บริการ ChaoChao!</p>
+                  <div className="space-y-3">
+                    <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
+                      <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        {orderReview
+                          ? `คุณให้คะแนนรีวิวการเช่านี้แล้ว (${orderReview.rating}/5 ดาว)`
+                          : "ร่วมแบ่งปันประสบการณ์ของคุณด้วยการเขียนรีวิวอุปกรณ์นี้"}
+                      </p>
+                    </div>
+                    <a
+                      href="#order-review-section"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-600 hover:to-orange-600 active:scale-95"
+                    >
+                      <Star className="h-4 w-4 fill-white" />
+                      <span>
+                        {orderReview ? "ดู / แก้ไขรีวิวของคุณ" : "เขียนรีวิวการเช่า"}
+                      </span>
+                    </a>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">

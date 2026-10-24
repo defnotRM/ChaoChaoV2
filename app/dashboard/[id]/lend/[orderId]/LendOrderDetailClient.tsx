@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
+import OrderReviewSection, {
+  type OrderReviewRecord,
+} from "@/components/orders/OrderReviewSection";
 import {
   OrderEvidenceModal,
   OrderEvidencePanel,
@@ -93,6 +96,7 @@ export interface LendOrderData {
   }>;
   evidence?: EvidenceRecord[];
   lenderAfterCount?: number;
+  review?: OrderReviewRecord | null;
 }
 
 const thb = new Intl.NumberFormat("th-TH", {
@@ -871,6 +875,21 @@ export default function LendOrderDetailClient({
                   onSuccess={handleEvidenceSuccess}
                 />
               </section>
+            )}
+
+            {/* 7) รีวิวจากผู้เช่า (แสดงหลังจากการเช่าเสร็จสมบูรณ์) */}
+            {currentStatus === "completed" && (
+              <OrderReviewSection
+                orderId={order.order_id}
+                itemId={order.item_id}
+                itemName={item.name}
+                userId={userId}
+                viewerRole="lender"
+                renterName={otherAccountName}
+                renterAvatarUrl={otherAvatarUrl}
+                lenderName={myAccountName}
+                initialReview={data.review ?? null}
+              />
             )}
           </div>
 

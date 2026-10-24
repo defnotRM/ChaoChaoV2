@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  BadgeCheck,
   CalendarDays,
+  CheckCircle2,
   ClipboardCheck,
   Clock3,
   MapPin,
+  MessageCircle,
   Star,
   Tag,
   WalletCards,
@@ -15,7 +18,7 @@ import BookingWidget from "@/components/products/BookingWidget";
 import { StatusChip } from "@/components/products/designSystem";
 import ProductGallery from "@/components/products/ProductGallery";
 import { getProductById } from "@/lib/products/queries";
-import { ITEM_CONDITION_LABELS, type ItemStatus } from "@/lib/types/product";
+import type { ItemStatus } from "@/lib/types/product";
 
 const thbFormatter = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -56,18 +59,8 @@ function formatTimestamp(date: string) {
   return dateFormatter.format(new Date(date));
 }
 
-function ProductStatus({
-  status,
-  isRentedOut,
-}: {
-  status: ItemStatus;
-  isRentedOut?: boolean;
-}) {
-  // ถูกเช่าออกไปอยู่ตอนนี้ แต่ยังจองวันอื่นได้ (ปฏิทินบอกวันว่างจริง)
-  const content =
-    status === "available" && isRentedOut
-      ? statusContent.rented
-      : statusContent[status];
+function ProductStatus({ status }: { status: ItemStatus }) {
+  const content = statusContent[status];
   return <StatusChip tone={content.tone}>{content.label}</StatusChip>;
 }
 
@@ -105,10 +98,7 @@ export default async function ProductDetailPage({
                 <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                   {product.categoryName}
                 </span>
-                <ProductStatus
-                  status={product.status}
-                  isRentedOut={product.isRentedOut}
-                />
+                <ProductStatus status={product.status} />
               </div>
 
               <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#000f22] sm:text-4xl">
@@ -130,27 +120,21 @@ export default async function ProductDetailPage({
                   <span>({product.reviewCount} รีวิว)</span>
                 </span>
 
-                {product.condition && (
-                  <>
-                    <span
-                      className="h-4 w-px bg-slate-200"
-                      aria-hidden="true"
-                    />
+                <span className="h-4 w-px bg-slate-200" aria-hidden="true" />
 
-                    <span className="inline-flex items-center gap-1.5">
-                      <Tag
-                        aria-hidden="true"
-                        className="h-4 w-4 text-slate-400"
-                      />
-                      <span>
-                        สภาพ:{" "}
-                        <strong className="font-semibold text-slate-700">
-                          {ITEM_CONDITION_LABELS[product.condition]}
-                        </strong>
-                      </span>
-                    </span>
-                  </>
-                )}
+                <span className="inline-flex items-center gap-1.5">
+                  <Tag aria-hidden="true" className="h-4 w-4 text-slate-400" />
+                  <span>
+                    สภาพ:{" "}
+                    <strong className="font-semibold text-slate-700">
+                      {product.condition === "like-new"
+                        ? "เหมือนใหม่"
+                        : product.condition === "good"
+                          ? "ดี"
+                          : "พอใช้"}
+                    </strong>
+                  </span>
+                </span>
 
                 <span className="h-4 w-px bg-slate-200" aria-hidden="true" />
 
@@ -292,12 +276,23 @@ export default async function ProductDetailPage({
                       className="rounded-xl border border-slate-100 bg-slate-50/50 p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
-                            {review.reviewerName.charAt(0).toUpperCase()}
-                          </span>
+                        <div className="flex items-center gap-2.5">
+                          {review.reviewerAvatarUrl ? (
+                            <img
+                              src={review.reviewerAvatarUrl}
+                              alt={review.reviewerName}
+                              className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                            />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">
+                              {review.reviewerName.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
                           <strong className="text-sm font-semibold text-slate-800">
-                            {review.reviewerName}
+                            {review.reviewerName}{" "}
+                            <span className="text-xs font-normal text-slate-500">
+                              (ผู้เช่า)
+                            </span>
                           </strong>
                         </div>
                         <div className="flex items-center gap-2">
@@ -325,9 +320,30 @@ export default async function ProductDetailPage({
                           </time>
                         </div>
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        {review.comment}
-                      </p>
+                      {review.comment && (
+                        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                          {review.comment}
+                        </p>
+                      )}
+                      {review.imageUrls && review.imageUrls.length > 0 && (
+                        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                          {review.imageUrls.map((url, idx) => (
+                            <a
+                              key={`${url}-${idx}`}
+                              href={url.startsWith("data:") ? undefined : url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative block aspect-square overflow-hidden rounded-xl ring-1 ring-slate-200"
+                            >
+                              <img
+                                src={url}
+                                alt={`รูปรีวิวที่ ${idx + 1}`}
+                                className="h-full w-full object-cover transition group-hover:scale-105"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>

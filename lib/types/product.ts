@@ -1,12 +1,6 @@
 export type ItemStatus = "available" | "rented" | "maintenance" | "inactive";
 export type ItemCondition = "like-new" | "good" | "fair";
 
-export const ITEM_CONDITION_LABELS: Record<ItemCondition, string> = {
-  "like-new": "เหมือนใหม่",
-  good: "ดี",
-  fair: "พอใช้",
-};
-
 // Database rows used by the product/listing feature.
 export interface ItemCategoryRow {
   category_id: number;
@@ -115,8 +109,10 @@ export interface ProductOwner {
 export interface ProductReview {
   id: string;
   reviewerName: string;
+  reviewerAvatarUrl?: string | null;
   rating: number;
   comment: string;
+  imageUrls?: string[];
   createdAt: string;
 }
 
@@ -131,8 +127,7 @@ export interface Product {
   originalPrice: number;
   pricePerDay: number;
   deposit: number;
-  // null = สินค้าเก่าที่ยังไม่ได้ระบุสภาพ
-  condition: ItemCondition | null;
+  condition: ItemCondition;
   rating: number;
   reviewCount: number;
   locations: ProductLocation[];
@@ -141,8 +136,6 @@ export interface Product {
   rentalTerms: string[];
   reviews: ProductReview[];
   status: ItemStatus;
-  /** แสดงผลเท่านั้น: ถูกเช่าออกไปอยู่ตอนนี้ (มีออเดอร์ item_sent/item_received) ไม่ใช่ตัวตัดสินการจอง */
-  isRentedOut?: boolean;
   availability: Array<{
     startDate: string;
     endDate: string;

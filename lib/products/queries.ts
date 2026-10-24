@@ -1,8 +1,6 @@
-import { getRentedOutItemIds } from "@/lib/products/rented-out";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   ItemCategoryRow,
-  ItemCondition,
   ItemStatus,
   Product,
   ProductLocation,
@@ -31,13 +29,6 @@ function normalizeStatus(status: unknown): ItemStatus {
   return VALID_STATUSES.includes(status as ItemStatus)
     ? (status as ItemStatus)
     : "inactive";
-}
-
-// item_condition เป็น NULL ได้ (สินค้าก่อน migration 25 ยังไม่ได้ระบุสภาพ)
-function normalizeCondition(value: unknown): ItemCondition | null {
-  return value === "like-new" || value === "good" || value === "fair"
-    ? value
-    : null;
 }
 
 // รวมที่อยู่ย่อยเป็นบรรทัดเดียว (คัดจาก lib/mock/product.ts:256)
@@ -115,13 +106,14 @@ export async function getProducts(): Promise<Product[]> {
 
   const { data: items } = await admin
     .from("item")
-    .select("*")
+    .select(
+      "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at"
+    )
     .order("created_at", { ascending: false });
 
   if (!items || items.length === 0) return [];
 
   const ids = items.map((it) => it.item_id);
-  const rentedOutIds = await getRentedOutItemIds(admin, ids);
 
   const [catRes, imgRes, locRes, availRes, reviewRes] = await Promise.all([
     admin.from("itemcategory").select("category_id, category_name"),
@@ -198,7 +190,7 @@ export async function getProducts(): Promise<Product[]> {
       originalPrice: toNumber(it.original_price),
       pricePerDay: toNumber(it.rental_fee_per_day),
       deposit: toNumber(it.deposit),
-      condition: normalizeCondition(it.item_condition),
+      condition: "good", // ไม่มีคอลัมน์ condition ใน DB — ค่า default (ไม่ถูกแสดงผล)
       rating: agg ? agg.sum / agg.count : 0,
       reviewCount: agg ? agg.count : 0,
       locations: locationsByItem.get(it.item_id) || [],
@@ -215,7 +207,6 @@ export async function getProducts(): Promise<Product[]> {
       rentalTerms: [],
       reviews: [],
       status: normalizeStatus(it.status),
-      isRentedOut: rentedOutIds.has(it.item_id),
       availability: availByItem.get(it.item_id) || [],
       createdAt: it.created_at,
     } satisfies Product;
@@ -228,7 +219,9 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   const { data: it, error } = await admin
     .from("item")
-    .select("*")
+    .select(
+      "item_id, user_id, category_id, item_name, description, original_price, rental_fee_per_day, deposit, status, created_at"
+    )
     .eq("item_id", id)
     .maybeSingle();
 
@@ -264,11 +257,11 @@ export async function getProductById(id: string): Promise<Product | null> {
         .select("user_id, firstname, lastname, username, avatar_url, updated_at, status, created_at")
         .eq("user_id", it.user_id)
         .maybeSingle(),
-      // รีวิวของชิ้นนี้ + ชื่อผู้รีวิว (renter ผ่าน rentalorder.user_id)
+      // รีวิวของชิ้นนี้ + ชื่อผู้รีวิว (renter ผ่าน rentalorder.user_id) + รูปประกอบรีวิว
       admin
         .from("review")
         .select(
-          "rating, comment, created_at, order:order_id!inner ( item_id, renter:user_id ( firstname, lastname, username ) )"
+          "review_id, rating, comment, created_at, reviewimage ( image_url, sequence ), order:order_id!inner ( item_id, renter:user_id ( firstname, lastname, username, avatar_url ) )"
         )
         .eq("order.item_id", id)
         .order("created_at", { ascending: false }),
@@ -292,10 +285,19 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   const reviews: ProductReview[] = (
     (reviewRes.data || []) as unknown as Array<{
+      review_id?: string;
       rating: number;
       comment: string | null;
       created_at: string;
-      order: { renter: { firstname: string | null; lastname: string | null; username: string | null } | null } | null;
+      reviewimage?: Array<{ image_url: string; sequence: number | null }> | null;
+      order: {
+        renter: {
+          firstname: string | null;
+          lastname: string | null;
+          username: string | null;
+          avatar_url?: string | null;
+        } | null;
+      } | null;
     }>
   ).map((r, index) => {
     const renter = r.order?.renter;
@@ -303,11 +305,16 @@ export async function getProductById(id: string): Promise<Product | null> {
       renter?.username ||
       [renter?.firstname, renter?.lastname].filter(Boolean).join(" ").trim() ||
       "ผู้เช่า";
+    const sortedReviewImages = [...(r.reviewimage || [])]
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+      .map((img) => img.image_url);
     return {
-      id: `${id}-review-${index}`,
+      id: r.review_id || `${id}-review-${index}`,
       reviewerName,
+      reviewerAvatarUrl: renter?.avatar_url || null,
       rating: toNumber(r.rating),
       comment: r.comment || "",
+      imageUrls: sortedReviewImages,
       createdAt: r.created_at,
     };
   });
@@ -387,7 +394,7 @@ export async function getProductById(id: string): Promise<Product | null> {
     originalPrice: toNumber(it.original_price),
     pricePerDay: toNumber(it.rental_fee_per_day),
     deposit: toNumber(it.deposit),
-    condition: normalizeCondition(it.item_condition),
+    condition: "good", // ไม่มีใน DB — ไม่ถูกแสดงผล
     rating: itemRating,
     reviewCount: reviews.length,
     locations,
@@ -405,7 +412,6 @@ export async function getProductById(id: string): Promise<Product | null> {
     rentalTerms,
     reviews,
     status: normalizeStatus(it.status),
-    isRentedOut: (await getRentedOutItemIds(admin, [it.item_id])).has(it.item_id),
     availability,
     createdAt: it.created_at,
   } satisfies Product;
