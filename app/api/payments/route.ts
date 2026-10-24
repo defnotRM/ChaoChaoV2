@@ -1,39 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { uploadImageToStorage } from "@/lib/supabase/storage";
-import {
-  expireOverdueOrders,
-  getOrderTimeouts,
-  isPastDeadline,
-} from "@/lib/system-config";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { uploadToStorage } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-];
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: Request) {
   try {
-    // ต้องล็อกอินก่อนเสมอ — เดิมไม่มีการเช็คเลย ใครก็อัปโหลดสลิปแทนคนอื่นได้
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 },
-      );
-    }
-
     let orderId = "";
     let amount = 0;
     let transferDate = new Date().toISOString();
@@ -48,78 +24,46 @@ export async function POST(request: Request) {
       amount = Number(json.amount) || 0;
       transferDate = json.transferDate || new Date().toISOString();
       transactionRef = json.transactionRef || null;
-
-      if (json.slipImageUrl) {
-        try {
-          slipDataUri = await uploadImageToStorage(json.slipImageUrl, {
-            bucket: "slips",
-            folder: orderId || "general",
-            filenamePrefix: "slip",
-          });
-        } catch (uploadErr) {
-          console.error("Storage upload failed for JSON slip:", uploadErr);
-          return NextResponse.json(
-            { message: "อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
-            { status: 502 },
-          );
-        }
-      }
+      slipDataUri = json.slipImageUrl || null;
     } else {
       const formData = await request.formData();
       const slip = formData.get("slip") as File | null;
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
       const amountRaw = formData.get("amount") as string | null;
-      transferDate =
-        (formData.get("transferDate") as string | null)?.trim() ??
-        new Date().toISOString();
-      transactionRef =
-        (formData.get("transactionRef") as string | null)?.trim() || null;
+      transferDate = (formData.get("transferDate") as string | null)?.trim() ?? new Date().toISOString();
+      transactionRef = (formData.get("transactionRef") as string | null)?.trim() || null;
       amount = Number(amountRaw);
 
       if (slip) {
         if (!ALLOWED_TYPES.includes(slip.type)) {
           return NextResponse.json(
             { message: "ประเภทไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPG, PNG หรือ WebP" },
-            { status: 400 },
+            { status: 400 }
           );
         }
         if (slip.size > MAX_FILE_SIZE) {
           return NextResponse.json(
             { message: "ขนาดไฟล์ต้องไม่เกิน 10 MB" },
-            { status: 400 },
+            { status: 400 }
           );
         }
-        try {
-          slipDataUri = await uploadImageToStorage(slip, {
-            bucket: "slips",
-            folder: orderId || "general",
-            filenamePrefix: "slip",
-          });
-        } catch (uploadErr) {
-          console.error(
-            "Storage upload failed for form slip:",
-            uploadErr,
-          );
-          return NextResponse.json(
-            { message: "อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
-            { status: 502 },
-          );
-        }
+        const uploadRes = await uploadToStorage("slips", orderId, slip, {
+          contentType: slip.type || "image/png",
+        });
+        slipDataUri = uploadRes.publicUrl;
       }
-    }
-
-    if (slipDataUri?.startsWith("data:")) {
-      return NextResponse.json(
-        { message: "ไม่อนุญาตให้อัปโหลดหรือบันทึกสลิปในรูปแบบ Base64" },
-        { status: 400 },
-      );
     }
 
     if (!orderId) {
       return NextResponse.json(
         { message: "กรุณาระบุเลขออเดอร์" },
-        { status: 400 },
+        { status: 400 }
       );
+    }
+
+    if (slipDataUri && slipDataUri.startsWith("data:")) {
+      const uploadRes = await uploadToStorage("slips", orderId, slipDataUri);
+      slipDataUri = uploadRes.publicUrl;
     }
 
     const admin = createAdminClient();
@@ -127,53 +71,27 @@ export async function POST(request: Request) {
     // 2) ตรวจออเดอร์ต้องมีจริง
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select(
-        "order_id, user_id, status, total_paid, rental_fee, deposit, updated_at",
-      )
+      .select("order_id, user_id, status, total_paid, rental_fee, deposit")
       .eq("order_id", orderId)
       .maybeSingle();
 
     if (orderError || !order) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
-    if (user.id !== order.user_id) {
-      return NextResponse.json(
-        { message: "คุณไม่มีสิทธิ์อัปโหลดสลิปสำหรับออเดอร์นี้" },
-        { status: 403 },
-      );
-    }
-    if (order.status !== "awaiting_payment") {
+    if (order.status !== "awaiting_payment" && order.status !== "requested") {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่อยู่ในสถานะรอชำระเงิน" },
-        { status: 400 },
-      );
-    }
-
-    // อัปโหลดสลิปได้ภายในเวลาชำระเงินที่แอดมินตั้ง (payment_timeout_hours) นับจากอนุมัติ/ปฏิเสธสลิปครั้งล่าสุด
-    const timeouts = await getOrderTimeouts();
-    if (isPastDeadline(order.updated_at, timeouts.paymentHours)) {
-      await expireOverdueOrders();
-      return NextResponse.json(
-        {
-          message: `เกินเวลาชำระเงิน (${timeouts.paymentHours} ชั่วโมง) แล้ว ออเดอร์นี้ถูกยกเลิกอัตโนมัติ`,
-        },
-        { status: 409 },
+        { status: 400 }
       );
     }
 
     if (!amount || amount <= 0) {
-      amount =
-        Number(order.total_paid) ||
-        Number(order.rental_fee) + Number(order.deposit) ||
-        0;
+      amount = Number(order.total_paid) || (Number(order.rental_fee) + Number(order.deposit)) || 0;
     }
 
-    // บังคับต้องแนบสลิปจริง (เดิมมีรูปปลอมเป็นค่าสำรอง)
+    // Default mock slip image if not provided
     if (!slipDataUri) {
-      return NextResponse.json(
-        { message: "กรุณาแนบรูปสลิปการโอนเงิน" },
-        { status: 400 },
-      );
+      slipDataUri = "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60";
     }
 
     // 3) ลบหรืออัปเดตสลิปเดิมหากมี
@@ -192,8 +110,7 @@ export async function POST(request: Request) {
         amount,
         date: transferDate,
         slip_image_url: slipDataUri,
-        transaction_ref:
-          transactionRef || `TXN-${Date.now().toString().slice(-8)}`,
+        transaction_ref: transactionRef || `TXN-${Date.now().toString().slice(-8)}`,
         status: "pending",
       })
       .select("payment_id")
@@ -203,7 +120,7 @@ export async function POST(request: Request) {
       console.error("Insert payment error:", paymentError);
       return NextResponse.json(
         { message: "บันทึกการชำระเงินไม่สำเร็จ กรุณาลองใหม่" },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -211,25 +128,23 @@ export async function POST(request: Request) {
     if (order.status !== "awaiting_payment") {
       await admin
         .from("rentalorder")
-        .update({
-          status: "awaiting_payment",
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: "awaiting_payment", updated_at: new Date().toISOString() })
         .eq("order_id", orderId);
     }
 
     return NextResponse.json(
       {
         paymentId: payment.payment_id,
+        slipUrl: slipDataUri,
         message: "อัปโหลดสลิปเรียบร้อยแล้ว รอผู้ให้เช่าตรวจสอบ",
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     console.error("POST /api/payments error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToStorage } from "@/lib/storage";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -51,33 +52,12 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = file.type || "image/png";
-
-    // Try uploading to Supabase Storage (bucket: avatars)
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "png";
-    const filePath = `${user.id}/avatar.${fileExt}`;
-
-    const { error: uploadError } = await admin.storage
-      .from("avatars")
-      .upload(filePath, buffer, {
-        contentType: mimeType,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Storage upload failed for avatar:", uploadError.message);
-      return NextResponse.json(
-        { message: "ไม่สามารถอัปโหลดรูปโปรไฟล์ไปยังพื้นที่จัดเก็บได้ กรุณาลองใหม่อีกครั้ง" },
-        { status: 502 }
-      );
-    }
-
-    const {
-      data: { publicUrl },
-    } = admin.storage.from("avatars").getPublicUrl(filePath);
-    const savedAvatarUrl = `${publicUrl}?t=${Date.now()}`;
+    const uploadResult = await uploadToStorage("avatars", user.id, file, {
+      fileName: `avatar.${fileExt}`,
+      contentType: file.type || "image/png",
+    });
+    const savedAvatarUrl = `${uploadResult.publicUrl}?t=${Date.now()}`;
 
     // 1. Check if useraccount already exists for this user
     const { data: existingUser } = await admin

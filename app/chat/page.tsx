@@ -20,7 +20,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
-import { useToast } from "@/components/ui/Toast";
+import { useToast, ToastProvider } from "@/components/ui/Toast";
 import { ORDER_STATUS_CONFIG } from "@/lib/chat-statuses";
 
 interface Partner {
@@ -949,14 +949,16 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-[calc(100vh-80px)] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[#3f6593]" />
-        </div>
-      }
-    >
-      <ChatContent />
-    </Suspense>
+    <ToastProvider>
+      <Suspense
+        fallback={
+          <div className="flex h-[calc(100vh-80px)] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-[#3f6593]" />
+          </div>
+        }
+      >
+        <ChatContent />
+      </Suspense>
+    </ToastProvider>
   );
 }

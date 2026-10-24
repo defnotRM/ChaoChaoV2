@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToStorage } from "@/lib/storage";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -50,33 +51,12 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = file.type || "image/jpeg";
-
-    // Try uploading to Supabase Storage (bucket: banners)
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const filePath = `${user.id}/banner.${fileExt}`;
-
-    const { error: uploadError } = await admin.storage
-      .from("banners")
-      .upload(filePath, buffer, {
-        contentType: mimeType,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Storage upload failed for banner:", uploadError.message);
-      return NextResponse.json(
-        { message: "ไม่สามารถอัปโหลดรูปภาพแบนเนอร์ไปยังพื้นที่จัดเก็บได้ กรุณาลองใหม่อีกครั้ง" },
-        { status: 502 }
-      );
-    }
-
-    const {
-      data: { publicUrl },
-    } = admin.storage.from("banners").getPublicUrl(filePath);
-    const savedBannerUrl = `${publicUrl}?t=${Date.now()}`;
+    const uploadResult = await uploadToStorage("banners", user.id, file, {
+      fileName: `banner.${fileExt}`,
+      contentType: file.type || "image/jpeg",
+    });
+    const savedBannerUrl = `${uploadResult.publicUrl}?t=${Date.now()}`;
 
     // 1. Check if useraccount already exists for this user
     const { data: existingUser } = await admin

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateProductSchema } from "@/lib/validations/product";
-import { saveItemCondition } from "@/lib/products/itemCondition";
+import { uploadToStorage } from "@/lib/storage";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
         `
           item_id, user_id, category_id, item_name, description,
           original_price, rental_fee_per_day, deposit, status, created_at, updated_at
-        `,
+        `
       )
       .eq("item_id", id)
       .maybeSingle();
@@ -34,36 +34,13 @@ export async function GET(_request: NextRequest, { params }: Params) {
       return apiError("ไม่พบสินค้านี้", 404);
     }
 
-    const [imagesRes, locationsRes, conditionsRes, availRes, catRes] =
-      await Promise.all([
-        admin
-          .from("itemimage")
-          .select("image_id, image_url, is_primary, sequence")
-          .eq("item_id", id)
-          .order("sequence", { ascending: true }),
-        admin
-          .from("itemlocation")
-          .select(
-            "location_id, description, no, alley, road, subdistrict, district, province, location_type",
-          )
-          .eq("item_id", id),
-        admin
-          .from("itemcondition")
-          .select("seq, condition")
-          .eq("item_id", id)
-          .order("seq", { ascending: true }),
-        admin
-          .from("availability")
-          .select("availability_id, start_date, end_date")
-          .eq("item_id", id),
-        item.category_id
-          ? admin
-              .from("itemcategory")
-              .select("category_id, category_name")
-              .eq("category_id", item.category_id)
-              .maybeSingle()
-          : { data: null },
-      ]);
+    const [imagesRes, locationsRes, conditionsRes, availRes, catRes] = await Promise.all([
+      admin.from("itemimage").select("image_id, image_url, is_primary, sequence").eq("item_id", id).order("sequence", { ascending: true }),
+      admin.from("itemlocation").select("location_id, description, no, alley, road, subdistrict, district, province").eq("item_id", id),
+      admin.from("itemcondition").select("seq, condition").eq("item_id", id).order("seq", { ascending: true }),
+      admin.from("availability").select("availability_id, start_date, end_date").eq("item_id", id),
+      item.category_id ? admin.from("itemcategory").select("category_id, category_name").eq("category_id", item.category_id).maybeSingle() : { data: null },
+    ]);
 
     const data = {
       ...item,
@@ -85,45 +62,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return apiError("กรุณาเข้าสู่ระบบก่อนแก้ไขสินค้า", 401);
-    }
-
     const admin = createAdminClient();
-
-    // ตรวจสอบว่าสินค้ามีอยู่และเป็นของผู้ใช้นี้ หรือเป็น admin
-    const { data: existingItem } = await admin
-      .from("item")
-      .select("user_id")
-      .eq("item_id", id)
-      .maybeSingle();
-
-    if (!existingItem) {
-      return apiError("ไม่พบสินค้านี้", 404);
-    }
-
-    const { data: userRoles } = await admin
-      .from("user_role_assignment")
-      .select("role ( role_type )")
-      .eq("user_id", user.id);
-
-    const roles = (userRoles || [])
-      .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
-        const item = Array.isArray(r.role) ? r.role[0] : r.role;
-        return item?.role_type;
-      })
-      .filter((r): r is string => Boolean(r));
-    const isAdmin = roles.includes("admin");
-
-    if (existingItem.user_id !== user.id && !isAdmin) {
-      return apiError("คุณไม่มีสิทธิ์แก้ไขสินค้านี้", 403);
-    }
 
     const body = await request.json();
     const parsed = updateProductSchema.safeParse(body);
@@ -136,15 +75,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (input.categoryId !== undefined)
-      updatePayload.category_id = input.categoryId;
+    if (input.categoryId !== undefined) updatePayload.category_id = input.categoryId;
     if (input.itemName !== undefined) updatePayload.item_name = input.itemName;
-    if (input.description !== undefined)
-      updatePayload.description = input.description;
-    if (input.originalPrice !== undefined)
-      updatePayload.original_price = input.originalPrice;
-    if (input.rentalFeePerDay !== undefined)
-      updatePayload.rental_fee_per_day = input.rentalFeePerDay;
+    if (input.description !== undefined) updatePayload.description = input.description;
+    if (input.originalPrice !== undefined) updatePayload.original_price = input.originalPrice;
+    if (input.rentalFeePerDay !== undefined) updatePayload.rental_fee_per_day = input.rentalFeePerDay;
     if (input.deposit !== undefined) updatePayload.deposit = input.deposit;
     if (input.status !== undefined) updatePayload.status = input.status;
 
@@ -164,10 +99,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return apiError("ไม่พบสินค้านี้", 404);
     }
 
-    if (input.condition !== undefined) {
-      await saveItemCondition(admin, id, input.condition);
-    }
-
     // 2) Update Locations if provided
     if (input.locations && input.locations.length > 0) {
       await admin.from("itemlocation").delete().eq("item_id", id);
@@ -180,7 +111,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         subdistrict: loc.subdistrict || "",
         district: loc.district || "",
         province: loc.province || "กรุงเทพมหานคร",
-        location_type: loc.location_type || "both",
       }));
       await admin.from("itemlocation").insert(locationRows);
     }
@@ -211,12 +141,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     // 5) Update Images if provided
     if (input.images && input.images.length > 0) {
       await admin.from("itemimage").delete().eq("item_id", id);
-      const imageRows = input.images.map((img, idx) => ({
-        item_id: id,
-        image_url: typeof img === "string" ? img : img.imageUrl,
-        is_primary: idx === 0,
-        sequence: idx + 1,
-      }));
+      const imageRows = await Promise.all(
+        input.images.map(async (img, idx) => {
+          let url = typeof img === "string" ? img : img.imageUrl;
+          if (url && url.startsWith("data:")) {
+            const res = await uploadToStorage("items", id, url);
+            url = res.publicUrl;
+          }
+          return {
+            item_id: id,
+            image_url: url,
+            is_primary: idx === 0,
+            sequence: idx + 1,
+          };
+        })
+      );
       await admin.from("itemimage").insert(imageRows);
     }
 
@@ -231,45 +170,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return apiError("กรุณาเข้าสู่ระบบก่อนดำเนินการ", 401);
-    }
-
     const admin = createAdminClient();
-
-    // ตรวจสอบว่าสินค้ามีอยู่และเป็นของผู้ใช้นี้ หรือเป็น admin
-    const { data: existingItem } = await admin
-      .from("item")
-      .select("user_id")
-      .eq("item_id", id)
-      .maybeSingle();
-
-    if (!existingItem) {
-      return apiError("ไม่พบสินค้านี้", 404);
-    }
-
-    const { data: userRoles } = await admin
-      .from("user_role_assignment")
-      .select("role ( role_type )")
-      .eq("user_id", user.id);
-
-    const roles = (userRoles || [])
-      .map((r: { role?: { role_type?: string } | { role_type?: string }[] | null }) => {
-        const item = Array.isArray(r.role) ? r.role[0] : r.role;
-        return item?.role_type;
-      })
-      .filter((r): r is string => Boolean(r));
-    const isAdmin = roles.includes("admin");
-
-    if (existingItem.user_id !== user.id && !isAdmin) {
-      return apiError("คุณไม่มีสิทธิ์ลบสินค้านี้", 403);
-    }
 
     const { data, error } = await admin
       .from("item")

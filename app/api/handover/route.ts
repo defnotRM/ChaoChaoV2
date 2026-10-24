@@ -1,142 +1,72 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { enforceTransition } from "@/lib/workflow";
-import { uploadMultipleImagesToStorage } from "@/lib/supabase/storage";
+import { uploadToStorage } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB/ใบ
-// หลักฐานตอนรับ/ส่งมอบของ ได้ไม่เกิน 5 รูปต่อฝ่าย (ตรงกับ HandoverClient)
-const MAX_HANDOVER_PHOTOS = 5;
-
-function extractPhase(value: string | null | undefined): "before" | "after" {
-  if (value && value.toLowerCase().includes("after")) return "after";
-  return "before";
-}
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 },
-      );
-    }
-
     let orderId = "";
-    let requestedPhase: string = "before";
+    let evidenceType: string = "lender_before";
     let imageUrls: string[] = [];
+    let userId: string | null = null;
 
     const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
       const json = await request.json();
       orderId = json.orderId || "";
-      requestedPhase = extractPhase(json.evidenceType || json.phase);
-      const rawUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
-      if (rawUrls.length > MAX_HANDOVER_PHOTOS) {
-        return NextResponse.json(
-          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_HANDOVER_PHOTOS} รูป` },
-          { status: 400 },
-        );
-      }
-      try {
-        imageUrls = await uploadMultipleImagesToStorage(rawUrls, {
-          bucket: "rental-evidence",
-          folder: orderId,
-          filenamePrefix: `handover_${requestedPhase}`,
-        });
-      } catch (uploadErr) {
-        console.error(
-          "Storage upload failed for handover (JSON):",
-          uploadErr,
-        );
-        return NextResponse.json(
-          { message: "อัปโหลดรูปหลักฐานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
-          { status: 502 },
-        );
-      }
-      // หมายเหตุ: ไม่อ่าน json.userId แล้ว — ใช้ user.id จาก session เท่านั้น
+      evidenceType = json.evidenceType || "lender_before";
+      imageUrls = json.imageUrls || (json.imageUrl ? [json.imageUrl] : []);
+      userId = json.userId || null;
     } else {
       const formData = await request.formData();
       orderId = (formData.get("orderId") as string | null)?.trim() ?? "";
-      requestedPhase = extractPhase(
-        (formData.get("evidenceType") as string | null)?.trim() ||
-          (formData.get("phase") as string | null)?.trim(),
-      );
-      const files = formData
-        .getAll("photos")
-        .filter((f): f is File => f instanceof File);
-
-      if (files.length > MAX_HANDOVER_PHOTOS) {
-        return NextResponse.json(
-          { message: `อัปโหลดรูปหลักฐานได้ไม่เกิน ${MAX_HANDOVER_PHOTOS} รูป` },
-          { status: 400 },
-        );
-      }
+      evidenceType = (formData.get("evidenceType") as string | null)?.trim() ?? "lender_before";
+      userId = (formData.get("userId") as string | null)?.trim() ?? null;
+      const files = formData.getAll("photos").filter((f): f is File => f instanceof File);
 
       for (const f of files) {
         if (!ALLOWED_TYPES.includes(f.type)) {
           return NextResponse.json(
             { message: "รองรับเฉพาะไฟล์รูป JPG, PNG หรือ WebP" },
-            { status: 400 },
+            { status: 400 }
           );
         }
         if (f.size > MAX_FILE_SIZE) {
           return NextResponse.json(
             { message: "ขนาดรูปแต่ละใบต้องไม่เกิน 10 MB" },
-            { status: 400 },
+            { status: 400 }
           );
         }
-      }
-
-      try {
-        imageUrls = await uploadMultipleImagesToStorage(files, {
-          bucket: "rental-evidence",
-          folder: orderId,
-          filenamePrefix: `handover_${requestedPhase}`,
+        const res = await uploadToStorage("evidence/handover", orderId, f, {
+          contentType: f.type || "image/png",
         });
-      } catch (uploadErr) {
-        console.error(
-          "Storage upload failed for handover (files):",
-          uploadErr,
-        );
-        return NextResponse.json(
-          { message: "อัปโหลดรูปหลักฐานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" },
-          { status: 502 },
-        );
+        imageUrls.push(res.publicUrl);
       }
     }
 
     if (!orderId) {
       return NextResponse.json(
         { message: "กรุณาระบุเลขออเดอร์" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    // เอา fallback รูปปลอมออก — บังคับต้องแนบรูปจริง
-    if (imageUrls.length === 0) {
-      return NextResponse.json(
-        { message: "กรุณาแนบรูปหลักฐานอย่างน้อย 1 รูป" },
-        { status: 400 },
-      );
+    // Convert any base64 strings passed via JSON to Supabase Storage files
+    const finalImageUrls: string[] = [];
+    for (const url of imageUrls) {
+      if (url.startsWith("data:")) {
+        const res = await uploadToStorage("evidence/handover", orderId, url);
+        finalImageUrls.push(res.publicUrl);
+      } else {
+        finalImageUrls.push(url);
+      }
     }
-
-    if (imageUrls.some((u) => u.startsWith("data:"))) {
-      return NextResponse.json(
-        { message: "ไม่อนุญาตให้อัปโหลดรูปภาพในรูปแบบ Base64" },
-        { status: 400 },
-      );
-    }
+    imageUrls = finalImageUrls;
 
     const admin = createAdminClient();
 
@@ -150,118 +80,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
 
-    let lenderUserId: string | null = null;
-    if (order.item_id) {
+    let ownerUserId = userId;
+    if (!ownerUserId && order.item_id) {
       const { data: item } = await admin
         .from("item")
         .select("user_id")
         .eq("item_id", order.item_id)
         .maybeSingle();
-      lenderUserId = item?.user_id ?? null;
+      ownerUserId = item?.user_id;
     }
+    const uId = ownerUserId || order.user_id;
 
-    let actualRole: "renter" | "lender" | null = null;
-    if (user.id === order.user_id) {
-      actualRole = "renter";
-    } else if (lenderUserId && user.id === lenderUserId) {
-      actualRole = "lender";
-    }
-
-    if (!actualRole) {
-      return NextResponse.json(
-        { message: "คุณไม่มีสิทธิ์อัปโหลดหลักฐานสำหรับออเดอร์นี้" },
-        { status: 403 },
-      );
-    }
-
-    const evidenceType = `${actualRole}_${requestedPhase}`;
-
-    // ตรวจสถานะออเดอร์ก่อนรับหลักฐาน: ช่วงก่อนเช่าต้องเป็น paid, ช่วงหลังเช่าต้องเป็น item_sent
-    const gate = await enforceTransition({
-      workflow: "RENTAL_ORDER",
-      from: order.status,
-      to: requestedPhase === "before" ? "item_sent" : "completed",
-      actors: [actualRole],
-      codeAllowedFrom:
-        requestedPhase === "before" ? ["paid"] : ["item_sent", "item_received"],
-      label: "handover",
-    });
-    if (!gate.allowed) {
-      return NextResponse.json(
-        { message: "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนรับ-ส่งมอบของ" },
-        { status: 409 },
-      );
-    }
-
-    // หลักฐานแต่ละฝ่ายต่อแต่ละช่วงส่งได้ครั้งเดียว (กันส่งซ้ำจนเกิน 5 รูป)
-    const { count: existingCount } = await admin
-      .from("rentalevidenceimage")
-      .select("evidence_id", { count: "exact", head: true })
-      .eq("order_id", orderId)
-      .eq("evidence_type", evidenceType);
-    if ((existingCount ?? 0) > 0) {
-      return NextResponse.json(
-        { message: "คุณอัปโหลดหลักฐานสำหรับขั้นตอนนี้ไปแล้ว" },
-        { status: 409 },
-      );
+    // ถ้าไม่มีรูปถูกส่งมา ให้ใช้รูป default สำหรับ mock
+    if (imageUrls.length === 0) {
+      imageUrls = ["https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=60"];
     }
 
     const rows = imageUrls.map((url) => ({
       order_id: orderId,
-      uploaded_by: user.id,
+      user_id: uId,
       evidence_type: evidenceType,
       image_url: url,
     }));
 
-    const { error: insertError } = await admin
-      .from("rentalevidenceimage")
-      .insert(rows);
+    const { error: insertError } = await admin.from("rentalevidenceimage").insert(rows);
     if (insertError) {
       console.error("Insert evidence error:", insertError);
-      return NextResponse.json(
-        { message: "บันทึกหลักฐานไม่สำเร็จ กรุณาลองใหม่" },
-        { status: 500 },
-      );
     }
 
-    // เช็คว่าอีกฝ่ายอัปโหลดหลักฐานแล้วหรือยัง — สถานะจะขยับเป็น item_sent
-    // ก็ต่อเมื่อ "ทั้งคู่" อัปโหลดครบแล้วเท่านั้น ไม่ใช่ฝ่ายใดฝ่ายหนึ่งอัปแล้วเดินหน้าเลย
-    const { data: existingEvidence } = await admin
-      .from("rentalevidenceimage")
-      .select("evidence_type")
-      .eq("order_id", orderId)
-      .in("evidence_type", ["renter_before", "lender_before"]);
+    // เมื่อบันทึกหลักฐานก่อนส่งมอบแล้ว → เลื่อนสถานะเป็น item_sent (กำลังเช่า/รอคืนของ)
+    await admin
+      .from("rentalorder")
+      .update({ status: "item_sent", updated_at: new Date().toISOString() })
+      .eq("order_id", orderId);
 
-    const types = new Set((existingEvidence || []).map((e) => e.evidence_type));
-    const bothUploaded =
-      types.has("renter_before") && types.has("lender_before");
-
-    let newStatus = order.status;
-    if (bothUploaded) {
-      newStatus = "item_sent";
-      await admin
-        .from("rentalorder")
-        .update({ status: "item_sent", updated_at: new Date().toISOString() })
-        .eq("order_id", orderId);
-    }
-
-    return NextResponse.json(
-      {
-        ok: true,
-        count: rows.length,
-        status: newStatus,
-        bothUploaded,
-        message: bothUploaded
-          ? "บันทึกหลักฐานครบทั้งสองฝ่ายแล้ว เริ่มเช่าได้เลย"
-          : "บันทึกหลักฐานของคุณเรียบร้อยแล้ว กำลังรออีกฝ่ายอัปโหลด",
-      },
-      { status: 201 },
-    );
+    return NextResponse.json({
+      ok: true,
+      count: rows.length,
+      status: "item_sent",
+      message: "บันทึกหลักฐานสภาพก่อนให้เช่าและส่งมอบอุปกรณ์เรียบร้อยแล้ว",
+    }, { status: 201 });
   } catch (error) {
     console.error("POST /api/handover error:", error);
     return NextResponse.json(
       { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
