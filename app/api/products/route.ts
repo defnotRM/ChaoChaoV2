@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
         subdistrict: loc.subdistrict || "",
         district: loc.district || "",
         province: loc.province || "กรุงเทพมหานคร",
+        location_type: loc.location_type || "both",
       })),
       p_availability_start: input.availabilityStart,
       p_availability_end: input.availabilityEnd,

@@ -36,7 +36,7 @@ export default async function EditProductPage({
       .order("sequence", { ascending: true }),
     admin
       .from("itemlocation")
-      .select("location_id, description, no, alley, road, subdistrict, district, province")
+      .select("location_id, description, no, alley, road, subdistrict, district, province, location_type")
       .eq("item_id", id),
     admin
       .from("itemcondition")

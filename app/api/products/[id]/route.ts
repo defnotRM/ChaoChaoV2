@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
     const [imagesRes, locationsRes, conditionsRes, availRes, catRes] = await Promise.all([
       admin.from("itemimage").select("image_id, image_url, is_primary, sequence").eq("item_id", id).order("sequence", { ascending: true }),
-      admin.from("itemlocation").select("location_id, description, no, alley, road, subdistrict, district, province").eq("item_id", id),
+      admin.from("itemlocation").select("location_id, description, no, alley, road, subdistrict, district, province, location_type").eq("item_id", id),
       admin.from("itemcondition").select("seq, condition").eq("item_id", id).order("seq", { ascending: true }),
       admin.from("availability").select("availability_id, start_date, end_date").eq("item_id", id),
       item.category_id ? admin.from("itemcategory").select("category_id, category_name").eq("category_id", item.category_id).maybeSingle() : { data: null },
@@ -116,6 +116,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         subdistrict: loc.subdistrict || "",
         district: loc.district || "",
         province: loc.province || "กรุงเทพมหานคร",
+        location_type: loc.location_type || "both",
       }));
       await admin.from("itemlocation").insert(locationRows);
     }

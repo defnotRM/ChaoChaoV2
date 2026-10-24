@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Calendar,
   Camera,
   CheckCircle2,
   DollarSign,
@@ -19,10 +18,17 @@ import {
   Sparkles,
   Tag,
   Trash2,
-  UploadCloud,
+  X,
 } from "lucide-react";
+import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
 import type { ItemCondition as ItemUsageCondition } from "@/lib/types/product";
 import ConditionPicker from "@/components/products/ConditionPicker";
+
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
+// รูปเดิมจากฐานข้อมูลมีแค่ url, รูปใหม่มี file ที่ยังไม่ได้อัปโหลด
+type EditImage = { id: string; preview: string; url?: string; file?: File };
 
 interface Category {
   category_id: string;
@@ -38,6 +44,7 @@ interface ItemLocation {
   subdistrict?: string | null;
   district?: string | null;
   province?: string | null;
+  location_type?: "meetup" | "return" | "both" | null;
 }
 
 interface ItemCondition {
@@ -62,7 +69,12 @@ interface InitialItem {
   deposit: number;
   status: string;
   item_condition?: ItemUsageCondition | null;
-  itemimage?: Array<{ image_id?: string; image_url: string; is_primary?: boolean; sequence?: number }>;
+  itemimage?: Array<{
+    image_id?: string;
+    image_url: string;
+    is_primary?: boolean;
+    sequence?: number;
+  }>;
   itemlocation?: ItemLocation[];
   itemcondition?: ItemCondition[];
   availability?: Availability[];
@@ -79,9 +91,14 @@ export default function EditProductClient({
 }: EditProductClientProps) {
   const router = useRouter();
 
-  // Primary Location prefill
-  const primaryLoc = initialItem.itemlocation?.[0];
   const primaryAvail = initialItem.availability?.[0];
+
+  const initialMeetupLocs = (initialItem.itemlocation || []).filter(
+    (l) => l.location_type !== "return",
+  );
+  const initialReturnLocs = (initialItem.itemlocation || []).filter(
+    (l) => l.location_type === "return",
+  );
 
   const todayStr = new Date().toISOString().split("T")[0];
   const sixMonthsLater = new Date();
@@ -89,101 +106,194 @@ export default function EditProductClient({
   const sixMonthsLaterStr = sixMonthsLater.toISOString().split("T")[0];
 
   // Images prefill
-  const initialImgs = (initialItem.itemimage || []).map((i) => i.image_url).filter(Boolean);
-  const [imageUrls, setImageUrls] = useState<string[]>(
-    initialImgs.length > 0
-      ? initialImgs
-      : ["https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80"]
+  const initialImgs = (initialItem.itemimage || [])
+    .map((i) => i.image_url)
+    .filter(Boolean);
+  const [images, setImages] = useState<EditImage[]>(() =>
+    initialImgs.map((url, idx) => ({ id: `existing_${idx}`, preview: url, url })),
   );
-  const [newImageUrl, setNewImageUrl] = useState("");
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef<EditImage[]>([]);
 
-  function handleAddImage(url: string) {
-    const trimmed = url.trim();
-    if (!trimmed) return;
-    if (!imageUrls.includes(trimmed)) {
-      setImageUrls([...imageUrls, trimmed]);
-    }
-    setNewImageUrl("");
-  }
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
-  function handleRemoveImage(index: number) {
-    if (imageUrls.length <= 1) {
-      alert("ต้องมีรูปภาพสินค้าอย่างน้อย 1 รูป");
-      return;
-    }
-    setImageUrls(imageUrls.filter((_, i) => i !== index));
-  }
-
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setIsUploadingImage(true);
-    setErrorMessage(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("category", "items");
-      formData.append("folderId", initialItem.item_id);
-      Array.from(files).forEach((f) => formData.append("files", f));
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((img) => {
+        if (img.file) URL.revokeObjectURL(img.preview);
       });
+    };
+  }, []);
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "อัปโหลดรูปภาพไม่สำเร็จ");
-      }
+  function handleSelectImages(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+    if (selected.length === 0) return;
 
-      if (data.urls && data.urls.length > 0) {
-        setImageUrls((prev) => [...prev, ...data.urls]);
+    setImageError(null);
+    const errors: string[] = [];
+    const valid: EditImage[] = [];
+    const remaining = MAX_PRODUCT_IMAGES - images.length;
+
+    for (const file of selected) {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        errors.push(`"${file.name}" ไม่ใช่ไฟล์ PNG, JPG หรือ WEBP`);
+        continue;
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || "เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ");
-    } finally {
-      setIsUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (file.size > MAX_IMAGE_SIZE) {
+        errors.push(`"${file.name}" มีขนาดเกิน 5MB`);
+        continue;
+      }
+      if (valid.length >= remaining) {
+        errors.push(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
+        break;
+      }
+      valid.push({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        preview: URL.createObjectURL(file),
+      });
     }
+
+    if (valid.length > 0) setImages((prev) => [...prev, ...valid]);
+    if (errors.length > 0) setImageError(errors.join(" • "));
+  }
+
+  function handleRemoveImage(id: string) {
+    setImageError(null);
+    setImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+      if (target?.file) URL.revokeObjectURL(target.preview);
+      return prev.filter((img) => img.id !== id);
+    });
+  }
+
+  async function uploadImages(): Promise<string[]> {
+    // รูปเดิมใช้ url เดิม รูปใหม่อัปโหลดทีละไฟล์ต่อ request และคงลำดับรูปไว้
+    return Promise.all(
+      images.map(async (img) => {
+        if (!img.file) return img.url as string;
+        const fd = new FormData();
+        fd.append("category", "items");
+        fd.append("folderId", initialItem.item_id);
+        fd.append("files", img.file);
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.urls?.[0]) {
+          throw new Error(data.message || "อัปโหลดรูปภาพไม่สำเร็จ");
+        }
+        return data.urls[0] as string;
+      }),
+    );
   }
 
   // Form states with initial values
   const [itemName, setItemName] = useState(initialItem.item_name || "");
   const [categoryId, setCategoryId] = useState(
-    initialItem.category_id || categories[0]?.category_id || ""
+    initialItem.category_id || categories[0]?.category_id || "",
   );
   const [description, setDescription] = useState(initialItem.description || "");
   const [originalPrice, setOriginalPrice] = useState<string>(
-    initialItem.original_price ? String(initialItem.original_price) : ""
+    initialItem.original_price ? String(initialItem.original_price) : "",
   );
   const [rentalFeePerDay, setRentalFeePerDay] = useState<string>(
-    String(initialItem.rental_fee_per_day || "")
+    String(initialItem.rental_fee_per_day || ""),
   );
   const [deposit, setDeposit] = useState<string>(
-    String(initialItem.deposit !== undefined ? initialItem.deposit : "")
+    String(initialItem.deposit !== undefined ? initialItem.deposit : ""),
   );
-  const [condition, setCondition] = useState<ItemUsageCondition>(
-    initialItem.item_condition ?? "good"
+  const [condition, setCondition] = useState<ItemUsageCondition | null>(
+    initialItem.item_condition ?? "good",
   );
-  const [status, setStatus] = useState<string>(initialItem.status || "available");
+  const [status, setStatus] = useState<string>(
+    initialItem.status || "available",
+  );
 
-  // Location
-  const [locationDesc, setLocationDesc] = useState(
-    primaryLoc?.description || "BTS สยาม / พญาไท (นัดรับที่สถานี)"
+  // Location — รองรับหลายที่ต่อประเภท (นัดรับ/นัดคืน)
+  type LocationEntry = {
+    description: string;
+    no: string;
+    alley: string;
+    road: string;
+    province: string;
+    district: string;
+    subdistrict: string;
+  };
+
+  const emptyLocation = (): LocationEntry => ({
+    description: "",
+    no: "",
+    alley: "",
+    road: "",
+    province: "กรุงเทพมหานคร",
+    district: "",
+    subdistrict: "",
+  });
+
+  const toEntry = (l: ItemLocation): LocationEntry => ({
+    description: l.description || "",
+    no: l.no === "-" ? "" : l.no || "",
+    alley: l.alley || "",
+    road: l.road || "",
+    province: l.province || "กรุงเทพมหานคร",
+    district: l.district || "",
+    subdistrict: l.subdistrict || "",
+  });
+
+  const [sameLocation, setSameLocation] = useState(
+    initialReturnLocs.length === 0,
   );
-  const [province, setProvince] = useState(primaryLoc?.province || "กรุงเทพมหานคร");
-  const [district, setDistrict] = useState(primaryLoc?.district || "ปทุมวัน");
-  const [subdistrict, setSubdistrict] = useState(primaryLoc?.subdistrict || "ปทุมวัน");
+  const [meetupLocations, setMeetupLocations] = useState<LocationEntry[]>(
+    initialMeetupLocs.length > 0
+      ? initialMeetupLocs.map(toEntry)
+      : [emptyLocation()],
+  );
+  const [returnLocations, setReturnLocations] = useState<LocationEntry[]>(
+    initialReturnLocs.length > 0
+      ? initialReturnLocs.map(toEntry)
+      : [emptyLocation()],
+  );
+
+  function updateLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+    index: number,
+    field: keyof LocationEntry,
+    value: string,
+  ) {
+    const next = [...list];
+    next[index] = { ...next[index], [field]: value };
+    setList(next);
+  }
+
+  function addLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+  ) {
+    setList([...list, emptyLocation()]);
+  }
+
+  function removeLocation(
+    list: LocationEntry[],
+    setList: (v: LocationEntry[]) => void,
+    index: number,
+  ) {
+    if (list.length <= 1) return;
+    setList(list.filter((_, i) => i !== index));
+  }
 
   // Dates
   const [availabilityStart, setAvailabilityStart] = useState(
-    primaryAvail?.start_date || todayStr
+    primaryAvail?.start_date || todayStr,
   );
   const [availabilityEnd, setAvailabilityEnd] = useState(
-    primaryAvail?.end_date || sixMonthsLaterStr
+    primaryAvail?.end_date || sixMonthsLaterStr,
   );
 
   // Conditions
@@ -198,7 +308,7 @@ export default function EditProductClient({
           "ตรวจเช็กสภาพอุปกรณ์และทดสอบการใช้งานร่วมกันก่อนรับมอบ",
           "ห้ามนำอุปกรณ์ไปใช้งานในน้ำ หรือในพื้นที่เสี่ยงอันตราย",
           "ส่งคืนอุปกรณ์ในสภาพสมบูรณ์ตรงตามวันเวลาที่นัดหมาย",
-        ]
+        ],
   );
   const [newCondition, setNewCondition] = useState("");
 
@@ -237,9 +347,22 @@ export default function EditProductClient({
       setErrorMessage("กรุณาระบุเงินประกันให้ถูกต้อง");
       return;
     }
+    if (!condition) {
+      setErrorMessage("กรุณาเลือกสภาพการใช้งานของอุปกรณ์");
+      return;
+    }
+    if (images.length === 0) {
+      setErrorMessage("กรุณาเพิ่มรูปภาพอุปกรณ์อย่างน้อย 1 รูป");
+      return;
+    }
+    if (images.length > MAX_PRODUCT_IMAGES) {
+      setErrorMessage(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
+      const imageUrls = await uploadImages();
       const payload = {
         categoryId: categoryId || null,
         itemName: itemName.trim(),
@@ -250,15 +373,28 @@ export default function EditProductClient({
         condition,
         status,
         locations: [
-          {
-            description: locationDesc.trim() || "จุดนัดรับที่ตกลงกัน",
-            no: "-",
-            alley: null,
-            road: null,
-            subdistrict: subdistrict.trim(),
-            district: district.trim(),
-            province: province.trim(),
-          },
+          ...meetupLocations.map((l) => ({
+            description: l.description.trim() || "จุดนัดรับที่ตกลงกัน",
+            no: l.no.trim() || "-",
+            alley: l.alley.trim() || null,
+            road: l.road.trim() || null,
+            subdistrict: l.subdistrict.trim(),
+            district: l.district.trim(),
+            province: l.province.trim(),
+            location_type: sameLocation ? "both" : "meetup",
+          })),
+          ...(sameLocation
+            ? []
+            : returnLocations.map((l) => ({
+                description: l.description.trim() || "จุดนัดคืนที่ตกลงกัน",
+                no: l.no.trim() || "-",
+                alley: l.alley.trim() || null,
+                road: l.road.trim() || null,
+                subdistrict: l.subdistrict.trim(),
+                district: l.district.trim(),
+                province: l.province.trim(),
+                location_type: "return",
+              }))),
         ],
         availabilityStart,
         availabilityEnd,
@@ -278,7 +414,9 @@ export default function EditProductClient({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || data.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+        throw new Error(
+          data.message || data.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
+        );
       }
 
       setSuccessMessage("บันทึกการแก้ไขสินค้าเรียบร้อยแล้ว!");
@@ -296,7 +434,10 @@ export default function EditProductClient({
   return (
     <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
       {/* Breadcrumb */}
-      <nav aria-label="เส้นทางนำทาง" className="mb-4 flex items-center gap-2 text-xs text-slate-500">
+      <nav
+        aria-label="เส้นทางนำทาง"
+        className="mb-4 flex items-center gap-2 text-xs text-slate-500"
+      >
         <Link href="/" className="transition hover:text-[#1b3554]">
           หน้าแรก
         </Link>
@@ -320,7 +461,8 @@ export default function EditProductClient({
             </h1>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            แก้ไขรายละเอียด กำหนดราคา สถานะความพร้อม และเงื่อนไขการให้เช่าอุปกรณ์
+            แก้ไขรายละเอียด กำหนดราคา สถานะความพร้อม
+            และเงื่อนไขการให้เช่าอุปกรณ์
           </p>
         </div>
         <Link
@@ -338,7 +480,9 @@ export default function EditProductClient({
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <Tag className="h-5 w-5 text-sky-600" />
-            <h2 className="text-lg font-bold text-slate-900">1. ข้อมูลพื้นฐานอุปกรณ์</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              1. ข้อมูลพื้นฐานอุปกรณ์
+            </h2>
           </div>
 
           <div className="space-y-4">
@@ -376,7 +520,10 @@ export default function EditProductClient({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  ราคาประเมินอุปกรณ์ (บาท) <span className="text-slate-400 font-normal">(ไม่บังคับ)</span>
+                  ราคาประเมินอุปกรณ์ (บาท){" "}
+                  <span className="text-slate-400 font-normal">
+                    (ไม่บังคับ)
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -410,13 +557,16 @@ export default function EditProductClient({
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <DollarSign className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-slate-900">2. อัตราค่าเช่า เงินประกัน และสถานะ</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              2. อัตราค่าเช่า เงินประกัน และสถานะ
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                ค่าเช่าต่อวัน (บาท / วัน) <span className="text-rose-500">*</span>
+                ค่าเช่าต่อวัน (บาท / วัน){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -436,7 +586,8 @@ export default function EditProductClient({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                เงินประกัน / มัดจำ (บาท) <span className="text-rose-500">*</span>
+                เงินประกัน / มัดจำ (บาท){" "}
+                <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -465,7 +616,9 @@ export default function EditProductClient({
               >
                 <option value="available">พร้อมให้เช่า (Available)</option>
                 <option value="rented">กำลังถูกเช่า (Rented)</option>
-                <option value="maintenance">อยู่ระหว่างซ่อมบำรุง (Maintenance)</option>
+                <option value="maintenance">
+                  อยู่ระหว่างซ่อมบำรุง (Maintenance)
+                </option>
                 <option value="inactive">ปิดประกาศ (Inactive)</option>
               </select>
             </div>
@@ -474,7 +627,8 @@ export default function EditProductClient({
           <div className="mt-4 flex items-start gap-2.5 rounded-2xl bg-emerald-50/70 p-3.5 text-xs text-emerald-800 border border-emerald-100">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <p>
-              เงินประกันจะถูกพักไว้ในระบบอย่างปลอดภัย และจะถูกโอนคืนให้ผู้เช่าเมื่อส่งคืนอุปกรณ์เสร็จสมบูรณ์
+              เงินประกันจะถูกพักไว้ในระบบอย่างปลอดภัย
+              และจะถูกโอนคืนให้ผู้เช่าเมื่อส่งคืนอุปกรณ์เสร็จสมบูรณ์
             </p>
           </div>
         </section>
@@ -484,119 +638,104 @@ export default function EditProductClient({
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
             <div className="flex items-center gap-2.5">
               <Camera className="h-5 w-5 text-sky-600" />
-              <h2 className="text-lg font-bold text-slate-900">3. รูปภาพอุปกรณ์</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                3. รูปภาพอุปกรณ์
+              </h2>
             </div>
-            <span className="text-xs text-slate-400">รูปภาพจะถูกจัดเก็บใน Supabase Storage โฟลเดอร์ items</span>
+            <span className="text-xs font-semibold text-slate-500">
+              {images.length}/{MAX_PRODUCT_IMAGES} รูป
+            </span>
           </div>
 
           <input
             ref={fileInputRef}
             type="file"
+            accept={ALLOWED_IMAGE_TYPES.join(",")}
             multiple
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleFileSelect}
+            onChange={handleSelectImages}
             className="hidden"
           />
 
-          <div className="flex flex-col sm:flex-row items-center gap-5">
-            {/* กล่องรูปภาพ Preview หลัก */}
-            <div className="relative flex aspect-square w-48 sm:w-56 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-[#eaf0f6] shadow-sm overflow-hidden">
-              {imageUrls[0] ? (
-                <img
-                  src={imageUrls[0]}
-                  alt={itemName}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="text-center p-4">
-                  <Package className="mx-auto h-16 w-16 text-[#a0b5ce]" strokeWidth={1.5} />
-                  <span className="mt-2 block text-xs text-slate-400">ยังไม่มีรูปภาพ</span>
-                </div>
-              )}
-              {imageUrls[0] && (
-                <span className="absolute bottom-2 left-2 rounded-lg bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-                  รูปหลัก (Cover)
-                </span>
-              )}
-            </div>
+          {images.length === 0 ? (
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              <div className="relative flex aspect-square w-48 sm:w-56 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-[#eaf0f6] shadow-sm">
+                <Package className="h-20 w-20 text-[#a0b5ce]" strokeWidth={1.5} />
+              </div>
 
-            {/* กล่องปุ่มเพิ่มรูป */}
-            <div className="flex flex-1 flex-col justify-center space-y-3 w-full">
-              <button
-                type="button"
-                disabled={isUploadingImage}
-                onClick={() => fileInputRef.current?.click()}
-                className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-sky-200 bg-sky-50/40 p-7 text-center transition hover:border-sky-400 hover:bg-sky-50/70 active:scale-[0.99] disabled:opacity-50"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-sky-600 shadow-sm transition group-hover:scale-105">
-                  {isUploadingImage ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <UploadCloud className="h-5 w-5" />
-                  )}
-                </div>
-                <span className="mt-3 text-sm font-semibold text-slate-800">
-                  {isUploadingImage ? "กำลังอัปโหลดรูปภาพ..." : "คลิกเพื่ออัปโหลดรูปภาพอุปกรณ์"}
-                </span>
-                <span className="mt-1 text-xs text-slate-400">
-                  รองรับไฟล์ PNG, JPG หรือ WEBP (จัดเก็บใน Supabase Storage)
-                </span>
-              </button>
-
-              {/* ช่องกรอก URL เพิ่มเติม */}
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="url"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  placeholder="หรือวางลิงก์รูปภาพ (URL)..."
-                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 transition focus:border-sky-500 focus:outline-none"
-                />
+              <div className="flex flex-1 flex-col justify-center space-y-3 w-full">
                 <button
                   type="button"
-                  onClick={() => handleAddImage(newImageUrl)}
-                  className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-7 text-center transition hover:border-[#3f6593] hover:bg-sky-50/50 active:scale-[0.99]"
                 >
-                  เพิ่มจากลิงก์
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm transition group-hover:scale-105">
+                    <Plus className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <span className="mt-3 text-sm font-semibold text-slate-700">
+                    เพิ่มรูปภาพอุปกรณ์
+                  </span>
+                  <span className="mt-1 text-xs text-slate-400">
+                    รองรับไฟล์ PNG, JPG หรือ WEBP (ไม่เกิน 5MB ต่อรูป, สูงสุด{" "}
+                    {MAX_PRODUCT_IMAGES} รูป)
+                  </span>
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* รายการรูปภาพทั้งหมดที่อัปโหลดแล้ว */}
-          {imageUrls.length > 0 && (
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <p className="text-xs font-bold text-slate-700 mb-2.5">
-                รูปภาพของสินค้านี้ ({imageUrls.length} รูป)
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {imageUrls.map((url, index) => (
-                  <div
-                    key={index}
-                    className="group relative h-20 w-20 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden shadow-xs"
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+              {images.map((img, idx) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-square overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100"
+                >
+                  <img
+                    src={img.preview}
+                    alt={`รูปอุปกรณ์ ${idx + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  {idx === 0 && (
+                    <span className="absolute left-2 top-2 rounded-full bg-[#1b3554] px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      รูปหลัก
+                    </span>
+                  )}
+                  {img.file && (
+                    <span className="absolute bottom-2 left-2 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      ใหม่
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(img.id)}
+                    disabled={isSubmitting}
+                    aria-label={`ลบรูปที่ ${idx + 1}`}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow-sm transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                   >
-                    <img
-                      src={url}
-                      alt={`รูปที่ ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(index)}
-                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white opacity-0 transition group-hover:opacity-100 hover:bg-rose-700"
-                      title="ลบรูปภาพนี้"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                    {index === 0 && (
-                      <span className="absolute bottom-0 inset-x-0 bg-sky-600/90 py-0.5 text-center text-[9px] font-bold text-white">
-                        หลัก
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+
+              {images.length < MAX_PRODUCT_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                  className="group flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/60 text-center transition hover:border-[#3f6593] hover:bg-sky-50/50 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Plus className="h-6 w-6 text-slate-500 transition group-hover:scale-110" />
+                  <span className="mt-1.5 text-xs font-semibold text-slate-600">
+                    เพิ่มรูป
+                  </span>
+                </button>
+              )}
             </div>
+          )}
+
+          {imageError && (
+            <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-rose-600">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{imageError}</span>
+            </p>
           )}
         </section>
 
@@ -604,58 +743,326 @@ export default function EditProductClient({
         <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
             <MapPin className="h-5 w-5 text-sky-600" />
-            <h2 className="text-lg font-bold text-slate-900">4. สถานที่นัดรับและช่วงเวลาให้เช่า</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              4. สถานที่นัดรับและช่วงเวลาให้เช่า
+            </h2>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                จุดนัดรับ–คืนอุปกรณ์ <span className="text-rose-500">*</span>
-              </label>
+            <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 cursor-pointer">
               <input
-                type="text"
-                required
-                value={locationDesc}
-                onChange={(e) => setLocationDesc(e.target.value)}
-                placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                type="checkbox"
+                checked={sameLocation}
+                onChange={(e) => setSameLocation(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
               />
+              <span className="text-sm font-semibold text-slate-700">
+                สถานที่นัดรับและนัดคืนเป็นที่เดียวกัน
+              </span>
+            </label>
+
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-slate-700">
+                {sameLocation ? "จุดนัดรับ–คืนอุปกรณ์" : "จุดนัดรับอุปกรณ์"}{" "}
+                <span className="text-rose-500">*</span>
+              </p>
+              {meetupLocations.map((loc, i) => (
+                <div
+                  key={i}
+                  className="space-y-3 rounded-2xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={loc.description}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "description",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                    />
+                    {meetupLocations.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeLocation(meetupLocations, setMeetupLocations, i)
+                        }
+                        className="mt-1 shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="บ้านเลขที่"
+                      value={loc.no}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "no",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="ซอย"
+                      value={loc.alley}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "alley",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="ถนน"
+                      value={loc.road}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "road",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="จังหวัด"
+                      value={loc.province}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "province",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="เขต / อำเภอ"
+                      value={loc.district}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "district",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="แขวง / ตำบล"
+                      value={loc.subdistrict}
+                      onChange={(e) =>
+                        updateLocation(
+                          meetupLocations,
+                          setMeetupLocations,
+                          i,
+                          "subdistrict",
+                          e.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => addLocation(meetupLocations, setMeetupLocations)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-[#1b3554] hover:text-[#1b3554]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                เพิ่มสถานที่นัดรับ
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">จังหวัด</label>
-                <input
-                  type="text"
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
+            {!sameLocation && (
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700">
+                  จุดนัดคืนอุปกรณ์ <span className="text-rose-500">*</span>
+                </p>
+                {returnLocations.map((loc, i) => (
+                  <div
+                    key={i}
+                    className="space-y-3 rounded-2xl border border-slate-200 p-4"
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={loc.description}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "description",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="เช่น BTS สยาม / ห้างเซ็นทรัลเวิลด์ / บริเวณอนุสาวรีย์ชัยฯ"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none focus:ring-2 focus:ring-sky-100"
+                      />
+                      {returnLocations.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeLocation(
+                              returnLocations,
+                              setReturnLocations,
+                              i,
+                            )
+                          }
+                          className="mt-1 shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        type="text"
+                        placeholder="บ้านเลขที่"
+                        value={loc.no}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "no",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ซอย"
+                        value={loc.alley}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "alley",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ถนน"
+                        value={loc.road}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "road",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        type="text"
+                        placeholder="จังหวัด"
+                        value={loc.province}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "province",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="เขต / อำเภอ"
+                        value={loc.district}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "district",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="แขวง / ตำบล"
+                        value={loc.subdistrict}
+                        onChange={(e) =>
+                          updateLocation(
+                            returnLocations,
+                            setReturnLocations,
+                            i,
+                            "subdistrict",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    addLocation(returnLocations, setReturnLocations)
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-[#1b3554] hover:text-[#1b3554]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  เพิ่มสถานที่นัดคืน
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">เขต / อำเภอ</label>
-                <input
-                  type="text"
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">แขวง / ตำบล</label>
-                <input
-                  type="text"
-                  value={subdistrict}
-                  onChange={(e) => setSubdistrict(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  วันที่เริ่มต้นเปิดให้เช่า <span className="text-rose-500">*</span>
+                  วันที่เริ่มต้นเปิดให้เช่า{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -667,7 +1074,8 @@ export default function EditProductClient({
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  วันที่สิ้นสุดเปิดให้เช่า <span className="text-rose-500">*</span>
+                  วันที่สิ้นสุดเปิดให้เช่า{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -686,7 +1094,9 @@ export default function EditProductClient({
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
             <div className="flex items-center gap-2.5">
               <FileText className="h-5 w-5 text-sky-600" />
-              <h2 className="text-lg font-bold text-slate-900">5. เงื่อนไขและข้อตกลงการเช่า</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                5. เงื่อนไขและข้อตกลงการเช่า
+              </h2>
             </div>
           </div>
 
@@ -761,7 +1171,7 @@ export default function EditProductClient({
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>กำลังบันทึกข้อมูล...</span>
+                <span>กำลังอัปโหลดรูปและบันทึกข้อมูล...</span>
               </>
             ) : (
               <>
