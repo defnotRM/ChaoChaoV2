@@ -65,6 +65,19 @@ export default async function LenderOrderDetailPage({
     notFound();
   }
 
+  const { data: lender } = item.user_id
+    ? await admin
+        .from("useraccount")
+        .select("user_id, username, firstname, lastname, avatar_url")
+        .eq("user_id", item.user_id)
+        .maybeSingle()
+    : { data: null };
+
+  const lenderFullName =
+    lender?.username ||
+    `${lender?.firstname || ""} ${lender?.lastname || ""}`.trim() ||
+    "ผู้ให้เช่า";
+
   const primaryImage =
     imageRes.data?.find((i) => i.is_primary)?.image_url ??
     imageRes.data?.[0]?.image_url ??
@@ -149,6 +162,12 @@ export default async function LenderOrderDetailPage({
       phone: renterPhones[0] || null,
       phones: renterPhones,
       avatarUrl,
+    },
+    lender: {
+      id: item.user_id || userId,
+      username: lender?.username || "ผู้ให้เช่า",
+      fullName: lenderFullName,
+      avatarUrl: lender?.avatar_url || null,
     },
     payments: (paymentsRes.data || []).map((p) => ({
       payment_id: p.payment_id,

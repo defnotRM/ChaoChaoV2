@@ -137,7 +137,9 @@ export function OrderEvidencePanel({
   userId,
   viewerRole,
   myName,
+  myAvatarUrl,
   otherName,
+  otherAvatarUrl,
   phase,
   canUpload,
   scheduledDate,
@@ -151,7 +153,9 @@ export function OrderEvidencePanel({
   userId: string;
   viewerRole: "lender" | "renter";
   myName: string;
+  myAvatarUrl?: string | null;
   otherName: string;
+  otherAvatarUrl?: string | null;
   phase: "before" | "after";
   canUpload: boolean;
   scheduledDate?: string | null;
@@ -709,7 +713,8 @@ export function OrderEvidencePanel({
       {/* แถวสถานะของเรา */}
       <UploaderRow
         initials={(myName || myRoleLabel).slice(0, 2)}
-        name={`คุณ (${myRoleLabel})`}
+        avatarUrl={myAvatarUrl}
+        name={`${myName || myRoleLabel} (${myRoleLabel})`}
         done={alreadyUploaded}
         subtitle={
           myEvidence
@@ -749,7 +754,8 @@ export function OrderEvidencePanel({
       {/* แถวสถานะอีกฝ่าย + รูปหลักฐานของอีกฝ่าย */}
       <UploaderRow
         initials={(otherName || otherRoleLabel).slice(0, 2)}
-        name={`${otherName} (${otherRoleLabel})`}
+        avatarUrl={otherAvatarUrl}
+        name={`${otherName || otherRoleLabel} (${otherRoleLabel})`}
         done={otherEvidence !== null}
         subtitle={
           otherEvidence
@@ -923,7 +929,9 @@ export function OrderEvidenceModal({
   userId,
   viewerRole,
   myName,
+  myAvatarUrl,
   otherName,
+  otherAvatarUrl,
   phase,
   canUpload,
   scheduledDate,
@@ -939,7 +947,9 @@ export function OrderEvidenceModal({
   userId: string;
   viewerRole: "lender" | "renter";
   myName: string;
+  myAvatarUrl?: string | null;
   otherName: string;
+  otherAvatarUrl?: string | null;
   phase: "before" | "after";
   canUpload: boolean;
   scheduledDate?: string | null;
@@ -972,7 +982,9 @@ export function OrderEvidenceModal({
           userId={userId}
           viewerRole={viewerRole}
           myName={myName}
+          myAvatarUrl={myAvatarUrl}
           otherName={otherName}
+          otherAvatarUrl={otherAvatarUrl}
           phase={phase}
           canUpload={canUpload}
           scheduledDate={scheduledDate}
@@ -991,12 +1003,14 @@ export function OrderEvidenceModal({
 
 function UploaderRow({
   initials,
+  avatarUrl,
   name,
   subtitle,
   done,
   children,
 }: {
   initials: string;
+  avatarUrl?: string | null;
   name: string;
   subtitle: string;
   done: boolean;
@@ -1005,9 +1019,17 @@ function UploaderRow({
   return (
     <div className="rounded-2xl border border-slate-200 p-3.5">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">
-          {(initials || "U").toUpperCase()}
-        </span>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+          />
+        ) : (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white">
+            {(initials || "U").toUpperCase()}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-slate-900">{name}</p>
           <p className="text-xs text-slate-500">{subtitle}</p>

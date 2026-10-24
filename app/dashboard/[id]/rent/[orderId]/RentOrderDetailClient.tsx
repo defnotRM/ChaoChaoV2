@@ -77,6 +77,12 @@ export interface RentOrderDetailData {
     avatarUrl: string | null;
     status: string;
   };
+  renter?: {
+    id: string;
+    username: string;
+    fullName: string;
+    avatarUrl: string | null;
+  };
   payments: Array<{
     payment_id: string;
     amount: number;
@@ -183,7 +189,13 @@ export default function RentOrderDetailClient({
   timeouts?: any;
 }) {
   const router = useRouter();
-  const { order, item, owner } = data;
+  const { order, item, owner, renter } = data;
+  const myAccountName =
+    renter?.username || renter?.fullName || "ผู้เช่า";
+  const myAvatarUrl = renter?.avatarUrl || null;
+  const otherAccountName =
+    owner.username || owner.fullName || "ผู้ให้เช่า";
+  const otherAvatarUrl = owner.avatarUrl || null;
 
   const [currentStatus, setCurrentStatus] = useState(order.status);
   const [paymentsList, setPaymentsList] = useState(data.payments);
@@ -862,8 +874,10 @@ export default function RentOrderDetailClient({
                   orderId={order.order_id}
                   userId={userId}
                   viewerRole="renter"
-                  myName="ผู้เช่า"
-                  otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
+                  myName={myAccountName}
+                  myAvatarUrl={myAvatarUrl}
+                  otherName={otherAccountName}
+                  otherAvatarUrl={otherAvatarUrl}
                   phase="before"
                   canUpload={currentStatus === "paid"}
                   scheduledDate={order.start_date}
@@ -883,8 +897,10 @@ export default function RentOrderDetailClient({
                   orderId={order.order_id}
                   userId={userId}
                   viewerRole="renter"
-                  myName="ผู้เช่า"
-                  otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
+                  myName={myAccountName}
+                  myAvatarUrl={myAvatarUrl}
+                  otherName={otherAccountName}
+                  otherAvatarUrl={otherAvatarUrl}
                   phase="after"
                   canUpload={
                     currentStatus === "item_sent" ||
@@ -985,13 +1001,13 @@ export default function RentOrderDetailClient({
                       </p>
                       <div className="space-y-1.5 border-t border-emerald-200/70 pt-2 text-[11px]">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-600">คุณ (ผู้เช่า):</span>
+                          <span className="text-slate-600">{myAccountName} (ผู้เช่า):</span>
                           <span className={renterBefore ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
                             {renterBefore ? `✓ อัปโหลดแล้ว (${renterBefore.count} รูป)` : "• รออัปโหลด"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-600">{owner.username || "ผู้ให้เช่า"} (ผู้ให้เช่า):</span>
+                          <span className="text-slate-600">{otherAccountName} (ผู้ให้เช่า):</span>
                           <span className={lenderBefore ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
                             {lenderBefore ? `✓ อัปโหลดแล้ว (${lenderBefore.count} รูป)` : "• รออัปโหลด"}
                           </span>
@@ -1023,13 +1039,13 @@ export default function RentOrderDetailClient({
                       </p>
                       <div className="space-y-1.5 border-t border-sky-200/70 pt-2 text-[11px]">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-600">คุณ (ผู้เช่า):</span>
+                          <span className="text-slate-600">{myAccountName} (ผู้เช่า):</span>
                           <span className={renterAfter ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
                             {renterAfter ? `✓ อัปโหลดแล้ว (${renterAfter.count} รูป)` : "• รออัปโหลด"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-600">{owner.username || "ผู้ให้เช่า"} (ผู้ให้เช่า):</span>
+                          <span className="text-slate-600">{otherAccountName} (ผู้ให้เช่า):</span>
                           <span className={lenderAfter ? "font-bold text-emerald-700" : "font-semibold text-amber-700"}>
                             {lenderAfter ? `✓ อัปโหลดแล้ว (${lenderAfter.count} รูป)` : "• รออัปโหลด"}
                           </span>
@@ -1098,8 +1114,10 @@ export default function RentOrderDetailClient({
         orderId={order.order_id}
         userId={userId}
         viewerRole="renter"
-        myName="ผู้เช่า"
-        otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
+        myName={myAccountName}
+        myAvatarUrl={myAvatarUrl}
+        otherName={otherAccountName}
+        otherAvatarUrl={otherAvatarUrl}
         phase="before"
         canUpload={currentStatus === "paid"}
         scheduledDate={order.start_date}
@@ -1116,8 +1134,10 @@ export default function RentOrderDetailClient({
         orderId={order.order_id}
         userId={userId}
         viewerRole="renter"
-        myName="ผู้เช่า"
-        otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
+        myName={myAccountName}
+        myAvatarUrl={myAvatarUrl}
+        otherName={otherAccountName}
+        otherAvatarUrl={otherAvatarUrl}
         phase="after"
         canUpload={
           currentStatus === "item_sent" || currentStatus === "item_returned"

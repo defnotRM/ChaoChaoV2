@@ -62,7 +62,7 @@ export default async function UserRentalOrderDetailPage({
   }
 
   const ownerId = item.user_id ?? "";
-  const [ownerRes, ownerPhoneRes] = await Promise.all([
+  const [ownerRes, ownerPhoneRes, renterRes] = await Promise.all([
     ownerId
       ? admin
           .from("useraccount")
@@ -76,10 +76,23 @@ export default async function UserRentalOrderDetailPage({
           .select("phone")
           .eq("user_id", ownerId)
       : Promise.resolve({ data: [] }),
+    order.user_id
+      ? admin
+          .from("useraccount")
+          .select("user_id, username, firstname, lastname, avatar_url")
+          .eq("user_id", order.user_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const owner = ownerRes.data;
   const ownerFullName = owner?.username || "ผู้ให้เช่า";
+
+  const renter = renterRes.data;
+  const renterFullName =
+    renter?.username ||
+    `${renter?.firstname || ""} ${renter?.lastname || ""}`.trim() ||
+    "ผู้เช่า";
 
   const ownerPhones = ((ownerPhoneRes as any).data || [])
     .map((p: any) => p.phone)
@@ -133,6 +146,12 @@ export default async function UserRentalOrderDetailPage({
       phones: ownerPhones,
       avatarUrl,
       status: owner?.status || "Active",
+    },
+    renter: {
+      id: order.user_id,
+      username: renter?.username || "ผู้เช่า",
+      fullName: renterFullName,
+      avatarUrl: renter?.avatar_url || null,
     },
     payments: (paymentsRes.data || []).map((p) => ({
       payment_id: p.payment_id,
