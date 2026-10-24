@@ -32,7 +32,7 @@ const LEGACY_BUCKET_MAP: Record<StorageCategory, { bucket: string; subPathPrefix
   slips: { bucket: "slips" },
   "evidence/handover": { bucket: "rental-evidence" },
   "evidence/return": { bucket: "rental-evidence" },
-  kyc: { bucket: "chaochao" },
+  kyc: { bucket: "kyc" },
   disputes: { bucket: "rental-evidence" },
 };
 
@@ -120,40 +120,112 @@ export async function uploadToStorage(
   const primaryPath = `${category}/${cleanFolderId}/${fileName}`;
 
   // 1. Upload to primary categorized bucket 'chaochao'
-  const { error: primaryError } = await admin.storage
+  let primaryUploadSuccess = false;
+  let { error: primaryError } = await admin.storage
     .from(PRIMARY_BUCKET)
     .upload(primaryPath, buffer, {
       contentType: mimeType,
       upsert: options.upsert ?? true,
     });
 
-  if (primaryError) {
-    console.error(`Failed to upload to primary bucket ${PRIMARY_BUCKET} at ${primaryPath}:`, primaryError);
+  if (
+    primaryError &&
+    (primaryError.message?.includes("Bucket not found") ||
+      (primaryError as any).error === "Bucket not found")
+  ) {
+    try {
+      await admin.storage.createBucket(PRIMARY_BUCKET, { public: true });
+      const retry = await admin.storage
+        .from(PRIMARY_BUCKET)
+        .upload(primaryPath, buffer, {
+          contentType: mimeType,
+          upsert: options.upsert ?? true,
+        });
+      primaryError = retry.error;
+    } catch (e) {
+      console.warn("Failed auto-creating primary bucket:", e);
+    }
   }
 
+  if (!primaryError) {
+    primaryUploadSuccess = true;
+  } else {
+    console.error(
+      `Failed to upload to primary bucket ${PRIMARY_BUCKET} at ${primaryPath}:`,
+      primaryError
+    );
+  }
+
+  // 2. Also sync to legacy bucket if different, to maintain 100% backward compatibility
+  let legacyUploadSuccess = false;
+  const legacyConfig = LEGACY_BUCKET_MAP[category];
+  const legacyPath = `${cleanFolderId}/${fileName}`;
+  if (legacyConfig && legacyConfig.bucket !== PRIMARY_BUCKET) {
+    try {
+      let { error: legErr } = await admin.storage
+        .from(legacyConfig.bucket)
+        .upload(legacyPath, buffer, {
+          contentType: mimeType,
+          upsert: options.upsert ?? true,
+        });
+
+      if (
+        legErr &&
+        (legErr.message?.includes("Bucket not found") ||
+          (legErr as any).error === "Bucket not found")
+      ) {
+        await admin.storage.createBucket(legacyConfig.bucket, { public: true });
+        const retryLeg = await admin.storage
+          .from(legacyConfig.bucket)
+          .upload(legacyPath, buffer, {
+            contentType: mimeType,
+            upsert: options.upsert ?? true,
+          });
+        legErr = retryLeg.error;
+      }
+
+      if (!legErr) {
+        legacyUploadSuccess = true;
+      }
+    } catch (e) {
+      console.warn(
+        `Sync to legacy bucket ${legacyConfig.bucket} skipped or failed:`,
+        e
+      );
+    }
+  }
+
+  if (primaryUploadSuccess) {
+    const { data: primaryPubData } = admin.storage
+      .from(PRIMARY_BUCKET)
+      .getPublicUrl(primaryPath);
+
+    return {
+      publicUrl: primaryPubData.publicUrl,
+      path: primaryPath,
+      bucket: PRIMARY_BUCKET,
+    };
+  }
+
+  if (legacyUploadSuccess && legacyConfig) {
+    const { data: legPubData } = admin.storage
+      .from(legacyConfig.bucket)
+      .getPublicUrl(legacyPath);
+
+    return {
+      publicUrl: legPubData.publicUrl,
+      path: legacyPath,
+      bucket: legacyConfig.bucket,
+    };
+  }
+
+  // Fallback public url
   const { data: primaryPubData } = admin.storage
     .from(PRIMARY_BUCKET)
     .getPublicUrl(primaryPath);
 
-  const publicUrl = primaryPubData.publicUrl;
-
-  // 2. Also sync to legacy bucket if different, to maintain 100% backward compatibility
-  const legacyConfig = LEGACY_BUCKET_MAP[category];
-  if (legacyConfig && legacyConfig.bucket !== PRIMARY_BUCKET) {
-    const legacyPath = `${cleanFolderId}/${fileName}`;
-    try {
-      await admin.storage.from(legacyConfig.bucket).upload(legacyPath, buffer, {
-        contentType: mimeType,
-        upsert: options.upsert ?? true,
-      });
-    } catch (e) {
-      // Legacy bucket error should not block
-      console.warn(`Sync to legacy bucket ${legacyConfig.bucket} skipped or failed:`, e);
-    }
-  }
-
   return {
-    publicUrl,
+    publicUrl: primaryPubData.publicUrl,
     path: primaryPath,
     bucket: PRIMARY_BUCKET,
   };

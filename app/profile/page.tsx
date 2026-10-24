@@ -38,6 +38,16 @@ export default function ProfilePage() {
   const [phone2, setPhone2] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [bannerUrl, setBannerUrl] = useState<string>("");
+  const [avatarImgError, setAvatarImgError] = useState(false);
+  const [bannerImgError, setBannerImgError] = useState(false);
+
+  useEffect(() => {
+    setAvatarImgError(false);
+  }, [avatarUrl]);
+
+  useEffect(() => {
+    setBannerImgError(false);
+  }, [bannerUrl]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
@@ -472,11 +482,12 @@ export default function ProfilePage() {
         <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
           {/* Narrow Banner with Upload Button */}
           <div className="group relative h-28 sm:h-36 w-full overflow-hidden bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]">
-            {bannerUrl ? (
+            {bannerUrl && !bannerImgError ? (
               <img
                 src={bannerUrl}
                 alt="Cover Banner"
                 className="h-full w-full object-cover"
+                onError={() => setBannerImgError(true)}
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-r from-[#000f22] via-[#1b3554] to-[#3f6593]" />
@@ -522,11 +533,12 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-5">
                 {/* Avatar with Camera Trigger */}
                 <div className="group relative -mt-12 sm:-mt-16 flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-2xl sm:text-3xl font-bold text-white shadow-xl ring-4 ring-white">
-                  {avatarUrl ? (
+                  {avatarUrl && !avatarImgError ? (
                     <img
                       src={avatarUrl}
                       alt={username}
                       className="h-full w-full object-cover"
+                      onError={() => setAvatarImgError(true)}
                     />
                   ) : (
                     <span>{initialLetter}</span>
