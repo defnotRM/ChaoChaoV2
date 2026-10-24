@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { uploadToStorage } from "@/lib/storage";
 
-const VALID_TYPES = ["damaged_item", "stolen_item"] as const;
+export const dynamic = "force-dynamic";
 
-export async function POST(
+export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: orderId } = await params;
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const {
       data: { user },
       error: authError,
@@ -19,148 +19,211 @@ export async function POST(
     if (authError || !user) {
       return NextResponse.json(
         { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
-    const body = await request.json().catch(() => ({}));
-    const reportType: string = body.reportType;
-    const description: string | undefined = body.description;
-    const imageUrls: string[] = Array.isArray(body.imageUrls)
-      ? body.imageUrls
-      : [];
+    const { id: orderId } = await props.params;
+    const admin = createAdminClient();
 
-    if (!VALID_TYPES.includes(reportType as (typeof VALID_TYPES)[number])) {
+    const [reportsRes, typesRes] = await Promise.all([
+      admin
+        .from("rentalreport")
+        .select(
+          `
+          report_id,
+          order_id,
+          reporter_id,
+          reported_user_id,
+          report_type_id,
+          description,
+          status,
+          verdict,
+          damage_amount,
+          created_at,
+          rentalreporttype (
+            report_type_id,
+            type_name
+          ),
+          rentalreportimage (
+            report_image_id,
+            image_url
+          )
+        `
+        )
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: false }),
+      admin.from("rentalreporttype").select("report_type_id, type_name"),
+    ]);
+
+    return NextResponse.json({
+      reports: reportsRes.data || [],
+      reportTypes: typesRes.data || [],
+    });
+  } catch (error: any) {
+    console.error("GET rental report error:", error);
+    return NextResponse.json(
+      { message: "เกิดข้อผิดพลาดในการดึงข้อมูลรายงานข้อพิพาท" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  request: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json(
-        {
-          message:
-            "ประเภทการรายงานไม่ถูกต้อง (รองรับเฉพาะ damaged_item, stolen_item)",
-        },
-        { status: 400 },
+        { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
+        { status: 401 }
       );
     }
-    if (!description || !description.trim()) {
+
+    const { id: orderId } = await props.params;
+    if (!orderId) {
       return NextResponse.json(
-        { message: "กรุณาอธิบายรายละเอียดปัญหา" },
-        { status: 400 },
+        { message: "กรุณาระบุรหัสคำสั่งเช่า" },
+        { status: 400 }
       );
     }
 
     const admin = createAdminClient();
 
+    // 1. Fetch rentalorder to check participants
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select("order_id, item_id, status, end_date")
+      .select("order_id, user_id, status, item(user_id, item_name)")
       .eq("order_id", orderId)
-      .maybeSingle();
+      .single();
 
     if (orderError || !order) {
-      return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
-    }
-
-    // ทั้ง 2 ประเภทนี้เป็นสิทธิ์ของ "ผู้ให้เช่า" เท่านั้น (ตาม FR-36, FR-37)
-    let lenderId: string | null = null;
-    if (order.item_id) {
-      const { data: item } = await admin
-        .from("item")
-        .select("user_id")
-        .eq("item_id", order.item_id)
-        .maybeSingle();
-      lenderId = item?.user_id ?? null;
-    }
-
-    if (user.id !== lenderId) {
       return NextResponse.json(
-        { message: "คุณไม่มีสิทธิ์รายงานปัญหานี้" },
-        { status: 403 },
+        { message: "ไม่พบข้อมูลคำสั่งเช่า" },
+        { status: 404 }
       );
     }
 
-    // เช็คสถานะให้เหมาะกับประเภทการรายงาน
-    if (reportType === "damaged_item") {
-      const allowed = ["item_returned", "completed"];
-      if (!allowed.includes(order.status)) {
-        return NextResponse.json(
-          { message: "รายงานความเสียหายได้เฉพาะหลังจากรับของคืนแล้วเท่านั้น" },
-          { status: 400 },
-        );
-      }
-    }
+    const renterId = order.user_id;
+    const lenderId = (order.item as any)?.user_id;
 
-    if (reportType === "stolen_item") {
-      const allowed = ["item_sent", "item_received"];
-      const isOverdue =
-        new Date(`${order.end_date}T00:00:00Z`).getTime() < Date.now();
-      if (!allowed.includes(order.status) || !isOverdue) {
-        return NextResponse.json(
-          {
-            message:
-              "รายงานได้เฉพาะเมื่อเลยกำหนดวันคืนของแล้วและยังไม่ได้รับของคืน",
-          },
-          { status: 400 },
-        );
-      }
-    }
-
-    const { data: reportType_, error: typeError } = await admin
-      .from("rentalreporttype")
-      .select("report_type_id")
-      .eq("type_name", reportType)
-      .maybeSingle();
-
-    if (typeError || !reportType_) {
+    if (user.id !== renterId && user.id !== lenderId) {
       return NextResponse.json(
-        { message: "ไม่พบประเภทการรายงานในระบบ" },
-        { status: 500 },
+        { message: "คุณไม่มีสิทธิ์ในการรายงานข้อพิพาทสำหรับรายการนี้" },
+        { status: 403 }
       );
     }
 
-    const { data: report, error: reportError } = await admin
+    const reportedUserId = user.id === renterId ? lenderId : renterId;
+
+    // 2. Parse form data
+    const formData = await request.formData();
+    const reportTypeId = formData.get("reportTypeId") as string;
+    const description = (formData.get("description") as string)?.trim();
+    const imageFiles = formData.getAll("images") as File[];
+
+    if (!reportTypeId) {
+      return NextResponse.json(
+        { message: "กรุณาเลือกประเภทของปัญหา/ข้อพิพาท" },
+        { status: 400 }
+      );
+    }
+
+    if (!description || description.length < 10) {
+      return NextResponse.json(
+        { message: "กรุณาระบุรายละเอียดของปัญหาอย่างน้อย 10 ตัวอักษร" },
+        { status: 400 }
+      );
+    }
+
+    // 3. Upload evidence images to Supabase Storage
+    const uploadedUrls: string[] = [];
+    if (imageFiles && imageFiles.length > 0) {
+      for (const file of imageFiles) {
+        if (file && file.size > 0 && file.type?.startsWith("image/")) {
+          try {
+            const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+            const uploadRes = await uploadToStorage(
+              "disputes",
+              orderId,
+              file,
+              {
+                fileName: `dispute_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`,
+                contentType: file.type || "image/png",
+              }
+            );
+            if (uploadRes.publicUrl) {
+              uploadedUrls.push(uploadRes.publicUrl);
+            }
+          } catch (uploadErr) {
+            console.warn("Dispute image upload failed:", uploadErr);
+          }
+        }
+      }
+    }
+
+    // 4. Insert into rentalreport
+    const { data: newReport, error: insertError } = await admin
       .from("rentalreport")
       .insert({
         order_id: orderId,
         reporter_id: user.id,
-        report_type_id: reportType_.report_type_id,
+        reported_user_id: reportedUserId,
+        report_type_id: reportTypeId,
         description,
         status: "pending_investigation",
       })
       .select("report_id")
       .single();
 
-    if (reportError || !report) {
-      console.error("Insert report error:", reportError);
+    if (insertError || !newReport) {
+      console.error("Insert rentalreport error:", insertError);
       return NextResponse.json(
-        { message: "ส่งรายงานไม่สำเร็จ กรุณาลองใหม่" },
-        { status: 500 },
+        { message: "ไม่สามารถบันทึกรายงานข้อพิพาทได้", details: insertError?.message },
+        { status: 500 }
       );
     }
 
-    if (imageUrls.length > 0) {
-      await admin
-        .from("rentalreportimage")
-        .insert(
-          imageUrls.map((url) => ({
-            report_id: report.report_id,
-            image_url: url,
-          })),
-        );
+    // 5. Insert images into rentalreportimage
+    if (uploadedUrls.length > 0) {
+      const imageRows = uploadedUrls.map((url) => ({
+        report_id: newReport.report_id,
+        image_url: url,
+      }));
+      await admin.from("rentalreportimage").insert(imageRows);
     }
 
-    // หมายเหตุ: ไม่เปลี่ยน rentalorder.status ตรงนี้ — ปล่อยไว้ตามเดิม (item_returned/
-    // completed/item_sent) รอแอดมินตรวจสอบแล้วเรียก settle_rental_order ตัดสินเอง
-    // (ต่างจาก false_advertisement ที่เปลี่ยนเป็น disputed_at_meetup ทันที เพราะเกิด
-    // ตอนกลาง flow ก่อน order จะปิด แต่ 2 ประเภทนี้เกิดหลัง order ปิด/ใกล้ปิดแล้ว)
+    // 6. Send notification to the reported party
+    try {
+      await admin.from("notification").insert({
+        user_id: reportedUserId,
+        type: "dispute_opened",
+        title: "มีการเปิดข้อพิพาทในรายการเช่า",
+        message: `มีรายงานข้อพิพาทเกี่ยวกับรายการเช่า #${orderId.slice(0, 8)} ทีมงาน Admin กำลังดำเนินการตรวจสอบ`,
+        related_order_id: orderId,
+        is_read: false,
+      });
+    } catch (notifErr) {
+      console.warn("Notification error:", notifErr);
+    }
 
     return NextResponse.json({
-      ok: true,
-      reportId: report.report_id,
-      message: "ส่งรายงานเรียบร้อยแล้ว รอแอดมินตรวจสอบและตัดสิน",
+      success: true,
+      message: "ส่งรายงานข้อพิพาทให้แอดมินเรียบร้อยแล้ว แอดมินจะดำเนินการตรวจสอบโดยเร็วที่สุด",
+      reportId: newReport.report_id,
     });
-  } catch (error) {
-    console.error("POST /api/rentals/[id]/report error:", error);
+  } catch (error: any) {
+    console.error("POST rental report error:", error);
     return NextResponse.json(
-      { message: "เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์" },
-      { status: 500 },
+      { message: "เกิดข้อผิดพลาดในการส่งรายงานข้อพิพาท", details: error.message },
+      { status: 500 }
     );
   }
 }

@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import {
   Menu,
   MessageCircle,
   X,
+  User as UserIcon,
   LogOut,
   LayoutDashboard,
   Globe,
+  Headphones,
 } from "lucide-react";
+import ContactSupportModal from "@/components/support/ContactSupportModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import NotificationBell from "./NotificationBell";
 
@@ -21,14 +23,18 @@ function Brand() {
       href="/"
       className="flex shrink-0 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600"
     >
-      <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] shadow-sm">
-        <Image
-          src="/logo.svg"
-          alt="ChaoChao"
-          width={40}
-          height={40}
-          className="h-full w-full object-contain"
-        />
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1b3554] shadow-sm">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="h-5 w-5 text-white"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
+          <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
+        </svg>
       </span>
       <span className="text-xl font-bold tracking-tight text-[#000f22]">
         CHAOCHAO
@@ -50,6 +56,7 @@ export default function Navbarver2() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   const fetchAuthUser = useCallback(async () => {
     try {
@@ -80,7 +87,7 @@ export default function Navbarver2() {
       if (res.ok) {
         const data = await res.json();
         const totalUnread = (data.rooms || []).reduce(
-          (sum: number, r: { unreadCount?: number }) => sum + (r.unreadCount || 0),
+          (sum: number, r: any) => sum + (r.unreadCount || 0),
           0,
         );
         setUnreadCount(totalUnread);
@@ -91,17 +98,12 @@ export default function Navbarver2() {
   }, [user]);
 
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!cancelled) {
-        await fetchAuthUser();
-      }
-    };
-    void run();
+    // 1. Fetch user from server endpoint
+    fetchAuthUser();
 
     // 2. Listen to custom auth events
     const handleAuthChange = () => {
-      void fetchAuthUser();
+      fetchAuthUser();
     };
 
     window.addEventListener("auth-state-change", handleAuthChange);
@@ -112,11 +114,10 @@ export default function Navbarver2() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      void fetchAuthUser();
+      fetchAuthUser();
     });
 
     return () => {
-      cancelled = true;
       window.removeEventListener("auth-state-change", handleAuthChange);
       window.removeEventListener("focus", handleAuthChange);
       subscription.unsubscribe();
@@ -125,18 +126,11 @@ export default function Navbarver2() {
 
   useEffect(() => {
     if (user && pathname !== "/chat") {
-      let cancelled = false;
-      const run = async () => {
-        if (!cancelled) {
-          await fetchUnreadCount();
-        }
-      };
-      void run();
+      fetchUnreadCount();
       const interval = setInterval(fetchUnreadCount, 30000);
-      return () => {
-        cancelled = true;
-        clearInterval(interval);
-      };
+      return () => clearInterval(interval);
+    } else if (pathname === "/chat") {
+      setUnreadCount(0);
     }
   }, [user, fetchUnreadCount, pathname]);
 
@@ -159,8 +153,8 @@ export default function Navbarver2() {
     user?.role === "admin"
       ? "/admin"
       : user?.id
-        ? `/dashboard/${user.id}`
-        : "/dashboard";
+      ? `/dashboard/${user.id}`
+      : "/dashboard";
 
   const userInitial = user?.username ? user.username[0].toUpperCase() : "U";
 
@@ -176,6 +170,16 @@ export default function Navbarver2() {
 
         {/* เมนูด้านขวาของ Laptop/Desktop */}
         <div className="flex shrink-0 items-center gap-2.5">
+          {/* ปุ่มติดต่อ Admin / ศูนย์ช่วยเหลือ */}
+          <button
+            type="button"
+            onClick={() => setShowSupportModal(true)}
+            title="ติดต่อ Admin / ศูนย์ช่วยเหลือ"
+            aria-label="ติดต่อ Admin / ศูนย์ช่วยเหลือ"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
+          >
+            <Headphones aria-hidden="true" className="h-6 w-6" />
+          </button>
           {/* ปุ่มค้นหาผู้ใช้งาน (Globe Icon) */}
           <Link
             href="/users"
@@ -221,12 +225,9 @@ export default function Navbarver2() {
               >
                 <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-sm font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]">
                   {user.avatarUrl ? (
-                    <Image
+                    <img
                       src={user.avatarUrl}
                       alt={user.username}
-                      width={36}
-                      height={36}
-                      unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -317,13 +318,10 @@ export default function Navbarver2() {
                 className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-xs font-bold text-white shadow-sm ring-2 ring-[#c0e6fd]"
               >
                 {user.avatarUrl ? (
-                  <Image
+                  <img
                     src={user.avatarUrl}
-                    alt={user.username || "อวตารผู้ใช้"}
-                    fill
-                    sizes="40px"
-                    className="object-cover"
-                    unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
+                    alt={user.username}
+                    className="h-full w-full object-cover"
                   />
                 ) : (
                   <span>{userInitial}</span>
@@ -375,6 +373,17 @@ export default function Navbarver2() {
                 )}
               </Link>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setShowSupportModal(true);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-[#17326b]"
+              >
+                <Headphones className="h-4 w-4 text-[#17326b]" />
+                <span>ติดต่อ Admin / ศูนย์ช่วยเหลือ</span>
+              </button>
               {user ? (
                 /* เมื่อเข้าสู่ระบบใน Mobile */
                 <>
@@ -385,13 +394,10 @@ export default function Navbarver2() {
                   >
                     <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-[#1b3554] ring-2 ring-white/40">
                       {user.avatarUrl ? (
-                        <Image
+                        <img
                           src={user.avatarUrl}
-                          alt={user.username || "อวตารผู้ใช้"}
-                          fill
-                          sizes="32px"
-                          className="object-cover"
-                          unoptimized={user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("blob:")}
+                          alt={user.username}
+                          className="h-full w-full object-cover"
                         />
                       ) : (
                         <span>{userInitial}</span>
@@ -449,6 +455,10 @@ export default function Navbarver2() {
           </div>
         )}
       </div>
+      <ContactSupportModal
+        isOpen={showSupportModal}
+        onClose={() => setShowSupportModal(false)}
+      />
     </header>
   );
 }

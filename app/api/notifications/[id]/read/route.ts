@@ -1,34 +1,50 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  props: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-  if (authError || !user) {
+    if (authError || !user) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { id: notificationId } = await props.params;
+    const admin = createAdminClient();
+
+    const { error } = await admin
+      .from("notification")
+      .update({ is_read: true })
+      .eq("notification_id", notificationId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Mark notification read error:", error);
+      return NextResponse.json(
+        { message: "Failed to mark as read" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error("Notification read error:", err);
     return NextResponse.json(
-      { message: "กรุณาเข้าสู่ระบบก่อน" },
-      { status: 401 },
+      { message: "Internal server error" },
+      { status: 500 }
     );
   }
-
-  const { error } = await supabase
-    .from("notification")
-    .update({ is_read: true })
-    .eq("notification_id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    console.error("Error marking notification read:", error);
-    return NextResponse.json({ message: "อัปเดตไม่สำเร็จ" }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
 }

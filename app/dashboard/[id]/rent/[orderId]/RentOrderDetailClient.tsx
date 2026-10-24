@@ -31,6 +31,7 @@ import {
   XCircle,
 } from "lucide-react";
 import CountdownBanner from "./CountdownBanner";
+import OrderDisputeModal from "@/components/orders/OrderDisputeModal";
 
 export interface RentOrderDetailData {
   order: {
@@ -170,6 +171,31 @@ export default function RentOrderDetailClient({
   const [isSubmittingSlip, setIsSubmittingSlip] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [loadingDisputes, setLoadingDisputes] = useState(false);
+
+  const fetchDisputes = useCallback(async () => {
+    try {
+      setLoadingDisputes(true);
+      const res = await fetch(`/api/rentals/${order.order_id}/report`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setDisputes(json.reports || []);
+      }
+    } catch (err) {
+      console.error("fetchDisputes error:", err);
+    } finally {
+      setLoadingDisputes(false);
+    }
+  }, [order.order_id]);
+
+  useEffect(() => {
+    fetchDisputes();
+  }, [fetchDisputes]);
+
 
   const fetchLatestOrder = useCallback(async () => {
     try {
@@ -393,6 +419,120 @@ export default function RentOrderDetailClient({
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22.5rem] xl:gap-8">
           {/* ───────────── ฝั่งซ้าย (เนื้อหาหลัก) ───────────── */}
           <div className="min-w-0 space-y-6">
+            {/* บัตรแสดงสถานะข้อพิพาท / รายงานปัญหา */}
+            {disputes.length > 0 && (
+              <section className="rounded-3xl border border-amber-300 bg-amber-50/70 p-5 sm:p-6 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                      <AlertTriangle className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-bold text-amber-950">
+                        มีรายงานข้อพิพาทสำหรับคำสั่งเช่านี้ ({disputes.length} รายการ)
+                      </h3>
+                      <p className="text-xs text-amber-700">
+                        ทีมงาน Admin กำลังตรวจสอบหลักฐานและดำเนินการระงับข้อพิพาท
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDisputeModal(true)}
+                    className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100/50 self-start sm:self-auto"
+                  >
+                    + ส่งข้อมูลเพิ่มเติม
+                  </button>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  {disputes.map((dsp: any) => {
+                    const statusMap: Record<string, { label: string; cls: string }> = {
+                      pending_investigation: {
+                        label: "กำลังตรวจสอบโดย Admin",
+                        cls: "bg-amber-100 text-amber-800 border-amber-200",
+                      },
+                      resolved: {
+                        label: "ระงับข้อพิพาทแล้ว",
+                        cls: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                      },
+                      resolved_renter_fault: {
+                        label: "ตัดสิน: ผู้เช่าเป็นฝ่ายผิด",
+                        cls: "bg-rose-100 text-rose-800 border-rose-200",
+                      },
+                      resolved_lender_fault: {
+                        label: "ตัดสิน: ผู้ให้เช่าเป็นฝ่ายผิด",
+                        cls: "bg-rose-100 text-rose-800 border-rose-200",
+                      },
+                      dismissed: {
+                        label: "ปฏิเสธคำร้อง",
+                        cls: "bg-slate-100 text-slate-700 border-slate-200",
+                      },
+                    };
+                    const sInfo = statusMap[dsp.status] || {
+                      label: dsp.status,
+                      cls: "bg-slate-100 text-slate-700 border-slate-200",
+                    };
+
+                    return (
+                      <div
+                        key={dsp.report_id}
+                        className="rounded-2xl border border-amber-200/80 bg-white p-4 text-xs space-y-2 shadow-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                          <span className="font-bold text-slate-900">
+                            ประเภท: {dsp.rentalreporttype?.type_name || "ข้อพิพาทการเช่า"}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 font-bold ${sInfo.cls}`}
+                          >
+                            {sInfo.label}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 leading-relaxed">
+                          <strong>รายละเอียด:</strong> {dsp.description}
+                        </p>
+                        {dsp.verdict && (
+                          <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
+                            <p className="font-bold text-slate-900">คำตัดสินของแอดมิน (Verdict):</p>
+                            <p className="text-slate-700 mt-0.5">{dsp.verdict}</p>
+                            {dsp.damage_amount > 0 && (
+                              <p className="mt-1 font-semibold text-rose-600">
+                                จำนวนเงินค่าเสียหาย/ชดเชย: {thb.format(dsp.damage_amount)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {dsp.rentalreportimage && dsp.rentalreportimage.length > 0 && (
+                          <div>
+                            <p className="font-bold text-slate-600 mb-1.5">
+                              หลักฐานที่แนบ ({dsp.rentalreportimage.length} รูป):
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {dsp.rentalreportimage.map((img: any) => (
+                                <a
+                                  key={img.report_image_id}
+                                  href={img.image_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="h-16 w-16 overflow-hidden rounded-xl border border-slate-200 hover:opacity-80 transition"
+                                >
+                                  <img
+                                    src={img.image_url}
+                                    alt="evidence"
+                                    className="h-full w-full object-cover"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             {/* 1) ไทม์ไลน์สถานะ 6 ขั้น */}
             <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
               <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -720,6 +860,17 @@ export default function RentOrderDetailClient({
                     <p className="text-xs font-semibold text-slate-700">สถานะ: {chip.label}</p>
                   </div>
                 )}
+                {/* ปุ่มเปิดข้อพิพาท / รายงานปัญหา */}
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowDisputeModal(true)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50 active:scale-[0.98]"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-rose-500" />
+                    <span>รายงานปัญหา / เปิดข้อพิพาทกับ Admin</span>
+                  </button>
+                </div>
               </div>
             </div>
           </aside>
@@ -727,6 +878,17 @@ export default function RentOrderDetailClient({
       </div>
 
       {/* Modal ชำระเงิน / อัปโหลดสลิป */}
+      {/* Modal เปิดข้อพิพาท */}
+      <OrderDisputeModal
+        orderId={order.order_id}
+        isOpen={showDisputeModal}
+        onClose={() => setShowDisputeModal(false)}
+        onSuccess={() => {
+          fetchDisputes();
+          fetchLatestOrder();
+        }}
+        userRole="renter"
+      />
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">

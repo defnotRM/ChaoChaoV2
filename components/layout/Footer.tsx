@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { useState } from "react";
+import ContactSupportModal from "@/components/support/ContactSupportModal";
+import { Mail, Phone, MapPin, Headphones } from "lucide-react";
 
 const footerLinks = [
   {
@@ -34,6 +35,7 @@ const footerLinks = [
 
 export default function Footer() {
   const pathname = usePathname();
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   if (pathname?.startsWith("/admin")) {
     return null;
@@ -46,14 +48,17 @@ export default function Footer() {
           {/* Brand */}
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-white/10">
-                <Image
-                  src="/logo.svg"
-                  alt="ChaoChao"
-                  width={36}
-                  height={36}
-                  className="h-full w-full object-contain"
-                />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="M9 3a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h3a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3" />
+                  <path d="M15 21a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3" />
+                </svg>
               </div>
               <span className="text-lg font-bold">ChaoChao</span>
             </div>
@@ -90,10 +95,7 @@ export default function Footer() {
             <ul className="mt-4 space-y-3">
               <li className="flex items-start gap-2 text-sm text-[#c0e6fd]">
                 <MapPin className="h-4 w-4 shrink-0 text-sky-300" />
-                <span>
-                  King Mongkut&apos;s Institute of Technology Ladkrabang, Bangkok,
-                  Thailand
-                </span>
+                <span>King Mongkut's Institute of Technology Ladkrabang, Bangkok, Thailand</span>
               </li>
               <li className="flex items-center gap-2 text-sm text-[#c0e6fd]">
                 <Phone className="h-4 w-4 shrink-0 text-sky-300" />
@@ -104,6 +106,14 @@ export default function Footer() {
                 <span>contact@chaochao.com</span>
               </li>
             </ul>
+            <button
+              type="button"
+              onClick={() => setShowSupportModal(true)}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-xs font-semibold text-white backdrop-blur-sm border border-white/20 transition hover:bg-white/25 shadow-sm"
+            >
+              <Headphones className="h-4 w-4 text-sky-300" />
+              <span>ติดต่อ Admin / ศูนย์ช่วยเหลือ</span>
+            </button>
           </div>
         </div>
 
@@ -111,6 +121,10 @@ export default function Footer() {
           &copy; {new Date().getFullYear()} ChaoChao. All rights reserved.
         </div>
       </div>
+      <ContactSupportModal
+        isOpen={showSupportModal}
+        onClose={() => setShowSupportModal(false)}
+      />
     </footer>
   );
 }
