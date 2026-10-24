@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import ContactSupportModal from "@/components/support/ContactSupportModal";
-import { Mail, Phone, MapPin, Headphones } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 
 const footerLinks = [
   {
@@ -35,7 +33,6 @@ const footerLinks = [
 
 export default function Footer() {
   const pathname = usePathname();
-  const [showSupportModal, setShowSupportModal] = useState(false);
 
   if (pathname?.startsWith("/admin")) {
     return null;
@@ -106,14 +103,6 @@ export default function Footer() {
                 <span>contact@chaochao.com</span>
               </li>
             </ul>
-            <button
-              type="button"
-              onClick={() => setShowSupportModal(true)}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-xs font-semibold text-white backdrop-blur-sm border border-white/20 transition hover:bg-white/25 shadow-sm"
-            >
-              <Headphones className="h-4 w-4 text-sky-300" />
-              <span>ติดต่อ Admin / ศูนย์ช่วยเหลือ</span>
-            </button>
           </div>
         </div>
 
@@ -121,10 +110,6 @@ export default function Footer() {
           &copy; {new Date().getFullYear()} ChaoChao. All rights reserved.
         </div>
       </div>
-      <ContactSupportModal
-        isOpen={showSupportModal}
-        onClose={() => setShowSupportModal(false)}
-      />
     </footer>
   );
 }

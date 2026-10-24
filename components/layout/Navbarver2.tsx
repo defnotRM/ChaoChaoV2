@@ -11,9 +11,7 @@ import {
   LogOut,
   LayoutDashboard,
   Globe,
-  Headphones,
 } from "lucide-react";
-import ContactSupportModal from "@/components/support/ContactSupportModal";
 import { createBrowserClient } from "@/lib/supabase/client";
 import NotificationBell from "./NotificationBell";
 
@@ -56,7 +54,6 @@ export default function Navbarver2() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showSupportModal, setShowSupportModal] = useState(false);
 
   const fetchAuthUser = useCallback(async () => {
     try {
@@ -170,16 +167,6 @@ export default function Navbarver2() {
 
         {/* เมนูด้านขวาของ Laptop/Desktop */}
         <div className="flex shrink-0 items-center gap-2.5">
-          {/* ปุ่มติดต่อ Admin / ศูนย์ช่วยเหลือ */}
-          <button
-            type="button"
-            onClick={() => setShowSupportModal(true)}
-            title="ติดต่อ Admin / ศูนย์ช่วยเหลือ"
-            aria-label="ติดต่อ Admin / ศูนย์ช่วยเหลือ"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
-          >
-            <Headphones aria-hidden="true" className="h-6 w-6" />
-          </button>
           {/* ปุ่มค้นหาผู้ใช้งาน (Globe Icon) */}
           <Link
             href="/users"
@@ -373,17 +360,6 @@ export default function Navbarver2() {
                 )}
               </Link>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  setShowSupportModal(true);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-[#17326b]"
-              >
-                <Headphones className="h-4 w-4 text-[#17326b]" />
-                <span>ติดต่อ Admin / ศูนย์ช่วยเหลือ</span>
-              </button>
               {user ? (
                 /* เมื่อเข้าสู่ระบบใน Mobile */
                 <>
@@ -455,10 +431,6 @@ export default function Navbarver2() {
           </div>
         )}
       </div>
-      <ContactSupportModal
-        isOpen={showSupportModal}
-        onClose={() => setShowSupportModal(false)}
-      />
     </header>
   );
 }
