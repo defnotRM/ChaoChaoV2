@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { processSimulatedExpiredOrders } from "@/lib/simulated-time";
 import LendOrderDetailClient, { type LendOrderData } from "./LendOrderDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +13,13 @@ export default async function LenderOrderDetailPage({
   const { id: userId, orderId } = await params;
   const admin = createAdminClient();
 
+  await processSimulatedExpiredOrders(admin, orderId);
+
   // 1. ดึงข้อมูลคำสั่งเช่า
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
-      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, rental_fee, deposit, total_paid, status, created_at, updated_at"
+      "order_id, item_id, user_id, meetup_location, return_location, start_date, end_date, meetup_time, return_time, rental_fee, deposit, total_paid, fee, net_income, status, created_at, updated_at"
     )
     .eq("order_id", orderId)
     .maybeSingle();
@@ -120,9 +123,13 @@ export default async function LenderOrderDetailPage({
       return_location: order.return_location,
       start_date: order.start_date,
       end_date: order.end_date,
+      meetup_time: order.meetup_time || "12:00",
+      return_time: order.return_time || "12:00",
       rental_fee: Number(order.rental_fee) || 0,
       deposit: Number(order.deposit) || 0,
       total_paid: Number(order.total_paid) || 0,
+      fee: Number(order.fee) || 0,
+      net_income: Number(order.net_income) || 0,
       status: order.status,
       created_at: order.created_at,
       updated_at: order.updated_at,

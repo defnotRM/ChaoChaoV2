@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { updateRentalOrderStatusSchema } from "@/lib/validations/rental";
+import { processSimulatedExpiredOrders } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,15 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const { id } = await params;
   const admin = createAdminClient();
 
+  // ประมวลผลกรณีหมดเวลา 1 ชั่วโมงตาม FR-28 / FR-29 อัตโนมัติ
+  await processSimulatedExpiredOrders(admin, id);
+
   const { data: order, error } = await admin
     .from("rentalorder")
     .select(
       `
         order_id, user_id, item_id, meetup_location, return_location,
-        start_date, end_date, rental_fee, deposit, total_paid,
+        start_date, end_date, meetup_time, return_time, rental_fee, deposit, total_paid,
         fee, net_income, status, created_at, updated_at
       `
     )

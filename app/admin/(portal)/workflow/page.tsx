@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import AdminSimulatedClock from "@/components/admin/AdminSimulatedClock";
 import {
   GitBranch,
   ShieldAlert,
@@ -13,6 +14,7 @@ import {
   Edit2,
   X,
   Save,
+  Filter,
   Check,
   ChevronRight,
   Info,
@@ -135,7 +137,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ดึงข้อมูลการตั้งค่าไม่สำเร็จ");
       }
-    } catch {
+    } catch (err: any) {
       showToast("error", "เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อดึงการตั้งค่า");
     }
   }, []);
@@ -161,7 +163,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ดึงประวัติ workflow ไม่สำเร็จ");
       }
-    } catch {
+    } catch (err: any) {
       showToast("error", "เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อดึงประวัติ");
     }
   }, [filterViolationsOnly, selectedWorkflowCode]);
@@ -173,18 +175,14 @@ export default function AdminWorkflowPage() {
     setLoading(false);
   }, [fetchConfigs, fetchHistory]);
 
-  // โหลดครั้งแรกและเมื่อเปลี่ยนตัวกรอง (loading เริ่มเป็น true อยู่แล้ว จึงไม่ต้อง setState ใน effect)
   useEffect(() => {
-    let cancelled = false;
-    // setState เกิดหลัง await ของ fetch เท่านั้น ไม่ใช่แบบ synchronous
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    Promise.all([fetchConfigs(), fetchHistory()]).then(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchConfigs, fetchHistory]);
+    loadAll();
+  }, [loadAll]);
+
+  // เมื่อเปลี่ยนตัวกรองประวัติ
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   // บันทึกการเปลี่ยนโหมด
   const handleModeChange = async (targetMode: string) => {
@@ -192,20 +190,16 @@ export default function AdminWorkflowPage() {
       setShowDynamicConfirmModal(true);
       return;
     }
-    await executeModeChange(targetMode, false);
+    await executeModeChange(targetMode);
   };
 
-  const executeModeChange = async (targetMode: string, confirmDynamic = false) => {
+  const executeModeChange = async (targetMode: string) => {
     setModeChanging(true);
     try {
-      const payload: { mode: string; confirmDynamic?: boolean } = { mode: targetMode };
-      if (targetMode === "dynamic" || confirmDynamic) {
-        payload.confirmDynamic = true;
-      }
       const res = await fetch("/api/admin/workflow/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ mode: targetMode }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -215,7 +209,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "ไม่สามารถเปลี่ยนโหมดได้");
       }
-    } catch {
+    } catch (err: any) {
       showToast("error", "เกิดข้อผิดพลาดในการเปลี่ยนโหมด");
     } finally {
       setModeChanging(false);
@@ -240,7 +234,7 @@ export default function AdminWorkflowPage() {
       } else {
         showToast("error", data.message || "อัปเดตไม่สำเร็จ");
       }
-    } catch {
+    } catch (err: any) {
       showToast("error", "เกิดข้อผิดพลาดในการบันทึกค่า");
     } finally {
       setSavingKey(false);
@@ -263,7 +257,11 @@ export default function AdminWorkflowPage() {
     }
   };
 
-  const systemConfigList = configs.filter((c) => c.config_key !== "workflow_mode");
+  const systemConfigList = configs.filter(
+    (c) =>
+      c.config_key !== "workflow_mode" &&
+      c.config_key !== "simulated_offset_seconds",
+  );
 
   return (
     <div className="space-y-8">
@@ -305,6 +303,11 @@ export default function AdminWorkflowPage() {
           <span>รีเฟรชข้อมูล</span>
         </button>
       </div>
+
+      {/* ============================================================ */}
+      {/* ส่วนที่ 0: นาฬิกา & ปฏิทินจำลองเวลาของระบบ (Time Simulator) */}
+      {/* ============================================================ */}
+      <AdminSimulatedClock onClockChanged={loadAll} />
 
       {/* ============================================================ */}
       {/* ส่วนที่ 1: สวิตช์โหมด WORKFLOW (Workflow Mode Switcher) */}

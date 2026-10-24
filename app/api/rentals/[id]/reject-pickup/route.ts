@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getSimulatedTimeInfo,
+  parseBangkokWindow,
+} from "@/lib/simulated-time";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(
   request: Request,
@@ -23,7 +29,7 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}));
-    const reason: string = body.reason; // "changed_mind" | "not_as_advertised"
+    const reason: string = body.reason || "changed_mind"; // "changed_mind" | "not_as_advertised"
     const description: string | undefined = body.description;
     const imageUrls: string[] = Array.isArray(body.imageUrls)
       ? body.imageUrls
@@ -33,7 +39,7 @@ export async function POST(
 
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select("order_id, user_id, status")
+      .select("order_id, user_id, start_date, meetup_time, status")
       .eq("order_id", orderId)
       .maybeSingle();
 
@@ -48,16 +54,66 @@ export async function POST(
       );
     }
 
-    if (order.status !== "item_sent") {
+    if (order.status !== "paid" && order.status !== "item_sent") {
       return NextResponse.json(
-        { message: "ปฏิเสธได้เฉพาะตอนที่เพิ่งอัปโหลดหลักฐานรับของเท่านั้น" },
+        {
+          message:
+            "สามารถปฏิเสธรับสินค้าได้เฉพาะในขั้นตอนการรับมอบสินค้าเท่านั้น",
+        },
         { status: 400 },
       );
     }
 
+    // ต้องอัปโหลดรูปหลักฐานตอนรับของ (renter_before) แล้วเท่านั้นตาม FR-28 กรณีที่ 3
+    const { data: renterEvidence } = await admin
+      .from("rentalevidenceimage")
+      .select("evidence_id")
+      .eq("order_id", orderId)
+      .eq("evidence_type", "renter_before")
+      .limit(1);
+
+    if (!renterEvidence || renterEvidence.length === 0) {
+      return NextResponse.json(
+        {
+          message:
+            "กรุณาอัปโหลดรูปภาพหลักฐานตอนรับของ (1–5 รูป) ก่อนกดปฏิเสธรับสินค้า",
+        },
+        { status: 400 },
+      );
+    }
+
+    // ตรวจสอบว่ายังอยู่ในกรอบเวลา 1 ชั่วโมงจากเวลานัดรับสินค้า
+    const timeInfo = await getSimulatedTimeInfo(admin);
+    const pickupWin = parseBangkokWindow(
+      order.start_date,
+      order.meetup_time,
+      timeInfo.graceHours,
+    );
+
+    if (timeInfo.nowMs > pickupWin.deadlineMs) {
+      return NextResponse.json(
+        {
+          message:
+            "เกินกำหนดเวลา 1 ชั่วโมงจากเวลานัดรับสินค้า ไม่สามารถกดปฏิเสธรับสินค้าได้",
+        },
+        { status: 400 },
+      );
+    }
+
+    // หากสถานะยังเป็น paid (เช่น ผู้ให้เช่ายังไม่อัปโหลดรูป) ให้เปลี่ยนผ่านเป็น item_sent ก่อนเพื่อให้สอดคล้องกับ workflow_transition
+    if (order.status === "paid") {
+      await admin
+        .from("rentalorder")
+        .update({
+          status: "item_sent",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", orderId);
+    }
+
     if (reason === "changed_mind") {
-      // เคส J — เปลี่ยนใจเฉยๆ ตัดสินจบทันที ไม่ต้องรอแอดมิน
-      const { data: outcome, error: rpcError } = await supabase.rpc(
+      // FR-28 กรณีที่ 3: คืนเงินประกัน 100% + ค่าเช่า 20% ให้ผู้เช่า และโอนค่าเช่า 80% ให้ผู้ให้เช่า
+      const { data: outcome, error: rpcError } = await admin.rpc(
         "settle_rental_order",
         {
           p_order_id: orderId,
@@ -76,9 +132,9 @@ export async function POST(
 
       return NextResponse.json({
         ok: true,
-        status: outcome,
+        status: outcome || "rejected_at_meetup",
         message:
-          "ปฏิเสธสินค้าเรียบร้อยแล้ว ระบบคืนเงินประกันเต็มจำนวน พร้อมค่าเช่า 20% ให้คุณ",
+          "ปฏิเสธรับสินค้าเรียบร้อยแล้ว ระบบคืนเงินประกันทั้งหมด พร้อมค่าเช่า 20% ให้ผู้เช่า และโอนค่าเช่า 80% แก่ผู้ให้เช่า",
       });
     }
 
@@ -124,14 +180,12 @@ export async function POST(
       }
 
       if (imageUrls.length > 0) {
-        await admin
-          .from("rentalreportimage")
-          .insert(
-            imageUrls.map((url) => ({
-              report_id: report.report_id,
-              image_url: url,
-            })),
-          );
+        await admin.from("rentalreportimage").insert(
+          imageUrls.map((url) => ({
+            report_id: report.report_id,
+            image_url: url,
+          })),
+        );
       }
 
       await admin

@@ -209,6 +209,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const [startKey, setStartKey] = useState<string | null>(null);
   const [endKey, setEndKey] = useState<string | null>(null);
+  const [meetupTime, setMeetupTime] = useState<string>("12:00");
+  const [returnTime, setReturnTime] = useState<string>("12:00");
   const meetupOptions = locations.filter(
     (l) => l.locationType === "meetup" || l.locationType === "both",
   );
@@ -356,6 +358,8 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
         itemId: item.id,
         startDate: startKey,
         endDate: endKey,
+        meetupTime: meetupTime || "12:00",
+        returnTime: returnTime || "12:00",
         meetupLocation:
           pickup?.description || pickup?.fullAddress || "จุดนัดรับที่ตกลงกัน",
         returnLocation:
@@ -606,7 +610,9 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   {endKey ? (
                     <span>
                       เลือก <strong>{formatKey(startKey)}</strong> ถึง{" "}
-                      <strong>{formatKey(endKey)}</strong> ({days} วัน)
+                      <strong>{formatKey(endKey)}</strong> ({days} วัน) · เวลานัดรับ{" "}
+                      <strong>{meetupTime} น.</strong> / คืน{" "}
+                      <strong>{returnTime} น.</strong>
                     </span>
                   ) : (
                     <span>
@@ -616,6 +622,78 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                   )}
                 </div>
               )}
+
+              {/* เลือกเวลานัดรับ–คืนสินค้า (FR-28 / FR-29) */}
+              <div className="mt-5 border-t border-slate-100 pt-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-[#1b3554]" />
+                  <h3 className="text-sm font-bold text-slate-900">
+                    กำหนดเวลานัดรับและคืนอุปกรณ์
+                  </h3>
+                </div>
+                <p className="mb-4 text-xs text-slate-500">
+                  ทั้งผู้เช่าและผู้ให้เช่าต้องถ่ายและอัปโหลดรูปภาพหลักฐานภายใน{" "}
+                  <strong className="text-slate-700">1 ชั่วโมง</strong> นับจากเวลานัดรับและเวลานัดคืนสินค้า
+                </p>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                    <label className="block text-xs font-bold text-slate-700">
+                      เวลานัดรับอุปกรณ์ {startKey ? `(${formatKey(startKey)})` : ""}
+                    </label>
+                    <input
+                      type="time"
+                      value={meetupTime}
+                      onChange={(e) => setMeetupTime(e.target.value || "12:00")}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1b3554] shadow-xs focus:border-[#3f6593] focus:outline-none"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => (
+                        <button
+                          key={`meetup-${t}`}
+                          type="button"
+                          onClick={() => setMeetupTime(t)}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            meetupTime === t
+                              ? "bg-[#1b3554] text-white"
+                              : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
+                          }`}
+                        >
+                          {t} น.
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                    <label className="block text-xs font-bold text-slate-700">
+                      เวลานัดคืนอุปกรณ์ {endKey ? `(${formatKey(endKey)})` : ""}
+                    </label>
+                    <input
+                      type="time"
+                      value={returnTime}
+                      onChange={(e) => setReturnTime(e.target.value || "12:00")}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1b3554] shadow-xs focus:border-[#3f6593] focus:outline-none"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => (
+                        <button
+                          key={`return-${t}`}
+                          type="button"
+                          onClick={() => setReturnTime(t)}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            returnTime === t
+                              ? "bg-[#1b3554] text-white"
+                              : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
+                          }`}
+                        >
+                          {t} น.
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </section>
 
             {/* จุดรับ–คืน */}

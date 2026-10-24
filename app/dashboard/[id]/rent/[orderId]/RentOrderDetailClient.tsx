@@ -48,9 +48,13 @@ export interface RentOrderDetailData {
     return_location: string | null;
     start_date: string;
     end_date: string;
+    meetup_time?: string | null;
+    return_time?: string | null;
     rental_fee: number;
     deposit: number;
     total_paid: number;
+    fee?: number;
+    net_income?: number;
     status: string;
     created_at: string;
     updated_at: string;
@@ -151,13 +155,22 @@ function statusStep(status: string, hasPending: boolean): number {
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   requested: { label: "รอการอนุมัติ", cls: "bg-amber-500/15 text-amber-800" },
   awaiting_payment: { label: "รอชำระเงิน", cls: "bg-amber-500/15 text-amber-800" },
-  paid: { label: "ชำระเงินแล้ว", cls: "bg-emerald-500/15 text-emerald-700" },
+  paid: { label: "ชำระเงินแล้ว · รอรับของ", cls: "bg-emerald-500/15 text-emerald-700" },
   item_sent: { label: "กำลังเช่า", cls: "bg-sky-500/15 text-sky-700" },
   item_returned: { label: "คืนของแล้ว", cls: "bg-sky-500/15 text-sky-700" },
   awaiting_additional_payment: { label: "รอชำระเพิ่ม", cls: "bg-amber-500/15 text-amber-800" },
   completed: { label: "เสร็จสมบูรณ์", cls: "bg-emerald-500/15 text-emerald-700" },
+  renter_noshow: { label: "ผู้เช่าไม่มาตามนัด (หมดเวลา 1 ชม.)", cls: "bg-rose-50 text-rose-700" },
+  lender_noshow: { label: "ผู้ให้เช่าไม่มาตามนัด (หมดเวลา 1 ชม.)", cls: "bg-rose-50 text-rose-700" },
+  rejected_at_meetup: { label: "ปฏิเสธรับสินค้าหน้างาน", cls: "bg-rose-50 text-rose-700" },
+  disputed_at_meetup: { label: "ข้อพิพาทหน้างาน (รอแอดมิน)", cls: "bg-amber-500/15 text-amber-800" },
+  refunded_dispute: { label: "คืนเงินจากข้อพิพาทแล้ว", cls: "bg-emerald-500/15 text-emerald-700" },
+  item_not_returned: { label: "ไม่คืนสินค้าตามกำหนด", cls: "bg-rose-50 text-rose-700" },
   rejected: { label: "ถูกปฏิเสธ", cls: "bg-rose-50 text-rose-700" },
+  rejected_by_lender: { label: "ผู้ให้เช่าปฏิเสธคำขอ", cls: "bg-rose-50 text-rose-700" },
   cancelled: { label: "ยกเลิกแล้ว", cls: "bg-rose-50 text-rose-700" },
+  cancelled_by_renter: { label: "ผู้เช่ายกเลิกคำขอ", cls: "bg-rose-50 text-rose-700" },
+  cancelled_by_lender: { label: "ผู้ให้เช่ายกเลิกคำขอ", cls: "bg-rose-50 text-rose-700" },
 };
 
 export default function RentOrderDetailClient({
@@ -599,9 +612,34 @@ export default function RentOrderDetailClient({
               </h2>
 
               {isCancelled ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                  <XCircle className="h-5 w-5 shrink-0" />
-                  <span>รายการนี้ถูกยกเลิกหรือปฏิเสธแล้ว</span>
+                <div className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                  <div className="flex items-center gap-2.5 font-bold">
+                    <XCircle className="h-5 w-5 shrink-0 text-rose-600" />
+                    <span>
+                      {currentStatus === "renter_noshow"
+                        ? "ปิดการเช่า: ผู้เช่าไม่อัปโหลดรูปหลักฐานภายใน 1 ชั่วโมง (ผู้เช่าไม่มาตามนัด)"
+                        : currentStatus === "lender_noshow"
+                          ? "ปิดการเช่า: ผู้ให้เช่าไม่อัปโหลดรูปหลักฐานภายใน 1 ชั่วโมง (ผู้ให้เช่าไม่มาตามนัด)"
+                          : currentStatus === "rejected_at_meetup"
+                            ? "ปิดการเช่า: ผู้เช่าปฏิเสธรับสินค้าหน้างาน (FR-28 กรณีที่ 3)"
+                            : `สถานะ: ${chip.label}`}
+                    </span>
+                  </div>
+                  {currentStatus === "renter_noshow" && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ตามเงื่อนไข FR-28 กรณีที่ 1: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) ให้แก่ผู้เช่า และโอนค่าเช่าทั้งหมด ({thb.format(rentalFee)}) แก่ผู้ให้เช่า
+                    </p>
+                  )}
+                  {currentStatus === "lender_noshow" && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ตามเงื่อนไข FR-28 กรณีที่ 2: ระบบคืนเงินทั้งหมด (เงินประกัน {thb.format(deposit)} + ค่าเช่า {thb.format(rentalFee)} = {thb.format(deposit + rentalFee)}) ให้แก่ผู้เช่า
+                    </p>
+                  )}
+                  {currentStatus === "rejected_at_meetup" && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ตามเงื่อนไข FR-28 กรณีที่ 3: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) รวม {thb.format(deposit + rentalFee * 0.2)} ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto pb-2">
@@ -797,7 +835,9 @@ export default function RentOrderDetailClient({
                     <span className="text-sm font-bold text-slate-900">จุดนัดรับอุปกรณ์</span>
                   </div>
                   <p className="mt-2 text-sm font-semibold text-slate-800">{order.meetup_location || "—"}</p>
-                  <p className="text-xs text-slate-500">{formatDate(order.start_date)}</p>
+                  <p className="text-xs text-slate-500">
+                    {formatDate(order.start_date)} · เวลา {(order.meetup_time || "12:00").slice(0, 5)} น.
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
@@ -808,7 +848,9 @@ export default function RentOrderDetailClient({
                     <span className="text-sm font-bold text-slate-900">จุดนัดคืนอุปกรณ์</span>
                   </div>
                   <p className="mt-2 text-sm font-semibold text-slate-800">{order.return_location || "—"}</p>
-                  <p className="text-xs text-slate-500">{formatDate(order.end_date)}</p>
+                  <p className="text-xs text-slate-500">
+                    {formatDate(order.end_date)} · เวลา {(order.return_time || "12:00").slice(0, 5)} น.
+                  </p>
                 </div>
               </div>
             </section>
@@ -824,6 +866,10 @@ export default function RentOrderDetailClient({
                   otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
                   phase="before"
                   canUpload={currentStatus === "paid"}
+                  scheduledDate={order.start_date}
+                  scheduledTime={order.meetup_time || "12:00"}
+                  rentalFee={rentalFee}
+                  deposit={deposit}
                   evidenceList={evidenceList}
                   onSuccess={handleEvidenceSuccess}
                 />
@@ -844,6 +890,10 @@ export default function RentOrderDetailClient({
                     currentStatus === "item_sent" ||
                     currentStatus === "item_returned"
                   }
+                  scheduledDate={order.end_date}
+                  scheduledTime={order.return_time || "12:00"}
+                  rentalFee={rentalFee}
+                  deposit={deposit}
                   evidenceList={evidenceList}
                   onSuccess={handleEvidenceSuccess}
                 />
@@ -1052,6 +1102,10 @@ export default function RentOrderDetailClient({
         otherName={owner.username || owner.fullName || "ผู้ให้เช่า"}
         phase="before"
         canUpload={currentStatus === "paid"}
+        scheduledDate={order.start_date}
+        scheduledTime={order.meetup_time || "12:00"}
+        rentalFee={rentalFee}
+        deposit={deposit}
         evidenceList={evidenceList}
         onSuccess={handleEvidenceSuccess}
       />
@@ -1068,6 +1122,10 @@ export default function RentOrderDetailClient({
         canUpload={
           currentStatus === "item_sent" || currentStatus === "item_returned"
         }
+        scheduledDate={order.end_date}
+        scheduledTime={order.return_time || "12:00"}
+        rentalFee={rentalFee}
+        deposit={deposit}
         evidenceList={evidenceList}
         onSuccess={handleEvidenceSuccess}
       />

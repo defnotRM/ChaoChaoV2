@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToStorage } from "@/lib/storage";
+import {
+  getSimulatedTimeInfo,
+  parseBangkokWindow,
+  processSimulatedExpiredOrders,
+} from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -106,12 +111,40 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select("order_id, user_id, item_id, status")
+      .select("order_id, user_id, item_id, start_date, meetup_time, status")
       .eq("order_id", orderId)
       .maybeSingle();
 
     if (orderError || !order) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
+    }
+
+    // ตรวจสอบกรอบเวลา 1 ชั่วโมงจากเวลานัดรับสินค้า (FR-28)
+    const timeInfo = await getSimulatedTimeInfo(admin);
+    const pickupWin = parseBangkokWindow(
+      order.start_date,
+      order.meetup_time,
+      timeInfo.graceHours,
+    );
+
+    if (timeInfo.nowMs < pickupWin.startMs) {
+      return NextResponse.json(
+        {
+          message: `ยังไม่ถึงเวลานัดรับสินค้า (${pickupWin.dateStr} เวลา ${pickupWin.timeStr} น.) กรุณาอัปโหลดรูปเมื่อถึงเวลานัดหมาย`,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (timeInfo.nowMs > pickupWin.deadlineMs) {
+      await processSimulatedExpiredOrders(admin, orderId);
+      return NextResponse.json(
+        {
+          message:
+            "หมดเวลาอัปโหลดรูปหลักฐานแล้ว (เกินกำหนด 1 ชั่วโมงจากเวลานัดรับสินค้า)",
+        },
+        { status: 400 },
+      );
     }
 
     let lenderUserId: string | null = null;

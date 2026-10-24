@@ -11,6 +11,8 @@ type RentalBody = {
   itemId?: string;
   startDate?: string;
   endDate?: string;
+  meetupTime?: string | null;
+  returnTime?: string | null;
   meetupLocation?: string | null;
   returnLocation?: string | null;
   rentalFee?: number | null;
@@ -32,6 +34,8 @@ export async function POST(request: Request) {
       itemId,
       startDate,
       endDate,
+      meetupTime,
+      returnTime,
       meetupLocation,
       returnLocation,
       rentalFee,
@@ -194,6 +198,9 @@ export async function POST(request: Request) {
     const finalDeposit = deposit ?? item.deposit;
     const finalTotal = totalPaid ?? Number(finalFee) + Number(finalDeposit);
 
+    const normalizedMeetupTime = (meetupTime || "12:00").trim().slice(0, 5);
+    const normalizedReturnTime = (returnTime || "12:00").trim().slice(0, 5);
+
     // 4) INSERT rentalorder
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
@@ -202,6 +209,8 @@ export async function POST(request: Request) {
         item_id: itemId,
         start_date: startDate,
         end_date: endDate,
+        meetup_time: normalizedMeetupTime,
+        return_time: normalizedReturnTime,
         meetup_location: meetupLocation ?? "จุดนัดรับที่ตกลงกัน",
         return_location: returnLocation ?? "จุดนัดคืนที่ตกลงกัน",
         rental_fee: finalFee,

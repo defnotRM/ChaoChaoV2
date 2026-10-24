@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import AdminSimulatedClock from "@/components/admin/AdminSimulatedClock";
 import {
   TrendingUp,
   Scale,
@@ -110,6 +111,9 @@ export default async function AdminDashboardPage() {
           สรุปรายได้แพลตฟอร์ม อัตราส่วนข้อพิพาท และคิวงานที่ต้องดำเนินการ
         </p>
       </div>
+
+      {/* นาฬิกา & ปฏิทินจำลองเวลาของระบบ */}
+      <AdminSimulatedClock />
 
       {/* Core Metrics + Queue Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
