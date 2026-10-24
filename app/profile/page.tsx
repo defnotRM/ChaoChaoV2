@@ -19,6 +19,14 @@ import {
   KeyRound,
   ImageIcon,
   Phone,
+  ShieldCheck,
+  ShieldAlert,
+  CreditCard,
+  Building,
+  Clock,
+  ExternalLink,
+  X,
+  Edit3,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -61,51 +69,84 @@ export default function ProfilePage() {
   const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
 
+  // KYC & Bank Account State
+  const [identityStatus, setIdentityStatus] = useState<string>("unverified");
+  const [nationalId, setNationalId] = useState<string>("");
+  const [idCardUrl, setIdCardUrl] = useState<string | null>(null);
+  const [idCardSelfieUrl, setIdCardSelfieUrl] = useState<string | null>(null);
+  const [bankAccount, setBankAccount] = useState<{
+    id: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    verificationStatus: string;
+  } | null>(null);
+
+  // KYC Modal State
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [kycNationalId, setKycNationalId] = useState("");
+  const [kycBankName, setKycBankName] = useState("");
+  const [kycAccountNumber, setKycAccountNumber] = useState("");
+  const [kycAccountName, setKycAccountName] = useState("");
+  const [kycIdCardFile, setKycIdCardFile] = useState<File | null>(null);
+  const [kycSelfieFile, setKycSelfieFile] = useState<File | null>(null);
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [kycModalError, setKycModalError] = useState<string | null>(null);
+  const [kycSuccessNotice, setKycSuccessNotice] = useState<string | null>(null);
+
+  // Image Preview Lightbox State
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
   // Delete Account State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        const res = await fetch("/api/profile", {
-          cache: "no-store",
-          headers: { Pragma: "no-cache" },
-        });
-        if (res.status === 401) {
-          setUsername("ผู้ใช้งานทดลอง (Guest)");
-          setBio("ยินดีต้อนรับสู่ระบบ ChaoChao");
-          setRoles(["ผู้เช่า (Renter)", "ผู้ให้เช่า (Lender)"]);
-          setStatus("Active");
-          return;
-        }
-
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUsername(data.user.username || "");
-          setBio(data.user.bio || "");
-          setAvatarUrl(data.user.avatarUrl || "");
-          setBannerUrl(data.user.bannerUrl || "");
-          setRoles(data.user.roles || []);
-          setStatus(data.user.status || "Active");
-
-          if (Array.isArray(data.user.phones)) {
-            setPhone1(data.user.phones[0] || "");
-            setPhone2(data.user.phones[1] || "");
-          }
-        } else {
-          setGeneralError(data.message || "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้");
-        }
-      } catch (err) {
-        console.error(err);
-        setGeneralError("เกิดข้อผิดพลาดในการโหลดข้อมูล");
-      } finally {
-        setLoading(false);
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch("/api/profile", {
+        cache: "no-store",
+        headers: { Pragma: "no-cache" },
+      });
+      if (res.status === 401) {
+        setUsername("ผู้ใช้งานทดลอง (Guest)");
+        setBio("ยินดีต้อนรับสู่ระบบ ChaoChao");
+        setRoles(["ผู้เช่า (Renter)", "ผู้ให้เช่า (Lender)"]);
+        setStatus("Active");
+        return;
       }
-    }
 
+      const data = await res.json();
+      if (res.ok && data.user) {
+        setUsername(data.user.username || "");
+        setBio(data.user.bio || "");
+        setAvatarUrl(data.user.avatarUrl || "");
+        setBannerUrl(data.user.bannerUrl || "");
+        setRoles(data.user.roles || []);
+        setStatus(data.user.status || "Active");
+        setNationalId(data.user.nationalId || "");
+        setIdentityStatus(data.user.identityVerificationStatus || "unverified");
+        setIdCardUrl(data.user.idCardUrl || null);
+        setIdCardSelfieUrl(data.user.idCardSelfieUrl || null);
+        setBankAccount(data.user.bankAccount || null);
+
+        if (Array.isArray(data.user.phones)) {
+          setPhone1(data.user.phones[0] || "");
+          setPhone2(data.user.phones[1] || "");
+        }
+      } else {
+        setGeneralError(data.message || "ไม่สามารถโหลดข้อมูลโปรไฟล์ได้");
+      }
+    } catch (err) {
+      console.error(err);
+      setGeneralError("เกิดข้อผิดพลาดในการโหลดข้อมูล");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchProfile();
   }, [router]);
 
@@ -440,6 +481,74 @@ export default function ProfilePage() {
       console.error(err);
       setDeleteError("เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์");
       setIsDeletingAccount(false);
+    }
+  };
+
+  // KYC Mask & Handlers
+  const maskNationalId = (id: string) => {
+    if (!id || id.length < 13) return id || "-";
+    return `${id.slice(0, 1)}-${id.slice(1, 5)}-XXXXX-${id.slice(10, 12)}-${id.slice(12)}`;
+  };
+
+  const maskBankAccountNumber = (acc: string) => {
+    if (!acc || acc.length < 6) return acc || "-";
+    return `${acc.slice(0, 3)}-X-XX${acc.slice(-3)}`;
+  };
+
+  const handleOpenKycModal = () => {
+    setKycNationalId(nationalId || "");
+    setKycBankName(bankAccount?.bankName || "");
+    setKycAccountNumber(bankAccount?.accountNumber || "");
+    setKycAccountName(bankAccount?.accountName || "");
+    setKycIdCardFile(null);
+    setKycSelfieFile(null);
+    setKycModalError(null);
+    setShowKycModal(true);
+  };
+
+  const handleSubmitKyc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setKycModalError(null);
+
+    if (kycNationalId && kycNationalId.length !== 13) {
+      setKycModalError("เลขประจำตัวประชาชนต้องมี 13 หลัก");
+      return;
+    }
+
+    if (kycAccountNumber && !/^\d{8,15}$/.test(kycAccountNumber)) {
+      setKycModalError("เลขที่บัญชีธนาคารต้องเป็นตัวเลข 8-15 หลัก");
+      return;
+    }
+
+    setKycSubmitting(true);
+    try {
+      const formData = new FormData();
+      if (kycNationalId) formData.append("nationalId", kycNationalId);
+      if (kycBankName) formData.append("bankName", kycBankName);
+      if (kycAccountNumber) formData.append("accountNumber", kycAccountNumber);
+      if (kycAccountName) formData.append("accountName", kycAccountName);
+      if (kycIdCardFile) formData.append("idCard", kycIdCardFile);
+      if (kycSelfieFile) formData.append("selfie", kycSelfieFile);
+
+      const res = await fetch("/api/profile/kyc", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setKycModalError(result.message || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+        return;
+      }
+
+      setKycSuccessNotice("ส่งข้อมูลยืนยันตัวตนเรียบร้อยแล้ว รอการตรวจสอบจากผู้ดูแลระบบ");
+      setShowKycModal(false);
+      await fetchProfile();
+    } catch (err) {
+      console.error(err);
+      setKycModalError("เกิดข้อผิดพลาดในการส่งข้อมูล");
+    } finally {
+      setKycSubmitting(false);
     }
   };
 
@@ -831,7 +940,253 @@ export default function ProfilePage() {
         </form>
 
         {/* ========================================================================= */}
-        {/* SECTION 2: Security & Password */}
+        {/* SECTION 2: KYC & Bank Account (การยืนยันตัวตนและบัญชีรับเงิน) */}
+        {/* ========================================================================= */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-[#000f22]">
+                  การยืนยันตัวตน & บัญชีรับเงิน (KYC & Payout)
+                </h2>
+                {identityStatus === "verified" && bankAccount?.verificationStatus === "verified" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    อนุมัติสมบูรณ์
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+                    <Clock className="h-3.5 w-3.5" />
+                    {identityStatus === "pending" ? "รอการตรวจสอบ" : "อยู่ระหว่างดำเนินการ"}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-[#5b86b6]">
+                สถานะการตรวจสอบบัตรประชาชนและข้อมูลบัญชีธนาคารสำหรับรับเงินโอนค่าเช่าของผู้ให้เช่า
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenKycModal}
+              className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-[#1b3554] shadow-sm transition hover:bg-slate-50 active:scale-95"
+            >
+              <Edit3 className="h-3.5 w-3.5 text-[#3f6593]" />
+              <span>{identityStatus === "verified" ? "อัปเดตข้อมูล" : "ส่งเอกสาร / แก้ไขข้อมูล"}</span>
+            </button>
+          </div>
+
+          {/* KYC Success Alert */}
+          {kycSuccessNotice && (
+            <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <p className="text-sm font-medium">{kycSuccessNotice}</p>
+            </div>
+          )}
+
+          {/* 2-Column Grid: ID Card KYC & Bank Account */}
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Column 1: Identity Verification (บัตรประชาชน) */}
+            <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#1b3554]">
+                    <ShieldCheck className="h-4 w-4 text-[#3f6593]" />
+                    <span>ข้อมูลบัตรประชาชน (KYC)</span>
+                  </div>
+
+                  {/* Status Badge */}
+                  {identityStatus === "verified" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                      <CheckCircle2 className="h-3 w-3" />
+                      อนุมัติแล้ว
+                    </span>
+                  ) : identityStatus === "pending" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                      <Clock className="h-3 w-3" />
+                      รอตรวจสอบ
+                    </span>
+                  ) : identityStatus === "rejected" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100/80 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                      <AlertCircle className="h-3 w-3" />
+                      ไม่ผ่านการอนุมัติ
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                      ยังไม่ยืนยัน
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">เลขประจำตัวประชาชน</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {maskNationalId(nationalId)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">สถานะการตรวจสอบ</span>
+                    <span className="font-medium text-slate-700">
+                      {identityStatus === "verified"
+                        ? "ได้รับการรับรองตัวตนแล้ว"
+                        : identityStatus === "pending"
+                        ? "เจ้าหน้าที่กำลังตรวจสอบข้อมูล"
+                        : identityStatus === "rejected"
+                        ? "เอกสารไม่ผ่าน กรุณาอัปโหลดใหม่"
+                        : "ยังไม่ได้ส่งเอกสารยืนยันตัวตน"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Document Thumbnails */}
+                <div className="mt-4">
+                  <span className="block text-xs font-semibold text-slate-600 mb-2">
+                    เอกสารที่อัปโหลดไว้:
+                  </span>
+                  <div className="flex flex-wrap gap-3">
+                    {idCardUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage({ url: idCardUrl, title: "รูปภาพบัตรประชาชน" })}
+                        className="group relative h-16 w-24 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs transition hover:border-[#3f6593] hover:ring-2 hover:ring-[#c0e6fd]/50"
+                      >
+                        <img
+                          src={idCardUrl}
+                          alt="ID Card"
+                          className="h-full w-full object-cover transition group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                          <ExternalLink className="h-4 w-4 text-white" />
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="flex h-16 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100/50 text-[10px] text-slate-400">
+                        ไม่มีรูปบัตร
+                      </div>
+                    )}
+
+                    {idCardSelfieUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage({ url: idCardSelfieUrl, title: "รูปเซลฟี่คู่กับบัตรประชาชน" })}
+                        className="group relative h-16 w-24 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs transition hover:border-[#3f6593] hover:ring-2 hover:ring-[#c0e6fd]/50"
+                      >
+                        <img
+                          src={idCardSelfieUrl}
+                          alt="Selfie with ID"
+                          className="h-full w-full object-cover transition group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                          <ExternalLink className="h-4 w-4 text-white" />
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="flex h-16 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-100/50 text-[10px] text-slate-400">
+                        ไม่มีรูปเซลฟี่
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {identityStatus !== "verified" && (
+                <div className="mt-4 pt-3 border-t border-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={handleOpenKycModal}
+                    className="w-full rounded-xl bg-gradient-to-r from-[#3f6593] to-[#1b3554] py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95"
+                  >
+                    {identityStatus === "rejected" ? "อัปโหลดเอกสารบัตรใหม่" : "ส่งเอกสารยืนยันตัวตน"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Column 2: Bank Account (บัญชีธนาคารสำหรับรับเงิน) */}
+            <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[#1b3554]">
+                    <CreditCard className="h-4 w-4 text-[#3f6593]" />
+                    <span>บัญชีธนาคารรับเงินโอนค่าเช่า</span>
+                  </div>
+
+                  {/* Status Badge */}
+                  {bankAccount?.verificationStatus === "verified" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                      <CheckCircle2 className="h-3 w-3" />
+                      อนุมัติแล้ว
+                    </span>
+                  ) : bankAccount?.verificationStatus === "pending" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                      <Clock className="h-3 w-3" />
+                      รอตรวจสอบ
+                    </span>
+                  ) : bankAccount?.verificationStatus === "rejected" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100/80 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                      <AlertCircle className="h-3 w-3" />
+                      ไม่ผ่าน
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                      ยังไม่ระบุ
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">ธนาคาร</span>
+                    <span className="font-semibold text-slate-800">
+                      {bankAccount?.bankName || "-"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">เลขที่บัญชี</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {bankAccount?.accountNumber ? maskBankAccountNumber(bankAccount.accountNumber) : "-"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">ชื่อบัญชี</span>
+                    <span className="font-semibold text-slate-800">
+                      {bankAccount?.accountName || "-"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500">สถานะบัญชี</span>
+                    <span className="font-medium text-slate-700">
+                      {bankAccount?.verificationStatus === "verified"
+                        ? "พร้อมรับเงินโอนค่าเช่า"
+                        : bankAccount?.verificationStatus === "pending"
+                        ? "รอเจ้าหน้าที่ตรวจสอบความถูกต้อง"
+                        : bankAccount?.verificationStatus === "rejected"
+                        ? "ข้อมูลบัญชีไม่ถูกต้อง กรุณาแก้ไข"
+                        : "ยังไม่ได้ผูกบัญชีธนาคาร"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200/60">
+                <button
+                  type="button"
+                  onClick={handleOpenKycModal}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 active:scale-95"
+                >
+                  {bankAccount ? "แก้ไขข้อมูลบัญชีธนาคาร" : "เพิ่มบัญชีธนาคาร"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* SECTION 3: Security & Password */}
         {/* ========================================================================= */}
         <form
           onSubmit={handleChangePassword}
@@ -1046,6 +1401,205 @@ export default function ProfilePage() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* KYC & Bank Account Modal */}
+        {/* ========================================================================= */}
+        {showKycModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto sm:p-8">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#000f22]">
+                    ส่งข้อมูลยืนยันตัวตน & บัญชีรับเงิน
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    อัปเดตบัตรประชาชนและบัญชีธนาคารสำหรับรับเงินโอนค่าเช่า
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowKycModal(false)}
+                  className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {kycModalError && (
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{kycModalError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitKyc} className="mt-5 space-y-4">
+                {/* National ID */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#1b3554] mb-1">
+                    เลขประจำตัวประชาชน (13 หลัก)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={13}
+                    inputMode="numeric"
+                    value={kycNationalId}
+                    onChange={(e) => setKycNationalId(e.target.value.replace(/\D/g, ""))}
+                    placeholder="เช่น 1234567890123"
+                    className="w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                  />
+                </div>
+
+                {/* ID Card Image Upload */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#1b3554] mb-1">
+                    รูปถ่ายบัตรประชาชน {idCardUrl && <span className="font-normal text-slate-400">(มีรูปเดิมแล้ว อัปโหลดเฉพาะเมื่อต้องการเปลี่ยน)</span>}
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setKycIdCardFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-[#c0e6fd]/50 file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#1b3554]"
+                  />
+                </div>
+
+                {/* Selfie Image Upload */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#1b3554] mb-1">
+                    รูปถ่ายเซลฟี่คู่กับบัตรประชาชน {idCardSelfieUrl && <span className="font-normal text-slate-400">(มีรูปเดิมแล้ว อัปโหลดเฉพาะเมื่อต้องการเปลี่ยน)</span>}
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setKycSelfieFile(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-[#c0e6fd]/50 file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#1b3554]"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="block text-xs font-bold text-[#1b3554] mb-3">
+                    ข้อมูลบัญชีธนาคาร (สำหรับรับเงินโอนค่าเช่า)
+                  </span>
+
+                  <div className="space-y-3">
+                    {/* Bank Name */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        ธนาคาร
+                      </label>
+                      <select
+                        value={kycBankName}
+                        onChange={(e) => setKycBankName(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-3 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      >
+                        <option value="">-- เลือกธนาคาร --</option>
+                        <option value="กสิกรไทย">ธนาคารกสิกรไทย (KBANK)</option>
+                        <option value="ไทยพาณิชย์">ธนาคารไทยพาณิชย์ (SCB)</option>
+                        <option value="กรุงเทพ">ธนาคารกรุงเทพ (BBL)</option>
+                        <option value="กรุงไทย">ธนาคารกรุงไทย (KTB)</option>
+                        <option value="กรุงศรีอยุธยา">ธนาคารกรุงศรีอยุธยา (BAY)</option>
+                        <option value="ทหารไทยธนชาต">ธนาคารทหารไทยธนชาต (TTB)</option>
+                        <option value="ออมสิน">ธนาคารออมสิน (GSB)</option>
+                        <option value="ธ.ก.ส.">ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)</option>
+                        <option value="ยูโอบี">ธนาคารยูโอบี (UOB)</option>
+                        <option value="อื่นๆ">ธนาคารอื่นๆ</option>
+                      </select>
+                    </div>
+
+                    {/* Account Number */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        เลขที่บัญชีธนาคาร
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={15}
+                        inputMode="numeric"
+                        value={kycAccountNumber}
+                        onChange={(e) => setKycAccountNumber(e.target.value.replace(/\D/g, ""))}
+                        placeholder="กรอกเฉพาะตัวเลข เช่น 1234567890"
+                        className="w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      />
+                    </div>
+
+                    {/* Account Name */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        ชื่อบัญชีธนาคาร (ตรงตามสมุดบัญชี)
+                      </label>
+                      <input
+                        type="text"
+                        value={kycAccountName}
+                        onChange={(e) => setKycAccountName(e.target.value)}
+                        placeholder="เช่น นาย สมชาย ใจดี"
+                        className="w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Actions */}
+                <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowKycModal(false)}
+                    disabled={kycSubmitting}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={kycSubmitting}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#3f6593] to-[#1b3554] px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+                  >
+                    {kycSubmitting ? (
+                      <>
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>กำลังส่งข้อมูล...</span>
+                      </>
+                    ) : (
+                      <span>ส่งข้อมูลให้ตรวจสอบ</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* Image Preview Lightbox */}
+        {/* ========================================================================= */}
+        {previewImage && (
+          <div
+            onClick={() => setPreviewImage(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs animate-in fade-in duration-200"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-2xl w-full rounded-2xl bg-white p-4 shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-sm font-bold text-slate-800">{previewImage.title}</span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-3 flex items-center justify-center max-h-[70vh] overflow-hidden rounded-xl bg-slate-50">
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.title}
+                  className="max-h-[70vh] w-auto object-contain"
+                />
               </div>
             </div>
           </div>

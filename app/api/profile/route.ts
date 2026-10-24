@@ -55,11 +55,11 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    const [profileRes, roleAssignmentsRes, allRolesRes, phonesRes] = await Promise.all([
+    const [profileRes, roleAssignmentsRes, allRolesRes, phonesRes, bankRes] = await Promise.all([
       admin
         .from("useraccount")
         .select(
-          "user_id, username, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at"
+          "user_id, username, email, national_id, bio, avatar_url, banner_url, updated_at, status, created_at, identity_verification_status, id_card_url, id_card_selfie_url"
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -72,6 +72,11 @@ export async function GET() {
         .from("userphones")
         .select("phone")
         .eq("user_id", user.id),
+      admin
+        .from("bankaccount")
+        .select("bank_account_id, bank_name, account_number, account_name, verification_status")
+        .eq("user_id", user.id)
+        .maybeSingle(),
     ]);
 
     let profile = profileRes.data;
@@ -102,6 +107,9 @@ export async function GET() {
         updated_at: new Date().toISOString(),
         status: "Active",
         created_at: new Date().toISOString(),
+        identity_verification_status: "unverified",
+        id_card_url: null,
+        id_card_selfie_url: null,
       };
     }
 
@@ -143,6 +151,18 @@ export async function GET() {
         status: profile.status,
         roles,
         createdAt: profile.created_at,
+        identityVerificationStatus: profile.identity_verification_status || "unverified",
+        idCardUrl: profile.id_card_url || null,
+        idCardSelfieUrl: profile.id_card_selfie_url || null,
+        bankAccount: bankRes.data
+          ? {
+              id: bankRes.data.bank_account_id,
+              bankName: bankRes.data.bank_name,
+              accountNumber: bankRes.data.account_number,
+              accountName: bankRes.data.account_name,
+              verificationStatus: bankRes.data.verification_status || "pending",
+            }
+          : null,
       },
     });
   } catch (error) {
