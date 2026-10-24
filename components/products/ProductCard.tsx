@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Heart, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 import type { Product } from "@/lib/types/product";
 import { PlaceholderImage, Rating, StatusChip } from "./designSystem";
@@ -26,17 +25,7 @@ function formatLocations(locations: Product["locations"]) {
   return locations.map((location) => location.description).join(" • ");
 }
 
-function ListingStatus({
-  status,
-  isRentedOut,
-}: {
-  status: Product["status"];
-  isRentedOut?: boolean;
-}) {
-  // ถูกเช่าออกไปอยู่ตอนนี้ แต่ยังจองวันอื่นได้ (ปฏิทินในหน้าสินค้าบอกวันว่างจริง)
-  if (status === "available" && isRentedOut) {
-    return <StatusChip tone="rented">กำลังถูกเช่า</StatusChip>;
-  }
+function ListingStatus({ status }: { status: Product["status"] }) {
   if (status === "available") {
     return <StatusChip tone="success">พร้อมให้เช่า</StatusChip>;
   }
@@ -53,38 +42,19 @@ export function ProductCard({
   listing,
   layout = "grid",
 }: ProductCardProps) {
-  const [saved, setSaved] = useState(false);
-
-  const saveButton = (
-    <button
-      type="button"
-      onClick={() => setSaved((current) => !current)}
-      aria-label={saved ? `เลิกบันทึก ${listing.title}` : `บันทึก ${listing.title}`}
-      aria-pressed={saved}
-      className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-600 shadow-sm backdrop-blur transition hover:scale-105 hover:bg-white hover:text-rose-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
-    >
-      <Heart
-        aria-hidden="true"
-        className={`h-4 w-4 ${saved ? "fill-rose-500 text-rose-500" : ""}`}
-      />
-    </button>
-  );
-
   if (layout === "list") {
     return (
       <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-sky-300 hover:shadow-md">
-        {saveButton}
         <Link
           href={`/product/${listing.id}`}
           className="flex gap-3 p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 sm:gap-4"
         >
           <PlaceholderImage
             seed={listing.imageUrls[0] ?? listing.title}
-            alt={listing.title}
             className="h-28 w-28 shrink-0 sm:h-32 sm:w-32"
           />
 
-          <div className="min-w-0 flex-1 pr-9">
+          <div className="min-w-0 flex-1">
             <h3 className="line-clamp-2 font-semibold leading-snug text-slate-800 transition group-hover:text-sky-700">
               {listing.title}
             </h3>
@@ -96,7 +66,7 @@ export function ProductCard({
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Rating value={listing.rating} count={listing.reviewCount} />
-              <ListingStatus status={listing.status} isRentedOut={listing.isRentedOut} />
+              <ListingStatus status={listing.status} />
             </div>
             <div className="mt-3 flex flex-wrap items-baseline gap-1">
               <span className="text-lg font-bold text-[#1b3554]">
@@ -115,7 +85,6 @@ export function ProductCard({
 
   return (
     <article className="group relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
-      {saveButton}
       <Link
         href={`/product/${listing.id}`}
         className="flex flex-1 flex-col focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-sky-600"
@@ -123,12 +92,11 @@ export function ProductCard({
         <div className="relative">
           <PlaceholderImage
             seed={listing.imageUrls[0] ?? listing.title}
-            alt={listing.title}
             className="aspect-[4/3] w-full lg:aspect-[16/10]"
             rounded="rounded-none"
           />
           <div className="absolute bottom-2 left-2">
-            <ListingStatus status={listing.status} isRentedOut={listing.isRentedOut} />
+            <ListingStatus status={listing.status} />
           </div>
         </div>
 

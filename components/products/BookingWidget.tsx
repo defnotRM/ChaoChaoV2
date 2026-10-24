@@ -6,8 +6,6 @@ import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   CalendarDays,
-  Heart,
-  MessageCircle,
   Pencil,
   ShieldAlert,
   ShieldCheck,
@@ -44,8 +42,6 @@ export default function BookingWidget({
   ownerRating,
   ownerReviewCount,
 }: BookingWidgetProps) {
-  // "บันทึก" ยังไม่มีตาราง favorites ใน DB → เก็บสถานะเฉพาะฝั่ง client
-  const [saved, setSaved] = useState(false);
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     role: string;
@@ -187,7 +183,10 @@ export default function BookingWidget({
             width={44}
             height={44}
             className="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm"
-            unoptimized={ownerAvatarUrl.startsWith("data:") || ownerAvatarUrl.startsWith("blob:")}
+            unoptimized={
+              ownerAvatarUrl.startsWith("data:") ||
+              ownerAvatarUrl.startsWith("blob:")
+            }
           />
         ) : (
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#1b3554] to-[#3f6593] text-base font-bold text-white">
@@ -225,8 +224,8 @@ export default function BookingWidget({
         </Link>
       </div>
 
-      {/* เจ้าของประกาศ: แชท/บันทึกกับของตัวเองไม่มีความหมาย → แสดงปุ่มแก้ไขแทน */}
-      {isOwner ? (
+      {/* เจ้าของประกาศ: แสดงปุ่มแก้ไขประกาศ */}
+      {isOwner && (
         <Link
           href={`/lender/editmyproduct/${productId}`}
           className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
@@ -234,25 +233,6 @@ export default function BookingWidget({
           <Pencil className="h-4 w-4" />
           แก้ไขประกาศ
         </Link>
-      ) : (
-        /* ปุ่มบันทึก */
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setSaved((v) => !v)}
-            aria-pressed={saved}
-            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 ${
-              saved
-                ? "border-rose-200 bg-rose-50 text-rose-600"
-                : "border-slate-200 bg-white text-slate-700 hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554]"
-            }`}
-          >
-            <Heart
-              className={`h-4 w-4 ${saved ? "fill-rose-500 text-rose-500" : ""}`}
-            />
-            {saved ? "บันทึกแล้ว" : "บันทึกสินค้า"}
-          </button>
-        </div>
       )}
     </div>
   );
