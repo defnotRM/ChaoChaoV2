@@ -54,10 +54,10 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "png";
     const uploadResult = await uploadToStorage("avatars", user.id, file, {
-      fileName: `avatar.${fileExt}`,
+      fileName: `avatar_${Date.now()}.${fileExt}`,
       contentType: file.type || "image/png",
     });
-    const savedAvatarUrl = `${uploadResult.publicUrl}?t=${Date.now()}`;
+    const savedAvatarUrl = uploadResult.publicUrl;
 
     // 1. Check if useraccount already exists for this user
     const { data: existingUser } = await admin
@@ -103,10 +103,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. In auth.users metadata, store the URL
+    // 2. In auth.users metadata, store the direct public Supabase Storage URL
     const userMetadata = {
       ...(user.user_metadata || {}),
-      avatar_url: savedAvatarUrl.startsWith("data:") ? `/api/avatar?id=${user.id}` : savedAvatarUrl,
+      avatar_url: savedAvatarUrl,
     };
 
     await admin.auth.admin.updateUserById(user.id, {

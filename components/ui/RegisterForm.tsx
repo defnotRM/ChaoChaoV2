@@ -31,6 +31,7 @@ export default function RegisterForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [idCardPreview, setIdCardPreview] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
 
@@ -46,6 +47,33 @@ export default function RegisterForm() {
 
   const selectedRole = watch("role");
   const isLenderRole = selectedRole === "lender" || selectedRole === "both";
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (PNG, JPG, WEBP)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("ขนาดไฟล์ต้องไม่เกิน 5 MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setAvatarPreview(result);
+      setValue("avatarImageUrl", result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+    setValue("avatarImageUrl", undefined);
+  };
 
   const handleIdCardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -192,6 +220,56 @@ export default function RegisterForm() {
             className="space-y-5"
             noValidate
           >
+            {/* Avatar Upload (Optional) */}
+            <div className="flex flex-col items-center justify-center pb-1">
+              <div className="relative group">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-[#c0e6fd] bg-[#c0e6fd]/20 text-[#3f6593] shadow-sm transition hover:border-[#3f6593]">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar Preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Camera className="h-7 w-7 text-[#5b86b6]" />
+                  )}
+                </div>
+
+                <label
+                  htmlFor="register-avatar-input"
+                  className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100"
+                  title="เลือกรูปโปรไฟล์"
+                >
+                  <Camera className="h-5 w-5 text-white" />
+                </label>
+
+                <input
+                  id="register-avatar-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarFileChange}
+                  className="hidden"
+                />
+
+                {avatarPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="absolute -top-1 -right-1 rounded-full bg-red-600 p-1 text-white shadow-sm hover:bg-red-700"
+                    title="ลบรูป"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <label
+                htmlFor="register-avatar-input"
+                className="mt-2 cursor-pointer text-xs font-semibold text-[#3f6593] hover:underline"
+              >
+                {avatarPreview ? "เปลี่ยนรูปโปรไฟล์" : "+ รูปภาพโปรไฟล์ (ไม่บังคับ)"}
+              </label>
+            </div>
+
             {/* Username */}
             <div>
               <label

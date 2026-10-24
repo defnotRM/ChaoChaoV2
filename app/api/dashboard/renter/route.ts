@@ -77,7 +77,11 @@ export async function GET(request: NextRequest) {
               lender: lender
                 ? {
                     username: lender.username || "เจ้าของสินค้า",
-                    avatarUrl: lender.avatar_url ? `/api/avatar?id=${lender.user_id}` : null,
+                    avatarUrl: lender.avatar_url
+                      ? (lender.avatar_url.startsWith("http")
+                          ? lender.avatar_url
+                          : `/api/avatar?id=${lender.user_id}`)
+                      : null,
                   }
                 : null,
             }

@@ -43,8 +43,29 @@ export async function GET(request: Request) {
       });
     }
 
-    // If it's a direct URL
-    return NextResponse.redirect(avatarData);
+    // If it's a direct URL, fetch and stream the buffer or fallback to redirect
+    if (avatarData.startsWith("http://") || avatarData.startsWith("https://")) {
+      try {
+        const imgRes = await fetch(avatarData);
+        if (imgRes.ok) {
+          const contentType = imgRes.headers.get("content-type") || "image/png";
+          const buffer = Buffer.from(await imgRes.arrayBuffer());
+          return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Content-Length": buffer.length.toString(),
+              "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200",
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("Avatar fetch direct error, falling back to redirect:", e);
+      }
+      return NextResponse.redirect(new URL(avatarData));
+    }
+
+    return new NextResponse("Avatar format invalid", { status: 400 });
   } catch (error) {
     console.error("Avatar serving error:", error);
     return new NextResponse("Error fetching avatar", { status: 500 });

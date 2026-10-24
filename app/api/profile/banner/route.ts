@@ -53,10 +53,10 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const uploadResult = await uploadToStorage("banners", user.id, file, {
-      fileName: `banner.${fileExt}`,
+      fileName: `banner_${Date.now()}.${fileExt}`,
       contentType: file.type || "image/jpeg",
     });
-    const savedBannerUrl = `${uploadResult.publicUrl}?t=${Date.now()}`;
+    const savedBannerUrl = uploadResult.publicUrl;
 
     // 1. Check if useraccount already exists for this user
     const { data: existingUser } = await admin

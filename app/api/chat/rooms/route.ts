@@ -165,7 +165,9 @@ export async function GET() {
           id: partnerId,
           username: partnerProfile?.username || "ผู้ใช้งาน",
           avatarUrl: partnerProfile?.avatar_url
-            ? `/api/avatar?id=${partnerId}&v=${v}`
+            ? (partnerProfile.avatar_url.startsWith("http")
+                ? partnerProfile.avatar_url
+                : `/api/avatar?id=${partnerId}&v=${v}`)
             : null,
           role: contextualRole,
           status: partnerProfile?.status || "Active",

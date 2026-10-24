@@ -23,6 +23,7 @@ export const registerSchema = z.object({
     message: "กรุณาเลือกประเภทผู้ใช้งาน",
   }),
 
+  avatarImageUrl: z.string().optional(),
   idCardImageUrl: z.string().optional(),
   idCardSelfieImageUrl: z.string().optional(),
 });
