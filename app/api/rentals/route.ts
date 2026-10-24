@@ -160,7 +160,7 @@ export async function POST(request: Request) {
     // 2) ตรวจสินค้ามีจริงและพร้อมให้เช่า
     const { data: item, error: itemError } = await admin
       .from("item")
-      .select("item_id, user_id, status, rental_fee_per_day, deposit")
+      .select("item_id, user_id, item_name, status, rental_fee_per_day, deposit")
       .eq("item_id", itemId)
       .maybeSingle();
 
@@ -305,6 +305,20 @@ export async function POST(request: Request) {
         });
       } catch (chatErr) {
         console.error("Auto create chatroom error on rental:", chatErr);
+      }
+
+      // 6) ส่งการแจ้งเตือนถึงผู้ให้เช่าเมื่อมีคำขอเช่าใหม่ (FR-46)
+      try {
+        await admin.from("notification").insert({
+          user_id: item.user_id,
+          type: "order_requested",
+          title: "มีคำขอเช่าอุปกรณ์ใหม่ 📦",
+          message: `มีผู้ส่งคำขอเช่า "${item.item_name || "อุปกรณ์ของคุณ"}" วันที่ ${startDate} ถึง ${endDate}`,
+          related_order_id: order.order_id,
+          is_read: false,
+        });
+      } catch (notifErr) {
+        console.warn("Failed to create new rental request notification:", notifErr);
       }
     }
 

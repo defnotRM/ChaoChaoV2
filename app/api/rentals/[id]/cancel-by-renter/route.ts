@@ -40,7 +40,7 @@ export async function POST(
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
       .select(
-        "order_id, user_id, item_id, start_date, meetup_time, rental_fee, deposit, total_paid, status",
+        "order_id, user_id, item_id, start_date, meetup_time, rental_fee, deposit, total_paid, status, item(user_id, item_name)",
       )
       .eq("order_id", orderId)
       .maybeSingle();
@@ -169,6 +169,49 @@ export async function POST(
         { message: "เกิดข้อผิดพลาดในการปรับปรุงสถานะคำสั่งเช่า" },
         { status: 500 },
       );
+    }
+
+    // ส่งการแจ้งเตือนเรื่องการยกเลิกและการกระจายเงิน (FR-51)
+    const lenderId = (order.item as any)?.user_id;
+    const itemName = (order.item as any)?.item_name || "อุปกรณ์";
+    const notifs = [];
+
+    // 1. แจ้งเตือนผู้เช่า
+    if (order.user_id) {
+      notifs.push({
+        user_id: order.user_id,
+        type: "order_cancelled",
+        title: isAdvance
+          ? "ยกเลิกการเช่าล่วงหน้าสำเร็จ (คืนเงินเต็มจำนวน) ↩️"
+          : "ยกเลิกการเช่ากะทันหันสำเร็จ ⚠️",
+        message: isAdvance
+          ? `คุณได้ยกเลิกการเช่า "${itemName}" ล่วงหน้ามากกว่า 2 วัน ระบบได้คืนเงินประกันและค่าเช่าเต็มจำนวน (${renterRefundAmount.toLocaleString()} บาท) ให้แก่คุณแล้ว`
+          : `คุณได้ยกเลิกการเช่า "${itemName}" กะทันหัน (<= 2 วันก่อนนัดรับ) ระบบได้คืนเงินประกัน (${renterRefundAmount.toLocaleString()} บาท) ให้แก่คุณ และโอนค่าเช่าหลังหักค่าธรรมเนียมให้แก่ผู้ให้เช่าเป็นค่าเสียโอกาส`,
+        related_order_id: orderId,
+        is_read: false,
+      });
+    }
+
+    // 2. แจ้งเตือนผู้ให้เช่า
+    if (lenderId) {
+      notifs.push({
+        user_id: lenderId,
+        type: "order_cancelled",
+        title: "ผู้เช่ายกเลิกรายการเช่า 📢",
+        message: isAdvance
+          ? `ผู้เช่าได้ขอยกเลิกรายการเช่า "${itemName}" ล่วงหน้า ระบบได้ปลดล็อกสินค้าให้ผู้อื่นสามารถจองได้แล้ว`
+          : `ผู้เช่าได้ขอยกเลิกรายการเช่า "${itemName}" กะทันหัน ระบบได้โอนเงินค่าเช่าหลังหักค่าธรรมเนียม (${netIncome.toLocaleString()} บาท) ให้แก่คุณเพื่อชดเชยค่าเสียโอกาสแล้ว`,
+        related_order_id: orderId,
+        is_read: false,
+      });
+    }
+
+    if (notifs.length > 0) {
+      try {
+        await admin.from("notification").insert(notifs);
+      } catch (notifErr) {
+        console.warn("Notification error (cancel-by-renter):", notifErr);
+      }
     }
 
     return NextResponse.json({

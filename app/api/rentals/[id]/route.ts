@@ -100,7 +100,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const { data: current, error: fetchError } = await admin
     .from("rentalorder")
-    .select("order_id, status, item_id, user_id")
+    .select("order_id, status, item_id, user_id, item(item_name)")
     .eq("order_id", id)
     .maybeSingle();
 
@@ -161,6 +161,34 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
   if (!data) {
     return apiError("สถานะถูกเปลี่ยนไปแล้วโดยคำขออื่น กรุณารีเฟรชแล้วลองใหม่", 409);
+  }
+
+  // ส่งการแจ้งเตือนถึงผู้เช่าเมื่อผู้ให้เช่าอนุมัติหรือปฏิเสธคำขอเช่า (FR-47)
+  if (current.user_id) {
+    const itemName = (current.item as any)?.item_name || "อุปกรณ์ที่คุณขอเช่า";
+    try {
+      if (status === "awaiting_payment") {
+        await admin.from("notification").insert({
+          user_id: current.user_id,
+          type: "order_approved",
+          title: "คำขอเช่าได้รับการอนุมัติแล้ว! ✅",
+          message: `ผู้ให้เช่าได้อนุมัติคำขอเช่า "${itemName}" แล้ว กรุณาชำระเงินและแนบสลิปเพื่อยืนยันรายการ`,
+          related_order_id: id,
+          is_read: false,
+        });
+      } else if (status === "rejected") {
+        await admin.from("notification").insert({
+          user_id: current.user_id,
+          type: "order_rejected",
+          title: "คำขอเช่าถูกปฏิเสธ ❌",
+          message: `ผู้ให้เช่าได้ปฏิเสธคำขอเช่า "${itemName}" ขออภัยในความไม่สะดวก`,
+          related_order_id: id,
+          is_read: false,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("Notification error (approval/rejection):", notifErr);
+    }
   }
 
   return apiSuccess({ message: "เปลี่ยนสถานะสำเร็จ", order: data });

@@ -1,54 +1,44 @@
-import { notFound, redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrderRedirectPage({
-  params,
-}: {
+export default async function OrderRedirectPage(props: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-
+  const { id: orderId } = await props.params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    notFound();
+    redirect(`/login?next=/orders/${orderId}`);
   }
 
   const admin = createAdminClient();
-
-  const { data: order, error } = await admin
+  const { data: order } = await admin
     .from("rentalorder")
-    .select("order_id, user_id, item_id")
-    .eq("order_id", id)
+    .select("order_id, user_id, item(user_id)")
+    .eq("order_id", orderId)
     .maybeSingle();
 
-  if (error || !order) {
-    notFound();
+  if (!order) {
+    redirect("/dashboard");
   }
 
-  if (user.id === order.user_id) {
-    redirect(`/dashboard/${user.id}/rent/${order.order_id}`);
-  }
+  const lenderId = (order.item as any)?.user_id;
 
-  let lenderId: string | null = null;
-  if (order.item_id) {
-    const { data: item } = await admin
-      .from("item")
-      .select("user_id")
-      .eq("item_id", order.item_id)
-      .maybeSingle();
-    lenderId = item?.user_id ?? null;
+  if (order.user_id === user.id) {
+    redirect(`/dashboard/${user.id}/rent/${orderId}`);
+  } else if (lenderId === user.id) {
+    redirect(`/dashboard/${user.id}/lend/${orderId}`);
+  } else {
+    const { data: isAdmin } = await supabase.rpc("is_admin");
+    if (isAdmin) {
+      redirect("/admin/disputes");
+    }
+    redirect("/dashboard");
   }
-
-  if (user.id === lenderId) {
-    redirect(`/dashboard/${user.id}/lend/${order.order_id}`);
-  }
-
-  notFound();
 }

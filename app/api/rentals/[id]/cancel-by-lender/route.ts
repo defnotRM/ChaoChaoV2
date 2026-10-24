@@ -50,7 +50,8 @@ export async function POST(
         total_paid,
         status,
         item:item_id (
-          user_id
+          user_id,
+          item_name
         )
       `,
       )
@@ -204,6 +205,22 @@ export async function POST(
         { message: "เกิดข้อผิดพลาดในการปรับปรุงสถานะคำสั่งเช่า" },
         { status: 500 },
       );
+    }
+
+    // ส่งการแจ้งเตือนถึงผู้เช่าเมื่อผู้ให้เช่ายกเลิกคำสั่งเช่าและคืนเงิน (FR-51)
+    if (order.user_id) {
+      try {
+        await admin.from("notification").insert({
+          user_id: order.user_id,
+          type: "order_cancelled",
+          title: "ผู้ให้เช่ายกเลิกคำสั่งเช่า (คืนเงินเต็มจำนวน) ↩️",
+          message: `ผู้ให้เช่าได้ขอยกเลิกคำสั่งเช่า "${itemObj?.item_name || "อุปกรณ์"}" (เหตุผล: ${reason}) ระบบได้ดำเนินการโอนเงินคืนเต็มจำนวน 100% (${totalPaid.toLocaleString()} บาท) ให้แก่คุณเรียบร้อยแล้ว`,
+          related_order_id: orderId,
+          is_read: false,
+        });
+      } catch (notifErr) {
+        console.warn("Notification error (cancel-by-lender):", notifErr);
+      }
     }
 
     return NextResponse.json({
