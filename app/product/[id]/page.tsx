@@ -251,12 +251,9 @@ export default async function ProductDetailPage({
                     การยืนยันตัวตนและคะแนนรีวิวเฉลี่ยของผู้ปล่อยเช่าอุปกรณ์ชิ้นนี้
                   </p>
                 </div>
-                <Link
-                  href={`/user/${product.owner.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-[#1b3554] transition hover:border-[#3f6593] hover:bg-sky-50"
-                >
-                  <span>ดูโปรไฟล์ผู้ให้เช่า ({product.owner.displayName})</span>
-                </Link>
+                <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-[#1b3554]">
+                  <span>ผู้ให้เช่า: {product.owner.displayName}</span>
+                </div>
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">

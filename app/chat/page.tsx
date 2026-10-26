@@ -846,15 +846,12 @@ function ChatContent() {
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
-                      <Link
-                        href={`/user/${activeRoom.partner?.id}?from=chat`}
-                        className="font-medium text-slate-700 hover:underline flex items-center gap-1"
-                      >
+                      <span className="font-medium text-slate-700 flex items-center gap-1">
                         <span>{activeRoom.partner?.role}:</span>
                         <span className="text-[#1b3554] font-semibold">
                           {activeRoom.partner?.username}
                         </span>
-                      </Link>
+                      </span>
 
                       {activeRoom.order?.startDate && activeRoom.order?.endDate && (
                         <>
@@ -885,15 +882,6 @@ function ChatContent() {
                       <ExternalLink className="h-3 w-3 text-slate-400 sm:hidden" />
                     </Link>
                   )}
-
-                  <Link
-                    href={`/user/${activeRoom.partner?.id}?from=chat`}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
-                    title="ดูโปรไฟล์คู่สนทนา"
-                  >
-                    <User className="h-3.5 w-3.5 text-slate-500" />
-                    <span className="hidden md:inline">โปรไฟล์</span>
-                  </Link>
                 </div>
               </div>
 

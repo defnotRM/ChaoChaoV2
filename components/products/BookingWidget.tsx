@@ -15,7 +15,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Star,
-  User,
 } from "lucide-react";
 
 const thb = new Intl.NumberFormat("th-TH", {
@@ -266,13 +265,6 @@ export default function BookingWidget({
               </span>
             </p>
           </div>
-          <Link
-            href={`/user/${ownerId}`}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 hover:text-[#1b3554] active:scale-95"
-          >
-            <User className="h-3.5 w-3.5" />
-            ดูโปรไฟล์
-          </Link>
         </div>
       </div>
 

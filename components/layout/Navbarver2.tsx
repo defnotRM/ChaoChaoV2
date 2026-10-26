@@ -10,7 +10,6 @@ import {
   User as UserIcon,
   LogOut,
   LayoutDashboard,
-  Globe,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import NotificationBell from "./NotificationBell";
@@ -167,15 +166,6 @@ export default function Navbarver2() {
 
         {/* เมนูด้านขวาของ Laptop/Desktop */}
         <div className="flex shrink-0 items-center gap-2.5">
-          {/* ปุ่มค้นหาผู้ใช้งาน (Globe Icon) */}
-          <Link
-            href="/users"
-            title="ค้นหาผู้ใช้งาน (Community)"
-            aria-label="ค้นหาผู้ใช้งาน"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
-          >
-            <Globe aria-hidden="true" className="h-6 w-6" />
-          </Link>
 
           <Link
             href={user ? "/chat" : "/login?redirect=/chat"}
@@ -275,14 +265,6 @@ export default function Navbarver2() {
           <Brand />
 
           <div className="ml-auto flex items-center gap-2">
-            {/* Globe Icon for Mobile */}
-            <Link
-              href="/users"
-              aria-label="ค้นหาผู้ใช้งาน"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-[#17326b] transition hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-600"
-            >
-              <Globe aria-hidden="true" className="h-5 w-5" />
-            </Link>
 
             <Link
               href={user ? "/chat" : "/login?redirect=/chat"}
@@ -338,14 +320,6 @@ export default function Navbarver2() {
                 className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-[#17326b]"
               >
                 ค้นหาอุปกรณ์
-              </Link>
-              <Link
-                href="/users"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-[#17326b]"
-              >
-                <Globe className="h-4 w-4 text-[#17326b]" />
-                <span>ค้นหาสมาชิก (Community)</span>
               </Link>
               <Link
                 href={user ? "/chat" : "/login?redirect=/chat"}
