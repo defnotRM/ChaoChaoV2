@@ -16,6 +16,9 @@ const kanit = Kanit({
 export const metadata: Metadata = {
   title: "ChaoChao",
   description: "ChaoChao Next.js App",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
