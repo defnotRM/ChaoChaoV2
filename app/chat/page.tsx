@@ -18,6 +18,7 @@ import {
   Package,
   Calendar,
   ExternalLink,
+  Image as ImageIcon,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { useToast, ToastProvider } from "@/components/ui/Toast";
@@ -163,7 +164,7 @@ function mergeClientMessages(
     const alreadyInConfirmed = confirmedList.some(
       (c) =>
         c.isMe &&
-        c.content === p.content &&
+        (c.content === p.content || (c.type === "image" && p.type === "image")) &&
         Math.abs(
           new Date(c.createdAt).getTime() - new Date(p.createdAt).getTime(),
         ) < 15000,
@@ -193,9 +194,13 @@ function ChatContent() {
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sendingCount, setSendingCount] = useState(0);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const roomChannelRef = useRef<any>(null);
   const globalChannelRef = useRef<any>(null);
   const removedTempIdsRef = useRef<Set<string>>(new Set());
@@ -393,7 +398,8 @@ function ChatContent() {
                   const matchingTemp = prev.find(
                     (m) =>
                       m.id.startsWith("temp-") &&
-                      m.content === incomingMsg.content,
+                      (m.content === incomingMsg.content ||
+                        (m.type === "image" && incomingMsg.type === "image")),
                   );
                   if (matchingTemp) {
                     removedTempIdsRef.current.add(matchingTemp.id);
@@ -486,35 +492,121 @@ function ChatContent() {
     scrollToBottom,
   ]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("กรุณาเลือกไฟล์รูปภาพเท่านั้น (JPG, PNG, WebP, GIF)");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("ขนาดรูปภาพต้องไม่เกิน 15 MB");
+      return;
+    }
+    setSelectedImageFile(file);
+    const preview = URL.createObjectURL(file);
+    setImagePreviewUrl(preview);
+  };
+
+  const handleRemoveImage = useCallback(() => {
+    setSelectedImageFile(null);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    handleRemoveImage();
+    setInputText("");
+  }, [selectedRoomId, handleRemoveImage]);
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf("image") !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          if (file.size > 15 * 1024 * 1024) {
+            toast.error("ขนาดรูปภาพต้องไม่เกิน 15 MB");
+            return;
+          }
+          setSelectedImageFile(file);
+          setImagePreviewUrl(URL.createObjectURL(file));
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!selectedRoomId || !inputText.trim() || activeRoom?.isClosed) return;
+    if (
+      !selectedRoomId ||
+      (!inputText.trim() && !selectedImageFile) ||
+      activeRoom?.isClosed
+    )
+      return;
 
     const targetRoomId = selectedRoomId;
+    const fileToSend = selectedImageFile;
+    const localImagePreview = imagePreviewUrl;
     const content = inputText.trim();
     const nowIso = new Date().toISOString();
 
     setInputText("");
+    handleRemoveImage();
     setSendingCount((c) => c + 1);
 
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const optimisticMsg: MessageItem = {
-      id: tempId,
-      roomId: targetRoomId,
-      senderId: currentUserId || "me",
-      isMe: true,
-      type: "text",
-      content,
-      isRead: false,
-      createdAt: nowIso,
-    };
+    const imageTempId = fileToSend
+      ? `temp-img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      : null;
+    const textTempId = content
+      ? `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      : null;
+
+    const optimisticItems: MessageItem[] = [];
+    if (imageTempId && localImagePreview) {
+      optimisticItems.push({
+        id: imageTempId,
+        roomId: targetRoomId,
+        senderId: currentUserId || "me",
+        isMe: true,
+        type: "image",
+        content: localImagePreview,
+        isRead: false,
+        createdAt: nowIso,
+      });
+    }
+    if (textTempId && content) {
+      optimisticItems.push({
+        id: textTempId,
+        roomId: targetRoomId,
+        senderId: currentUserId || "me",
+        isMe: true,
+        type: "text",
+        content,
+        isRead: false,
+        createdAt: new Date(Date.now() + 1).toISOString(),
+      });
+    }
 
     // แสดงข้อความขึ้นหน้าจอทันที (Optimistic UI)
-    setMessages((prev) => [...prev, optimisticMsg]);
+    setMessages((prev) => [...prev, ...optimisticItems]);
     setRooms((prev) =>
       prev.map((r) =>
         r.id === targetRoomId
-          ? { ...r, lastMessage: content, updatedAt: nowIso }
+          ? {
+              ...r,
+              lastMessage: content || "[รูปภาพ]",
+              updatedAt: nowIso,
+            }
           : r,
       ),
     );
@@ -522,74 +614,149 @@ function ChatContent() {
     inputRef.current?.focus();
 
     try {
-      const res = await fetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId: targetRoomId,
-          content,
-          type: "text",
-        }),
-      });
+      // 1. ถ้ามีไฟล์รูปภาพ ให้ทำการอัปโหลดและส่งข้อความรูปภาพก่อน
+      if (fileToSend && imageTempId) {
+        const formData = new FormData();
+        formData.append("file", fileToSend);
+        formData.append("category", "chat");
+        formData.append("folderId", targetRoomId);
 
-      if (res.ok) {
-        const data = await res.json();
-        const serverMsg: MessageItem = {
-          ...data.message,
-          isMe: true,
-        };
-
-        removedTempIdsRef.current.add(tempId);
-
-        setMessages((prev) => {
-          const replaced = prev.some((m) => m.id === tempId)
-            ? prev.map((m) => (m.id === tempId ? serverMsg : m))
-            : [...prev, serverMsg];
-
-          // Deduplicate by id
-          const uniqueMap = new Map<string, MessageItem>();
-          for (const m of replaced) {
-            uniqueMap.set(m.id, m);
-          }
-          return Array.from(uniqueMap.values()).sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-          );
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
         });
 
-        void fetchRooms();
-        setTimeout(() => scrollToBottom(true), 20);
+        if (!uploadRes.ok) {
+          removedTempIdsRef.current.add(imageTempId);
+          setMessages((prev) => prev.filter((m) => m.id !== imageTempId));
+          toast.error("อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+        } else {
+          const uploadData = await uploadRes.json();
+          const imageUrl = uploadData.url;
 
-        // Broadcast เรียลไทม์ทันทีไปยังคู่สนทนาในห้องแชท (< 50ms)
-        if (roomChannelRef.current) {
-          roomChannelRef.current.send({
-            type: "broadcast",
-            event: "new_message",
-            payload: serverMsg,
+          const imgMsgRes = await fetch("/api/chat/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              roomId: targetRoomId,
+              content: imageUrl,
+              type: "image",
+            }),
           });
+
+          if (imgMsgRes.ok) {
+            const imgData = await imgMsgRes.json();
+            const serverImgMsg: MessageItem = {
+              ...imgData.message,
+              isMe: true,
+            };
+            removedTempIdsRef.current.add(imageTempId);
+            setMessages((prev) => {
+              const replaced = prev.some((m) => m.id === imageTempId)
+                ? prev.map((m) => (m.id === imageTempId ? serverImgMsg : m))
+                : [...prev, serverImgMsg];
+              const uniqueMap = new Map<string, MessageItem>();
+              for (const m of replaced) {
+                uniqueMap.set(m.id, m);
+              }
+              return Array.from(uniqueMap.values()).sort(
+                (a, b) =>
+                  new Date(a.createdAt).getTime() -
+                  new Date(b.createdAt).getTime(),
+              );
+            });
+
+            if (roomChannelRef.current) {
+              roomChannelRef.current.send({
+                type: "broadcast",
+                event: "new_message",
+                payload: serverImgMsg,
+              });
+            }
+          } else {
+            removedTempIdsRef.current.add(imageTempId);
+            setMessages((prev) => prev.filter((m) => m.id !== imageTempId));
+            toast.error("ส่งรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+          }
         }
-        // Broadcast แจ้งเตือนห้องแชทโดยรวม
-        if (globalChannelRef.current) {
-          globalChannelRef.current.send({
-            type: "broadcast",
-            event: "room_updated",
-            payload: { roomId: targetRoomId },
+      }
+
+      // 2. ถ้ามีข้อความตัวอักษร ให้ทำการส่งข้อความ
+      if (content && textTempId) {
+        const res = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId: targetRoomId,
+            content,
+            type: "text",
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const serverMsg: MessageItem = {
+            ...data.message,
+            isMe: true,
+          };
+
+          removedTempIdsRef.current.add(textTempId);
+
+          setMessages((prev) => {
+            const replaced = prev.some((m) => m.id === textTempId)
+              ? prev.map((m) => (m.id === textTempId ? serverMsg : m))
+              : [...prev, serverMsg];
+
+            const uniqueMap = new Map<string, MessageItem>();
+            for (const m of replaced) {
+              uniqueMap.set(m.id, m);
+            }
+            return Array.from(uniqueMap.values()).sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime(),
+            );
           });
+
+          if (roomChannelRef.current) {
+            roomChannelRef.current.send({
+              type: "broadcast",
+              event: "new_message",
+              payload: serverMsg,
+            });
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          removedTempIdsRef.current.add(textTempId);
+          setMessages((prev) => prev.filter((m) => m.id !== textTempId));
+          setInputText((curr) => curr || content);
+          toast.error(
+            errData.message || "ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง",
+          );
         }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        removedTempIdsRef.current.add(tempId);
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setInputText((curr) => curr || content);
-        toast.error(
-          errData.message || "ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง",
-        );
+      }
+
+      void fetchRooms();
+      setTimeout(() => scrollToBottom(true), 20);
+
+      if (globalChannelRef.current) {
+        globalChannelRef.current.send({
+          type: "broadcast",
+          event: "room_updated",
+          payload: { roomId: targetRoomId },
+        });
       }
     } catch (err) {
       console.error("Error sending message:", err);
-      removedTempIdsRef.current.add(tempId);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setInputText((curr) => curr || content);
+      if (imageTempId) {
+        removedTempIdsRef.current.add(imageTempId);
+        setMessages((prev) => prev.filter((m) => m.id !== imageTempId));
+      }
+      if (textTempId) {
+        removedTempIdsRef.current.add(textTempId);
+        setMessages((prev) => prev.filter((m) => m.id !== textTempId));
+        setInputText((curr) => curr || content);
+      }
       toast.error("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setSendingCount((c) => Math.max(0, c - 1));
@@ -747,7 +914,17 @@ function ChatContent() {
                       {/* Last Message Preview & Unread Badge */}
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <p className="truncate text-xs text-slate-500">
-                          {room.lastMessage || (
+                          {room.lastMessage ? (
+                            room.lastMessage.startsWith("http") ||
+                            room.lastMessage === "[รูปภาพ]" ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-slate-600">
+                                <ImageIcon className="inline h-3 w-3 text-[#3f6593]" />
+                                <span>รูปภาพ</span>
+                              </span>
+                            ) : (
+                              room.lastMessage
+                            )
+                          ) : (
                             <span className="italic text-slate-400">
                               เริ่มการสนทนา
                             </span>
@@ -990,15 +1167,31 @@ function ChatContent() {
 
                           <div className="max-w-[75%] space-y-1">
                             <div
-                              className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm break-words ${
+                              className={`rounded-2xl text-sm shadow-sm break-words overflow-hidden ${
                                 msg.isMe
                                   ? "bg-gradient-to-r from-[#1b3554] to-[#3f6593] text-white rounded-br-none"
                                   : "bg-white border border-slate-200/80 text-slate-800 rounded-bl-none"
-                              }`}
+                              } ${msg.type === "image" ? "p-1.5" : "px-4 py-2.5"}`}
                             >
-                              <p className="whitespace-pre-wrap leading-relaxed">
-                                {msg.content}
-                              </p>
+                              {msg.type === "image" ? (
+                                <div
+                                  className="group relative cursor-pointer overflow-hidden rounded-xl bg-black/5"
+                                  onClick={() => setPreviewModalUrl(msg.content)}
+                                  title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                                >
+                                  <img
+                                    src={msg.content}
+                                    alt="รูปภาพแนบในแชท"
+                                    className="max-h-60 sm:max-h-72 w-auto max-w-full rounded-xl object-contain transition group-hover:opacity-95"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 transition group-hover:bg-black/10" />
+                                </div>
+                              ) : (
+                                <p className="whitespace-pre-wrap leading-relaxed">
+                                  {msg.content}
+                                </p>
+                              )}
                             </div>
 
                             <div
@@ -1033,31 +1226,89 @@ function ChatContent() {
                     </span>
                   </div>
                 ) : (
-                  <form
-                    onSubmit={handleSendMessage}
-                    className="flex items-center gap-2"
-                  >
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder="พิมพ์ข้อความที่นี่..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      className="h-11 flex-1 rounded-full border border-slate-200 bg-slate-50/70 px-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#3f6593] focus:bg-white focus:ring-4 focus:ring-[#c0e6fd]/40"
-                    />
+                  <div>
+                    {/* Image Preview Bar before sending */}
+                    {imagePreviewUrl && (
+                      <div className="mb-2 flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-2.5">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-sky-300 bg-white">
+                          <img
+                            src={imagePreviewUrl}
+                            alt="ตัวอย่างรูปภาพ"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-slate-800">
+                            {selectedImageFile?.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {selectedImageFile
+                              ? (selectedImageFile.size / 1024 / 1024).toFixed(2)
+                              : "0"}{" "}
+                            MB · แนบรูปภาพแล้ว
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-400 shadow-xs transition hover:bg-slate-100 hover:text-slate-700"
+                          title="ยกเลิกรูปภาพ"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
 
-                    <button
-                      type="submit"
-                      disabled={!inputText.trim()}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#1b3554] to-[#3f6593] text-white shadow-md shadow-[#1b3554]/20 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    <form
+                      onSubmit={handleSendMessage}
+                      className="flex items-center gap-2"
                     >
-                      {isSending ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4 -translate-x-0.5" />
-                      )}
-                    </button>
-                  </form>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isSending}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 active:scale-95 disabled:opacity-40"
+                        title="แนบรูปภาพ"
+                      >
+                        <ImageIcon className="h-5 w-5" />
+                      </button>
+
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          selectedImageFile
+                            ? "พิมพ์คำอธิบายรูปภาพ (ไม่บังคับ)..."
+                            : "พิมพ์ข้อความที่นี่..."
+                        }
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        onPaste={handlePaste}
+                        className="h-11 flex-1 rounded-full border border-slate-200 bg-slate-50/70 px-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#3f6593] focus:bg-white focus:ring-4 focus:ring-[#c0e6fd]/40"
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={
+                          (!inputText.trim() && !selectedImageFile) || isSending
+                        }
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#1b3554] to-[#3f6593] text-white shadow-md shadow-[#1b3554]/20 transition hover:from-[#000f22] hover:to-[#1b3554] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {isSending ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 -translate-x-0.5" />
+                        )}
+                      </button>
+                    </form>
+                  </div>
                 )}
               </div>
             </>
@@ -1079,6 +1330,44 @@ function ChatContent() {
           )}
         </div>
       </div>
+
+      {/* Fullscreen Image Preview Modal */}
+      {previewModalUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setPreviewModalUrl(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl bg-black/90 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+              <a
+                href={previewModalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition hover:bg-white/30"
+                title="เปิดรูปในแท็บใหม่"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreviewModalUrl(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition hover:bg-white/30"
+                title="ปิด"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <img
+              src={previewModalUrl}
+              alt="รูปภาพขนาดใหญ่"
+              className="mx-auto max-h-[85vh] max-w-[85vw] rounded-xl object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

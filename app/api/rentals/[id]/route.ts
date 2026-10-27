@@ -164,6 +164,58 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return apiError("สถานะถูกเปลี่ยนไปแล้วโดยคำขออื่น กรุณารีเฟรชแล้วลองใหม่", 409);
   }
 
+  // เมื่อผู้ให้เช่าอนุมัติคำขอเช่า (awaiting_payment) ให้ยกเลิกคำขออื่นที่วันทับซ้อนกันโดยอัตโนมัติ (TC16)
+  if (status === "awaiting_payment") {
+    try {
+      const { data: fullOrder } = await admin
+        .from("rentalorder")
+        .select("start_date, end_date, item_id")
+        .eq("order_id", id)
+        .maybeSingle();
+
+      if (fullOrder?.start_date && fullOrder?.end_date) {
+        const { data: conflictingPending } = await admin
+          .from("rentalorder")
+          .select("order_id, user_id")
+          .eq("item_id", fullOrder.item_id)
+          .neq("order_id", id)
+          .in("status", ["requested", "created", "pending_approval"])
+          .lte("start_date", fullOrder.end_date)
+          .gte("end_date", fullOrder.start_date);
+
+        if (conflictingPending && conflictingPending.length > 0) {
+          const conflictingIds = conflictingPending.map((o) => o.order_id);
+          await admin
+            .from("rentalorder")
+            .update({
+              status: "cancelled",
+              cancel_reason:
+                "ผู้ให้เช่าได้อนุมัติคำขอเช่าของลูกค้ารายอื่นในช่วงวันดังกล่าวแล้ว",
+              updated_at: nowIso,
+            })
+            .in("order_id", conflictingIds);
+
+          const itemName =
+            (current.item as any)?.item_name || "สินค้าที่คุณขอเช่า";
+          const cancelNotifs = conflictingPending.map((o) => ({
+            user_id: o.user_id,
+            type: "rental_cancelled",
+            title: "คำขอเช่าถูกยกเลิกอัตโนมัติ",
+            message: `คำขอเช่าของคุณสำหรับ "${itemName}" ถูกยกเลิกอัตโนมัติ เนื่องจากผู้ให้เช่าได้อนุมัติคำขอเช่าของผู้เช่ารายอื่นในช่วงวันดังกล่าวแล้ว`,
+            related_order_id: o.order_id,
+            is_read: false,
+          }));
+          await admin.from("notification").insert(cancelNotifs);
+        }
+      }
+    } catch (cancelErr) {
+      console.warn(
+        "Failed to auto-cancel conflicting pending orders:",
+        cancelErr
+      );
+    }
+  }
+
   // ส่งการแจ้งเตือนถึงผู้เช่าเมื่อผู้ให้เช่าอนุมัติหรือปฏิเสธคำขอเช่า (FR-47)
   if (current.user_id) {
     const itemName = (current.item as any)?.item_name || "อุปกรณ์ที่คุณขอเช่า";

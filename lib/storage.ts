@@ -9,7 +9,8 @@ export type StorageCategory =
   | "evidence/return"
   | "kyc"
   | "disputes"
-  | "reviews";
+  | "reviews"
+  | "chat";
 
 export interface UploadOptions {
   fileName?: string;
@@ -37,6 +38,7 @@ export const CATEGORY_BUCKET_MAP: Record<
   kyc: { bucket: "kyc" },
   disputes: { bucket: "rental-evidence", subPathPrefix: "disputes" },
   reviews: { bucket: "rental-evidence", subPathPrefix: "reviews" },
+  chat: { bucket: "rental-evidence", subPathPrefix: "chat" },
 };
 
 function getExtensionFromMime(mime: string): string {

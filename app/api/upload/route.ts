@@ -13,6 +13,7 @@ const VALID_CATEGORIES: StorageCategory[] = [
   "evidence/return",
   "kyc",
   "disputes",
+  "chat",
 ];
 
 const ALLOWED_TYPES = [

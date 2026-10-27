@@ -236,6 +236,8 @@ export async function processSimulatedExpiredOrders(
               .from("rentalorder")
               .update({
                 status: "cancelled",
+                cancel_reason:
+                  "ผู้เช่าไม่ได้ชำระเงินภายในเวลา 8 ชั่วโมงที่กำหนด (ระบบยกเลิกอัตโนมัติ)",
                 updated_at: timeInfo.simulatedNowIso,
               })
               .eq("order_id", ord.order_id);
