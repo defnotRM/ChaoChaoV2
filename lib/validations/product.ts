@@ -5,6 +5,51 @@ const nonNegativeNumber = z.number().min(0, "ต้องเป็นจำน�
 
 export const MAX_PRODUCT_IMAGES = 10;
 
+// วันนี้ตามเวลาไทยในรูปแบบ YYYY-MM-DD (en-CA ให้รูปแบบนี้)
+// ห้ามใช้ toISOString() เพราะเป็นเวลา UTC ก่อน 07:00 น. จะได้วันที่ของเมื่อวาน
+export function getTodayInBangkok(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(
+    now,
+  );
+}
+
+export function addMonthsToDate(dateStr: string, months: number) {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function isValidDateString(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  // กันวันที่ไม่มีจริง เช่น 2026-02-31 ที่ Date จะเลื่อนไปเป็นเดือนถัดไป
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+// คืนข้อความผิดพลาดของช่วงวันที่เปิดให้เช่า หรือ null ถ้าถูกต้อง
+// originalStart ใช้ตอนแก้ไขประกาศเดิม: วันเริ่มเดิมที่ผ่านไปแล้วคงไว้ได้ แต่ถ้าเปลี่ยนวันเริ่มใหม่ต้องไม่ย้อนหลัง
+export function getAvailabilityRangeError(
+  start: string,
+  end: string,
+  options: { today?: string; originalStart?: string | null } = {},
+) {
+  const today = options.today ?? getTodayInBangkok();
+
+  if (!isValidDateString(start) || !isValidDateString(end)) {
+    return "รูปแบบวันที่ไม่ถูกต้อง";
+  }
+  if (start < today && start !== options.originalStart) {
+    return "วันที่เริ่มต้นเปิดให้เช่าต้องไม่ย้อนหลัง";
+  }
+  if (end < start) {
+    return "วันที่สิ้นสุดต้องไม่อยู่ก่อนวันที่เริ่มต้นเปิดให้เช่า";
+  }
+  if (end < today) {
+    return "วันที่สิ้นสุดเปิดให้เช่าต้องไม่ย้อนหลัง";
+  }
+  return null;
+}
+
 // ตรงกับ CHECK constraint ของ item.item_condition (migration 25)
 const itemCondition = z.enum(["like-new", "good", "fair"], {
   message: "กรุณาเลือกสภาพการใช้งานของอุปกรณ์",
@@ -49,6 +94,18 @@ export const createProductSchema = z.object({
   availabilityStart: z.string().min(1, "รูปแบบวันที่ไม่ถูกต้อง"),
   availabilityEnd: z.string().min(1, "รูปแบบวันที่ไม่ถูกต้อง"),
   conditions: z.array(z.string()).nullish().default([]),
+}).superRefine((data, ctx) => {
+  const dateError = getAvailabilityRangeError(
+    data.availabilityStart,
+    data.availabilityEnd,
+  );
+  if (dateError) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["availabilityStart"],
+      message: dateError,
+    });
+  }
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

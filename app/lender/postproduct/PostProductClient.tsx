@@ -20,7 +20,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
+import {
+  MAX_PRODUCT_IMAGES,
+  addMonthsToDate,
+  getAvailabilityRangeError,
+  getTodayInBangkok,
+} from "@/lib/validations/product";
 import type { ItemCondition } from "@/lib/types/product";
 import ConditionPicker from "@/components/products/ConditionPicker";
 
@@ -161,10 +166,8 @@ export default function PostProductClient({
   }
 
   // Dates
-  const todayStr = new Date().toISOString().split("T")[0];
-  const sixMonthsLater = new Date();
-  sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
-  const sixMonthsLaterStr = sixMonthsLater.toISOString().split("T")[0];
+  const todayStr = getTodayInBangkok();
+  const sixMonthsLaterStr = addMonthsToDate(todayStr, 6);
 
   const [availabilityStart, setAvailabilityStart] = useState(todayStr);
   const [availabilityEnd, setAvailabilityEnd] = useState(sixMonthsLaterStr);
@@ -283,6 +286,15 @@ export default function PostProductClient({
       setErrorMessage(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
       return;
     }
+    // ตรวจวันที่ก่อนอัปโหลดรูป เพื่อไม่ให้รูปค้างใน storage เมื่อประกาศไม่ผ่าน
+    const dateError = getAvailabilityRangeError(
+      availabilityStart,
+      availabilityEnd,
+    );
+    if (dateError) {
+      setErrorMessage(dateError);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -352,9 +364,12 @@ export default function PostProductClient({
           router.push("/");
         }
       }, 1200);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error posting product:", err);
-      setErrorMessage(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      setErrorMessage(
+        (err instanceof Error && err.message) ||
+          "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -976,6 +991,7 @@ export default function PostProductClient({
                   type="date"
                   required
                   value={availabilityStart}
+                  min={todayStr}
                   onChange={(e) => setAvailabilityStart(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
                 />
@@ -989,6 +1005,9 @@ export default function PostProductClient({
                   type="date"
                   required
                   value={availabilityEnd}
+                  min={
+                    availabilityStart > todayStr ? availabilityStart : todayStr
+                  }
                   onChange={(e) => setAvailabilityEnd(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
                 />

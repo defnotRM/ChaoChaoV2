@@ -20,7 +20,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { MAX_PRODUCT_IMAGES } from "@/lib/validations/product";
+import {
+  MAX_PRODUCT_IMAGES,
+  addMonthsToDate,
+  getAvailabilityRangeError,
+  getTodayInBangkok,
+} from "@/lib/validations/product";
 import type { ItemCondition as ItemUsageCondition } from "@/lib/types/product";
 import ConditionPicker from "@/components/products/ConditionPicker";
 
@@ -100,10 +105,8 @@ export default function EditProductClient({
     (l) => l.location_type === "return",
   );
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const sixMonthsLater = new Date();
-  sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
-  const sixMonthsLaterStr = sixMonthsLater.toISOString().split("T")[0];
+  const todayStr = getTodayInBangkok();
+  const sixMonthsLaterStr = addMonthsToDate(todayStr, 6);
 
   // Images prefill
   const initialImgs = (initialItem.itemimage || [])
@@ -295,6 +298,10 @@ export default function EditProductClient({
   const [availabilityEnd, setAvailabilityEnd] = useState(
     primaryAvail?.end_date || sixMonthsLaterStr,
   );
+  // ประกาศเดิมที่วันเริ่มผ่านไปแล้วต้องบันทึกได้โดยไม่ต้องเปลี่ยนวันเริ่ม
+  const originalStart = primaryAvail?.start_date ?? null;
+  const minStartDate =
+    originalStart && originalStart < todayStr ? originalStart : todayStr;
 
   // Conditions
   const initialConditions = (initialItem.itemcondition || [])
@@ -357,6 +364,15 @@ export default function EditProductClient({
     }
     if (images.length > MAX_PRODUCT_IMAGES) {
       setErrorMessage(`อัปโหลดรูปภาพได้ไม่เกิน ${MAX_PRODUCT_IMAGES} รูป`);
+      return;
+    }
+    const dateError = getAvailabilityRangeError(
+      availabilityStart,
+      availabilityEnd,
+      { originalStart },
+    );
+    if (dateError) {
+      setErrorMessage(dateError);
       return;
     }
 
@@ -423,9 +439,12 @@ export default function EditProductClient({
       setTimeout(() => {
         router.push(`/product/${initialItem.item_id}`);
       }, 1200);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error updating product:", err);
-      setErrorMessage(err.message || "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+      setErrorMessage(
+        (err instanceof Error && err.message) ||
+          "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1068,6 +1087,7 @@ export default function EditProductClient({
                   type="date"
                   required
                   value={availabilityStart}
+                  min={minStartDate}
                   onChange={(e) => setAvailabilityStart(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
                 />
@@ -1081,6 +1101,9 @@ export default function EditProductClient({
                   type="date"
                   required
                   value={availabilityEnd}
+                  min={
+                    availabilityStart > todayStr ? availabilityStart : todayStr
+                  }
                   onChange={(e) => setAvailabilityEnd(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 transition focus:border-[#1b3554] focus:outline-none"
                 />
