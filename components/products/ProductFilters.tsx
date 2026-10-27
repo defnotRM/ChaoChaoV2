@@ -117,9 +117,11 @@ export default function ProductFilters({
           className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
         >
           <option value={0}>ทุกคะแนน</option>
-          <option value={4.5}>4.5 ดาวขึ้นไป</option>
+          <option value={5}>5 ดาว</option>
           <option value={4}>4 ดาวขึ้นไป</option>
           <option value={3}>3 ดาวขึ้นไป</option>
+          <option value={2}>2 ดาวขึ้นไป</option>
+          <option value={1}>1 ดาวขึ้นไป</option>
         </select>
       </fieldset>
 
