@@ -34,6 +34,70 @@ export type ProductCategoryOption = {
   count: number;
 };
 
+// วรรณยุกต์และสระบน-ล่างของไทยต้องติดกับพยัญชนะตัวก่อนหน้า ถ้าคำที่เจอมีตัวพวกนี้ต่อท้าย แปลว่าตัดกลางพยางค์ (เช่น "ไม" ใน "ไม่")
+const THAI_COMBINING_MARK = /[ัิ-ฺ็-๎]/;
+// สระหน้า (เ แ โ ใ ไ) เป็นส่วนหนึ่งของพยางค์ที่ตามมา คำที่เจอจึงต้องไม่เริ่มหลังสระหน้า (เช่น "มว" ใน "แมว")
+const THAI_LEADING_VOWEL = /[เ-ไ]/;
+
+function normalizeSearchText(text: string) {
+  return text.normalize("NFC").toLowerCase();
+}
+
+// ชื่อรุ่นเขียนได้หลายแบบ เช่น "A7 III", "A7-III", "a7iii" จึงเทียบแบบตัดช่องว่างและขีดออกด้วย
+function compactModelText(text: string) {
+  return text.replace(/[\s\-_]/g, "");
+}
+
+export function includesThaiAware(text: string, query: string) {
+  for (
+    let index = text.indexOf(query);
+    index !== -1;
+    index = text.indexOf(query, index + 1)
+  ) {
+    const before = text[index - 1] ?? "";
+    const after = text[index + query.length] ?? "";
+    if (!THAI_LEADING_VOWEL.test(before) && !THAI_COMBINING_MARK.test(after)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function fieldIncludes(field: string, token: string) {
+  if (includesThaiAware(field, token)) return true;
+  // เทียบแบบตัดช่องว่างเฉพาะคำที่มีตัวอักษรอังกฤษหรือตัวเลข เพื่อไม่ให้คำไทยต่างคำถูกนำมาต่อกัน
+  return (
+    /[a-z0-9]/.test(token) &&
+    includesThaiAware(compactModelText(field), compactModelText(token))
+  );
+}
+
+// คืนคะแนนความเกี่ยวข้อง หรือ null ถ้าไม่ตรงคำค้น
+// ทุกคำที่พิมพ์ (แยกด้วยช่องว่าง) ต้องเจออย่างน้อยหนึ่งช่อง และคะแนนนับจากช่องที่สำคัญที่สุดที่เจอ
+export function getSearchRelevance(product: Product, searchQuery: string) {
+  if (!searchQuery) return 0;
+
+  const title = normalizeSearchText(product.title ?? "");
+  const category = normalizeSearchText(product.categoryName ?? "");
+  const description = normalizeSearchText(product.description ?? "");
+  let relevance = 0;
+
+  for (const token of searchQuery.split(/\s+/)) {
+    if (fieldIncludes(title, token)) {
+      const startsTitle =
+        title.startsWith(token) &&
+        !THAI_COMBINING_MARK.test(title[token.length] ?? "");
+      relevance += startsTitle ? 3 : 2;
+    } else if (fieldIncludes(category, token)) {
+      relevance += 1;
+    } else if (!fieldIncludes(description, token)) {
+      return null;
+    }
+  }
+
+  return relevance;
+}
+
 export function createInitialProductFilters(
   initialSearch = "",
   initialCategoryIds: string[] = [],
@@ -65,7 +129,7 @@ export function createFilterCriteria(filters: ProductFilterState) {
   );
 
   const criteria: ProductFilterCriteria = {
-    searchQuery: (filters.searchQuery || "").trim().toLowerCase(),
+    searchQuery: normalizeSearchText((filters.searchQuery || "").trim()),
     minPrice,
     maxPrice,
     minRating: filters.minRating,
@@ -88,10 +152,7 @@ export function matchesNonCategoryFilters(
 
   // ค้นหาตามคำค้นหา (ชื่อสินค้า, รายละเอียด, หมวดหมู่)
   const matchesSearch =
-    !criteria.searchQuery ||
-    (product.title && product.title.toLowerCase().includes(criteria.searchQuery)) ||
-    (product.description && product.description.toLowerCase().includes(criteria.searchQuery)) ||
-    (product.categoryName && product.categoryName.toLowerCase().includes(criteria.searchQuery));
+    getSearchRelevance(product, criteria.searchQuery) !== null;
 
   const matchesMinPrice =
     criteria.minPrice === null || product.pricePerDay >= criteria.minPrice;
@@ -178,9 +239,25 @@ export function filterProducts(
   });
 }
 
-export function sortProducts(products: Product[], sortBy: CatalogSort) {
+export function sortProducts(
+  products: Product[],
+  sortBy: CatalogSort,
+  searchQuery = "",
+) {
+  const relevance = new Map(
+    products.map((product) => [
+      product.id,
+      getSearchRelevance(product, searchQuery) ?? 0,
+    ]),
+  );
+
   // sort แก้ array ต้นฉบับ จึง copy ก่อนเพื่อไม่ให้ข้อมูลจาก props ถูกเปลี่ยน
   return [...products].sort((a, b) => {
+    // ตอนมีคำค้น สินค้าที่ตรงชื่อขึ้นก่อนสินค้าที่ตรงแค่หมวดหรือรายละเอียด แล้วค่อยเรียงตามที่ผู้ใช้เลือก
+    const relevanceDiff =
+      (relevance.get(b.id) ?? 0) - (relevance.get(a.id) ?? 0);
+    if (relevanceDiff !== 0) return relevanceDiff;
+
     if (sortBy === "newest") {
       return b.createdAt.localeCompare(a.createdAt);
     }

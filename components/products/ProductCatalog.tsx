@@ -54,8 +54,8 @@ export default function ProductCatalog({
   );
 
   const sortedProducts = useMemo(
-    () => sortProducts(filteredProducts, sortBy),
-    [filteredProducts, sortBy],
+    () => sortProducts(filteredProducts, sortBy, criteria.searchQuery),
+    [criteria.searchQuery, filteredProducts, sortBy],
   );
 
   function updateFilters(patch: Partial<ProductFilterState>) {
