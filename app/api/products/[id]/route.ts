@@ -2,7 +2,10 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError, apiSuccess } from "@/lib/api-response";
-import { updateProductSchema } from "@/lib/validations/product";
+import {
+  getAvailabilityRangeError,
+  updateProductSchema,
+} from "@/lib/validations/product";
 import { uploadToStorage } from "@/lib/storage";
 import { saveItemCondition } from "@/lib/products/itemCondition";
 
@@ -73,6 +76,29 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const input = parsed.data;
+
+    if (input.availabilityStart && input.availabilityEnd) {
+      // ประกาศเดิมที่เปิดให้เช่ามาแล้ว วันเริ่มเดิมอาจผ่านไปแล้ว จึงยอมให้ส่งวันเริ่มเดิมกลับมาได้
+      const { data: currentAvailability } = await admin
+        .from("availability")
+        .select("start_date")
+        .eq("item_id", id);
+      const originalStart = (currentAvailability || []).some(
+        (row) => row.start_date === input.availabilityStart,
+      )
+        ? input.availabilityStart
+        : null;
+
+      const dateError = getAvailabilityRangeError(
+        input.availabilityStart,
+        input.availabilityEnd,
+        { originalStart },
+      );
+      if (dateError) {
+        return apiError(dateError, 400);
+      }
+    }
+
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
