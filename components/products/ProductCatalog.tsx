@@ -38,7 +38,7 @@ export default function ProductCatalog({
   const [layout, setLayout] = useState<CatalogLayout>("grid");
   const [sortBy, setSortBy] = useState<CatalogSort>("rating-desc");
 
-  const { criteria, invalidPriceRange, invalidDateRange } = useMemo(
+  const { criteria, invalidPriceRange, invalidDateRange, invalidPastDate } = useMemo(
     () => createFilterCriteria(filters),
     [filters],
   );
@@ -127,6 +127,7 @@ export default function ProductCatalog({
             filters={filters}
             invalidPriceRange={invalidPriceRange}
             invalidDateRange={invalidDateRange}
+            invalidPastDate={invalidPastDate}
             onChange={updateFilters}
             onToggleCategory={toggleCategory}
             onReset={resetFilters}
