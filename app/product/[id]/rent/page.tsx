@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
+import { getOwnerRatings } from "@/lib/products/ratings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import BookingClient from "./BookingClient";
 import type { BookingLocation, BookingPageData, DateRange } from "./types";
@@ -56,8 +57,7 @@ export default async function ProductRentPage({
     availabilityRes,
     imageRes,
     ordersRes,
-    reviewRes,
-    ownerItemsRes,
+    ownerRatings,
   ] = await Promise.all([
     admin
       .from("useraccount")
@@ -88,13 +88,7 @@ export default async function ProductRentPage({
       .select("start_date, end_date, status, order_id")
       .eq("item_id", id)
       .in("status", [...BOOKING_BLOCKING_STATUSES]),
-    // เรตติ้งสินค้า: review join ผ่าน rentalorder.order_id ของชิ้นนี้
-    admin
-      .from("review")
-      .select("rating, order:order_id!inner ( item_id )")
-      .eq("order.item_id", id),
-    // สินค้าทั้งหมดของผู้ให้เช่าสำหรับ aggregate เรตติ้ง
-    admin.from("item").select("item_id").eq("user_id", item.user_id),
+    getOwnerRatings(admin, [item.user_id]),
   ]);
 
   let owner = ownerRes.data;
@@ -166,36 +160,11 @@ export default async function ProductRentPage({
     imageRes.data?.[0]?.image_url ||
     null;
 
-  // เรตติ้งของผู้ให้เช่าจากทุกสินค้า
-  const ownerItemIds = (ownerItemsRes.data || []).map((r) => r.item_id);
-  let ownerRatingData: { average: number; count: number } | null = null;
-  if (ownerItemIds.length > 0) {
-    const { data: ownerReviews } = await admin
-      .from("review")
-      .select("rating, order:order_id!inner ( item_id )")
-      .in("order.item_id", ownerItemIds);
-    const rows = (ownerReviews || []) as Array<{ rating: number }>;
-    if (rows.length > 0) {
-      const sum = rows.reduce((s, r) => s + (Number(r.rating) || 0), 0);
-      ownerRatingData = {
-        average: sum / rows.length,
-        count: rows.length,
-      };
-    }
-  }
-
-  const reviews = reviewRes.data || [];
-  const itemRating =
-    reviews.length > 0
-      ? {
-          average:
-            reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) /
-            reviews.length,
-          count: reviews.length,
-        }
-      : null;
-
-  const rating = ownerRatingData || itemRating;
+  // เรตติ้งของผู้ให้เช่าจากทุกสินค้า (รีวิวของชิ้นนี้รวมอยู่แล้ว ถ้าผู้ให้เช่าไม่มีรีวิวเลย ชิ้นนี้ก็ไม่มีเช่นกัน)
+  const ownerRating = ownerRatings.byOwner.get(item.user_id);
+  const rating = ownerRating
+    ? { average: ownerRating.rating, count: ownerRating.reviewCount }
+    : null;
 
   const data: BookingPageData = {
     item: {
