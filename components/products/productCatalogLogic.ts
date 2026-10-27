@@ -114,7 +114,17 @@ export function createInitialProductFilters(
   };
 }
 
-export function createFilterCriteria(filters: ProductFilterState) {
+// วันนี้ตามเวลาไทยในรูปแบบ YYYY-MM-DD (en-CA ให้รูปแบบนี้) ใช้เป็นวันแรกสุดที่เลือกเช่าได้
+export function getTodayInBangkok(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(
+    now,
+  );
+}
+
+export function createFilterCriteria(
+  filters: ProductFilterState,
+  today = getTodayInBangkok(),
+) {
   // ค่าในช่องราคาเก็บเป็น string เพื่อให้ input ว่างได้ ก่อนแปลงเป็นตัวเลขสำหรับกรองสินค้า
   const minPrice = filters.minPrice === "" ? null : Number(filters.minPrice);
   const maxPrice = filters.maxPrice === "" ? null : Number(filters.maxPrice);
@@ -127,6 +137,11 @@ export function createFilterCriteria(filters: ProductFilterState) {
       filters.endDate &&
       filters.startDate > filters.endDate,
   );
+  // input type="date" กัน min ได้แค่ในปฏิทิน แต่ยังพิมพ์วันย้อนหลังเองได้ จึงตรวจซ้ำที่นี่
+  const invalidPastDate = Boolean(
+    (filters.startDate && filters.startDate < today) ||
+      (filters.endDate && filters.endDate < today),
+  );
 
   const criteria: ProductFilterCriteria = {
     searchQuery: normalizeSearchText((filters.searchQuery || "").trim()),
@@ -136,10 +151,10 @@ export function createFilterCriteria(filters: ProductFilterState) {
     startDate: filters.startDate,
     endDate: filters.endDate,
     onlyAvailable: filters.onlyAvailable,
-    hasInvalidRange: invalidPriceRange || invalidDateRange,
+    hasInvalidRange: invalidPriceRange || invalidDateRange || invalidPastDate,
   };
 
-  return { criteria, invalidPriceRange, invalidDateRange };
+  return { criteria, invalidPriceRange, invalidDateRange, invalidPastDate };
 }
 
 export function matchesNonCategoryFilters(
