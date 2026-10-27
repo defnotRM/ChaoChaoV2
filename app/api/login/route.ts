@@ -78,11 +78,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      profile.status === "Suspended" ||
-      profile.status === "Banned" ||
-      profile.status === "Deactivated"
-    ) {
+    // Suspended: ให้ล็อกอินได้ แต่ proxy.ts จะล็อกไว้ที่แดชบอร์ดของตัวเอง พร้อม banner แจ้งระงับ
+    if (profile.status === "Banned" || profile.status === "Deactivated") {
       return NextResponse.json(
         {
           message:

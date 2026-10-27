@@ -111,6 +111,7 @@ export async function GET() {
         avatarUrl,
         role,
         roles,
+        status: profile?.status || "Active",
       },
     });
   } catch (error) {

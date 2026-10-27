@@ -17,6 +17,7 @@ import {
 import BookingWidget from "@/components/products/BookingWidget";
 import { StatusChip } from "@/components/products/designSystem";
 import ProductGallery from "@/components/products/ProductGallery";
+import ReportAccountButton from "@/components/products/ReportAccountButton";
 import { getProductById } from "@/lib/products/queries";
 import type { ItemStatus } from "@/lib/types/product";
 
@@ -251,8 +252,14 @@ export default async function ProductDetailPage({
                     การยืนยันตัวตนและคะแนนรีวิวเฉลี่ยของผู้ปล่อยเช่าอุปกรณ์ชิ้นนี้
                   </p>
                 </div>
-                <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-[#1b3554]">
-                  <span>ผู้ให้เช่า: {product.owner.displayName}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-[#1b3554]">
+                    <span>ผู้ให้เช่า: {product.owner.displayName}</span>
+                  </div>
+                  <ReportAccountButton
+                    reportedUserId={product.owner.id}
+                    reportedName={product.owner.displayName}
+                  />
                 </div>
               </div>
 
