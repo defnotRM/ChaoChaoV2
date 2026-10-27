@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Suspended: ให้ล็อกอินได้ แต่จะถูกล็อกไว้ที่หน้า dashboard (proxy.ts) พร้อม banner แจ้งระงับ
+    // Suspended: ให้ล็อกอินได้ แต่ proxy.ts จะล็อกไว้ที่แดชบอร์ดของตัวเอง พร้อม banner แจ้งระงับ
     if (profile.status === "Banned" || profile.status === "Deactivated") {
       return NextResponse.json(
         {
@@ -90,7 +90,6 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
-    const isSuspended = profile.status === "Suspended";
 
     // 3. Resolve user roles from user_role_assignment
     const { data: userRoles, error: roleError } = await admin
@@ -169,7 +168,7 @@ export async function POST(request: Request) {
     }
 
     // 5. Determine redirection path (เข้าสู่หน้าแดชบอร์ดหลักทันที)
-    const redirectTo = isSuspended ? "/lender/dashboard" : "/dashboard";
+    const redirectTo = "/dashboard";
 
     const response = NextResponse.json(
       {

@@ -2,8 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-// หน้าเดียวที่บัญชีถูกระงับ (Suspended) เข้าได้
-const SUSPENDED_HOME = "/lender/dashboard";
+// หน้าเดียวที่บัญชีถูกระงับ (Suspended) เข้าได้ คือแดชบอร์ดของตัวเอง
+// ("/dashboard" จะพาไปที่ /dashboard/<user id> เหมือนผู้ใช้ปกติ)
+// ถ้าหน้าแดชบอร์ดจริงใช้ URL อื่น ให้แก้ที่สองฟังก์ชันนี้ที่เดียว
+function suspendedHome(userId: string) {
+  return `/dashboard/${userId}`;
+}
+function isSuspendedAllowedPath(pathname: string, userId: string) {
+  const home = suspendedHome(userId);
+  return pathname === "/dashboard" || pathname === home;
+}
 
 // อ่านสถานะบัญชีด้วย service role (ไม่พึ่ง RLS) ถ้าเช็กไม่ได้ให้ปล่อยผ่านเพื่อไม่ให้เว็บล่มทั้งระบบ
 async function isSuspendedUser(userId: string): Promise<boolean> {
@@ -73,12 +81,12 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const activeRole = request.cookies.get("chaochao_active_role")?.value;
 
-  // 0. บัญชีที่ถูกระงับ: ล็อกให้อยู่ที่หน้า dashboard เท่านั้น (เช็กก่อนทุกกฎ กันการแก้ cookie role)
+  // 0. บัญชีถูกระงับ: ล็อกไว้ที่แดชบอร์ดของตัวเองเท่านั้น (เช็คก่อนกฎอื่นทั้งหมด)
   if (user && (await isSuspendedUser(user.id))) {
-    const onSuspendedHome =
-      pathname === SUSPENDED_HOME || pathname.startsWith(`${SUSPENDED_HOME}/`);
-    if (!onSuspendedHome) {
-      return NextResponse.redirect(new URL(SUSPENDED_HOME, request.url));
+    if (!isSuspendedAllowedPath(pathname, user.id)) {
+      return NextResponse.redirect(
+        new URL(suspendedHome(user.id), request.url),
+      );
     }
     return response;
   }
