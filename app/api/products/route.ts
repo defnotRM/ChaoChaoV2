@@ -125,7 +125,50 @@ export async function POST(request: NextRequest) {
 
     const input = parsed.data;
     const admin = createAdminClient();
-    const userId = user?.id || "b5041d3d-ba07-4230-96fa-3fbfb4411439";
+
+    if (!user) {
+      return apiError("กรุณาเข้าสู่ระบบก่อนลงประกาศสินค้า", 401);
+    }
+
+    const userId = user.id;
+
+    // ตรวจสอบการยืนยันตัวตนของผู้ให้เช่า (TC19 / FR-05)
+    const [{ data: lenderProfile }, { data: lenderBank }] = await Promise.all([
+      admin
+        .from("useraccount")
+        .select("id_card_url, id_card_selfie_url, identity_verification_status")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      admin
+        .from("bankaccount")
+        .select(
+          "bank_account_id, bank_name, account_number, account_name, verification_status"
+        )
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+
+    const isMissingKyc =
+      !lenderProfile?.id_card_url ||
+      !lenderProfile?.id_card_selfie_url ||
+      !lenderBank?.account_number;
+
+    if (isMissingKyc) {
+      return apiError(
+        "กรุณากรอกข้อมูลยืนยันตัวตน (รูปบัตรประชาชน รูปคู่บัตร และบัญชีธนาคาร) ให้ครบถ้วนก่อนลงประกาศสินค้า",
+        403
+      );
+    }
+
+    if (
+      lenderProfile?.identity_verification_status !== "verified" ||
+      lenderBank?.verification_status !== "verified"
+    ) {
+      return apiError(
+        "บัญชีผู้ให้เช่าของคุณอยู่ระหว่างรอแอดมินตรวจสอบและยืนยันตัวตน จึงยังไม่สามารถลงประกาศสินค้าได้",
+        403
+      );
+    }
 
     const processedImages = await Promise.all(
       (input.images || []).map(async (img, idx) => {

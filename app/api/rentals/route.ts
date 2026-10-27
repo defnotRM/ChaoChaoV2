@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { getSimulatedTimeInfo } from "@/lib/simulated-time";
+import { getSimulatedTimeInfo, parseBangkokWindow } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -258,6 +258,29 @@ export async function POST(request: Request) {
 
     const timeInfo = await getSimulatedTimeInfo(admin);
     const nowIso = timeInfo.simulatedNowIso;
+
+    // ตรวจสอบวันและเวลานัดรับสินค้า ต้องไม่เป็นเวลาในอดีต (TC09)
+    const pickupWindow = parseBangkokWindow(startDate, normalizedMeetupTime, 0);
+    if (pickupWindow.startMs < timeInfo.nowMs) {
+      return NextResponse.json(
+        {
+          message:
+            "ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้",
+        },
+        { status: 400 },
+      );
+    }
+
+    const returnWindow = parseBangkokWindow(endDate, normalizedReturnTime, 0);
+    if (returnWindow.startMs <= pickupWindow.startMs) {
+      return NextResponse.json(
+        {
+          message:
+            "ช่วงเวลาที่เลือกไม่ถูกต้อง เวลานัดคืนสินค้าต้องอยู่หลังเวลานัดรับสินค้า",
+        },
+        { status: 400 },
+      );
+    }
 
     // 4) INSERT rentalorder
     const { data: order, error: orderError } = await admin

@@ -212,6 +212,7 @@ export default function RentOrderDetailClient({
   const otherAvatarUrl = owner.avatarUrl || null;
 
   const [currentStatus, setCurrentStatus] = useState(order.status);
+  const [cancelReason, setCancelReason] = useState<string | null>(order.cancel_reason || null);
   const [paymentsList, setPaymentsList] = useState(data.payments);
   const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>(
     data.evidence || []
@@ -268,6 +269,9 @@ export default function RentOrderDetailClient({
 
       if (latestOrder.status) {
         setCurrentStatus(latestOrder.status);
+      }
+      if (latestOrder.cancel_reason) {
+        setCancelReason(latestOrder.cancel_reason);
       }
 
       if (Array.isArray(latestOrder.payment)) {
@@ -696,7 +700,9 @@ export default function RentOrderDetailClient({
                           ? "ปิดการเช่า: ผู้ให้เช่าไม่อัปโหลดรูปหลักฐานภายใน 1 ชั่วโมง (ผู้ให้เช่าไม่มาตามนัด)"
                           : currentStatus === "rejected_at_meetup"
                             ? "ปิดการเช่า: ผู้เช่าปฏิเสธรับสินค้าหน้างาน (FR-28 กรณีที่ 3)"
-                            : `สถานะ: ${chip.label}`}
+                            : (order.cancel_reason || cancelReason)
+                              ? `สถานะ: ยกเลิกคำขอ (${order.cancel_reason || cancelReason})`
+                              : `สถานะ: ${chip.label}`}
                     </span>
                   </div>
                   {currentStatus === "renter_noshow" && (
@@ -1242,7 +1248,9 @@ export default function RentOrderDetailClient({
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
-                    <p className="text-xs font-semibold text-slate-700">สถานะ: {chip.label}</p>
+                    <p className="text-xs font-semibold text-slate-700">
+                      สถานะ: {(order.cancel_reason || cancelReason) ? `ยกเลิกคำขอ (${order.cancel_reason || cancelReason})` : chip.label}
+                    </p>
                   </div>
                 )}
                 {/* ปุ่มเปิดข้อพิพาท / รายงานปัญหา */}

@@ -308,7 +308,7 @@ export async function getRoomsSummary(
       }
 
       summaryMap.set(roomId, {
-        lastMessage: last?.content || "",
+        lastMessage: last?.type === "image" ? "[รูปภาพ]" : (last?.content || ""),
         lastCreatedAt: last?.createdAt || "",
         unreadCount: unread,
       });

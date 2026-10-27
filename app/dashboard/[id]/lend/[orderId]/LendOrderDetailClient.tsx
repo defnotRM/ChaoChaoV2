@@ -187,7 +187,7 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   item_not_returned: { label: "ผู้เช่าไม่คืนสินค้าตามกำหนด", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   rejected: { label: "ปฏิเสธคำขอแล้ว", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   rejected_by_lender: { label: "ปฏิเสธคำขอแล้ว", cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  cancelled: { label: "ผู้เช่ายกเลิกคำขอ", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  cancelled: { label: "คำขอถูกยกเลิกแล้ว", cls: "bg-slate-100 text-slate-700 border-slate-200" },
   cancelled_by_renter: { label: "ผู้เช่ายกเลิกคำขอ", cls: "bg-slate-100 text-slate-700 border-slate-200" },
   cancelled_by_lender: { label: "ผู้ให้เช่ายกเลิกคำขอ", cls: "bg-slate-100 text-slate-700 border-slate-200" },
 };
@@ -211,6 +211,7 @@ export default function LendOrderDetailClient({
   const otherAvatarUrl = renter.avatarUrl || null;
 
   const [currentStatus, setCurrentStatus] = useState<string>(order.status);
+  const [cancelReason, setCancelReason] = useState<string | null>(order.cancel_reason || null);
   const [paymentsList, setPaymentsList] = useState(payments);
   const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>(
     data.evidence || []
@@ -261,6 +262,9 @@ export default function LendOrderDetailClient({
 
       if (latestOrder.status) {
         setCurrentStatus(latestOrder.status);
+      }
+      if (latestOrder.cancel_reason) {
+        setCancelReason(latestOrder.cancel_reason);
       }
 
       if (Array.isArray(latestOrder.payment)) {
@@ -406,7 +410,9 @@ export default function LendOrderDetailClient({
     }
   }
 
-  async function handleUpdateStatus(newStatus: "awaiting_payment" | "rejected" | "cancelled") {
+  async function handleUpdateStatus(
+    newStatus: "awaiting_payment" | "rejected" | "rejected_by_lender" | "cancelled",
+  ) {
     try {
       setIsUpdating(true);
       setErrorMsg(null);
@@ -685,7 +691,9 @@ export default function LendOrderDetailClient({
                           ? "ปิดการเช่า: ผู้ให้เช่าไม่อัปโหลดรูปหลักฐานภายใน 1 ชั่วโมง (ผู้ให้เช่าไม่มาตามนัด)"
                           : currentStatus === "rejected_at_meetup"
                             ? "ปิดการเช่า: ผู้เช่าปฏิเสธรับสินค้าหน้างาน (FR-28 กรณีที่ 3)"
-                            : `สถานะ: ${chip.label}`}
+                            : (order.cancel_reason || cancelReason)
+                              ? `สถานะ: ยกเลิกคำขอ (${order.cancel_reason || cancelReason})`
+                              : `สถานะ: ${chip.label}`}
                     </span>
                   </div>
                   {currentStatus === "renter_noshow" && (
@@ -1028,7 +1036,7 @@ export default function LendOrderDetailClient({
 
                   <button
                     type="button"
-                    onClick={() => handleUpdateStatus("rejected")}
+                    onClick={() => handleUpdateStatus("rejected_by_lender")}
                     disabled={isUpdating}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 transition duration-200 hover:bg-rose-50 active:scale-95 disabled:opacity-50"
                   >
@@ -1189,7 +1197,7 @@ export default function LendOrderDetailClient({
               ) : (
                 <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
                   <p className="text-xs font-semibold text-slate-700">
-                    สถานะ: {chip.label}
+                    สถานะ: {(order.cancel_reason || cancelReason) ? `ยกเลิกคำขอ (${order.cancel_reason || cancelReason})` : chip.label}
                   </p>
                 </div>
               )}

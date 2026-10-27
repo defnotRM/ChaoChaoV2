@@ -514,6 +514,20 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     try {
       setIsSubmitting(true);
       setSubmitError(null);
+
+      // ตรวจสอบวันและเวลานัดรับสินค้า ต้องไม่เป็นเวลาในอดีต (TC09)
+      if (startKey) {
+        const [sY, sM, sD] = startKey.split("-").map(Number);
+        const [mH, mM] = (meetupTime || "12:00").split(":").map(Number);
+        const pickupDate = new Date(sY, sM - 1, sD, mH, mM);
+        if (pickupDate.getTime() < Date.now()) {
+          setSubmitError("ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้");
+          setIsSubmitting(false);
+          setShowTermsModal(false);
+          return;
+        }
+      }
+
       const pickup = locations.find((l) => l.id === pickupId);
       const returnLoc = locations.find((l) => l.id === returnId);
 
@@ -1140,6 +1154,19 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                         setShowRenterKycModal(true);
                         return;
                       }
+
+                      // ตรวจสอบวันและเวลานัดรับสินค้า ต้องไม่เป็นเวลาในอดีต (TC09)
+                      if (startKey) {
+                        const [sY, sM, sD] = startKey.split("-").map(Number);
+                        const [mH, mM] = (meetupTime || "12:00").split(":").map(Number);
+                        const pickupDate = new Date(sY, sM - 1, sD, mH, mM);
+                        if (pickupDate.getTime() < Date.now()) {
+                          setSubmitError("ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้");
+                          return;
+                        }
+                      }
+
+                      setSubmitError(null);
                       setShowTermsModal(true);
                     }}
                     disabled={!canContinue || isSubmitting}
