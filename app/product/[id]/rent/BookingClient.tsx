@@ -153,17 +153,63 @@ function monthValue(year: number, month: number) {
 
 /* ────────────────────────────── component ────────────────────────────── */
 
-export default function BookingClient({ data }: { data: BookingPageData }) {
+export default function BookingClient({
+  data,
+  initialSimulatedTime,
+}: {
+  data: BookingPageData;
+  initialSimulatedTime?: string;
+}) {
   const { item, owner, locations, availability, bookedRanges, rating } = data;
   const router = useRouter();
 
-  const todayKey = useMemo(() => getTodayKey(), []);
+  const [simulatedNowIso, setSimulatedNowIso] = useState<string>(
+    initialSimulatedTime || new Date().toISOString(),
+  );
+
+  useEffect(() => {
+    let active = true;
+    async function loadSimulated() {
+      try {
+        const res = await fetch("/api/simulated-time", { cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          if (active && json.simulatedNowIso) {
+            setSimulatedNowIso(json.simulatedNowIso);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadSimulated();
+    const timer = setInterval(loadSimulated, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const todayKey = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date(simulatedNowIso));
+    } catch {
+      return simulatedNowIso.split("T")[0];
+    }
+  }, [simulatedNowIso]);
 
   // ขอบเขตเดือนที่เลื่อนดูได้ = ยึดตามช่วง availability ที่ผู้ให้เช่าเปิดไว้จริง
   const bounds = useMemo(() => {
+    const simDate = new Date(simulatedNowIso);
+    const validNow = Number.isNaN(simDate.getTime()) ? new Date() : simDate;
+    const currentMonth = monthValue(validNow.getFullYear(), validNow.getMonth());
+
     if (availability.length === 0) {
-      const now = new Date();
-      const currentMonth = monthValue(now.getFullYear(), now.getMonth());
       return { min: currentMonth - 6, max: currentMonth + 12 };
     }
     const validStarts = availability
@@ -176,8 +222,6 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
       .map((k) => keyToDate(k));
 
     if (validStarts.length === 0 || validEnds.length === 0) {
-      const now = new Date();
-      const currentMonth = monthValue(now.getFullYear(), now.getMonth());
       return { min: currentMonth - 6, max: currentMonth + 12 };
     }
 
@@ -188,13 +232,16 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     const endMonth = monthValue(maxDate.getFullYear(), maxDate.getMonth());
 
     return { min: startMonth, max: endMonth };
-  }, [availability]);
+  }, [availability, simulatedNowIso]);
 
   // ตั้งปฏิทินให้เปิดมาที่เดือนแรกของช่วงที่ผู้ให้เช่าเปิดไว้ทันที
   const initialMonth = useMemo(() => {
+    const simDate = new Date(simulatedNowIso);
+    const validNow = Number.isNaN(simDate.getTime()) ? new Date() : simDate;
+    const curMonth = monthValue(validNow.getFullYear(), validNow.getMonth());
+
     if (availability.length === 0) {
-      const now = new Date();
-      return monthValue(now.getFullYear(), now.getMonth());
+      return curMonth;
     }
 
     const validStarts = availability
@@ -203,12 +250,12 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
     if (validStarts.length > 0) {
       const firstDate = keyToDate(validStarts[0]);
-      return monthValue(firstDate.getFullYear(), firstDate.getMonth());
+      const openMonth = monthValue(firstDate.getFullYear(), firstDate.getMonth());
+      return Math.max(openMonth, curMonth);
     }
 
-    const now = new Date();
-    return monthValue(now.getFullYear(), now.getMonth());
-  }, [availability]);
+    return curMonth;
+  }, [availability, simulatedNowIso]);
 
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const [startKey, setStartKey] = useState<string | null>(null);
@@ -248,7 +295,22 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     return inRanges(key, availability);
   };
   const isSelectable = (key: string) =>
-    isOpen(key) && !isBooked(key) && item.status === "available";
+    isOpen(key) && !isBooked(key) && key >= todayKey && item.status === "available";
+
+  useEffect(() => {
+    if (startKey && startKey < todayKey) {
+      setStartKey(null);
+      setEndKey(null);
+      setDraft(null);
+    }
+  }, [startKey, todayKey]);
+
+  useEffect(() => {
+    const simDate = new Date(simulatedNowIso);
+    const validNow = Number.isNaN(simDate.getTime()) ? new Date() : simDate;
+    const curMonth = monthValue(validNow.getFullYear(), validNow.getMonth());
+    setViewMonth((prev) => (prev < curMonth ? curMonth : prev));
+  }, [simulatedNowIso]);
 
   // ไม่ให้ช่วงคร่อมวันที่ถูกจอง/นอกช่วงเปิดจอง
   function spanIsClear(from: string, to: string) {
@@ -505,8 +567,43 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
     !roles.includes("admin") &&
     !roles.includes("ผู้ดูแลระบบ");
 
+  const isMeetupInPast = useMemo(() => {
+    if (!startKey) return false;
+    if (startKey < todayKey) return true;
+    try {
+      const pickupMs = new Date(
+        `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+      ).getTime();
+      const currentSimMs = new Date(simulatedNowIso).getTime();
+      return pickupMs < currentSimMs;
+    } catch {
+      return false;
+    }
+  }, [startKey, todayKey, meetupTime, simulatedNowIso]);
+
+  const isReturnBeforePickup = useMemo(() => {
+    if (!startKey || !endKey) return false;
+    try {
+      const pickupMs = new Date(
+        `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+      ).getTime();
+      const returnMs = new Date(
+        `${endKey}T${(returnTime || "12:00").padStart(5, "0")}:00+07:00`,
+      ).getTime();
+      return returnMs <= pickupMs;
+    } catch {
+      return false;
+    }
+  }, [startKey, endKey, meetupTime, returnTime]);
+
   const canContinue = Boolean(
-    startKey && endKey && pickupId && returnId && !isLenderOnly,
+    startKey &&
+      endKey &&
+      pickupId &&
+      returnId &&
+      !isLenderOnly &&
+      !isMeetupInPast &&
+      !isReturnBeforePickup,
   );
 
   async function handleSubmitBooking() {
@@ -517,11 +614,31 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
       // ตรวจสอบวันและเวลานัดรับสินค้า ต้องไม่เป็นเวลาในอดีต (TC09)
       if (startKey) {
-        const [sY, sM, sD] = startKey.split("-").map(Number);
-        const [mH, mM] = (meetupTime || "12:00").split(":").map(Number);
-        const pickupDate = new Date(sY, sM - 1, sD, mH, mM);
-        if (pickupDate.getTime() < Date.now()) {
-          setSubmitError("ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้");
+        const currentSimMs = new Date(simulatedNowIso).getTime();
+        const pickupMs = new Date(
+          `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+        ).getTime();
+        if (pickupMs < currentSimMs) {
+          setSubmitError(
+            "ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้",
+          );
+          setIsSubmitting(false);
+          setShowTermsModal(false);
+          return;
+        }
+      }
+
+      if (startKey && endKey) {
+        const pickupMs = new Date(
+          `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+        ).getTime();
+        const returnMs = new Date(
+          `${endKey}T${(returnTime || "12:00").padStart(5, "0")}:00+07:00`,
+        ).getTime();
+        if (returnMs <= pickupMs) {
+          setSubmitError(
+            "ช่วงเวลาที่เลือกไม่ถูกต้อง เวลานัดคืนสินค้าต้องอยู่หลังเวลานัดรับสินค้า",
+          );
           setIsSubmitting(false);
           setShowTermsModal(false);
           return;
@@ -644,6 +761,12 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                       <h2 className="text-lg font-bold text-slate-900">
                         ปฏิทินคิวว่าง
                       </h2>
+                      {todayKey && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800">
+                          <Clock3 className="h-3 w-3 text-sky-600" />
+                          <span>วันปัจจุบันในระบบ: <strong>{formatKey(todayKey)}</strong></span>
+                        </span>
+                      )}
                       {availability.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {availability.map((r, idx) => (
@@ -733,7 +856,10 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
                   let cls =
                     "text-slate-700 hover:bg-sky-50 hover:text-[#1b3554]";
-                  if (!open) {
+                  if (isPast) {
+                    cls =
+                      "bg-slate-100/70 text-slate-300 line-through decoration-slate-300 cursor-not-allowed";
+                  } else if (!open) {
                     cls = "bg-slate-50/70 text-slate-300 cursor-not-allowed";
                   } else if (booked) {
                     cls =
@@ -828,21 +954,41 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                       className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1b3554] shadow-xs focus:border-[#3f6593] focus:outline-none"
                     />
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => (
-                        <button
-                          key={`meetup-${t}`}
-                          type="button"
-                          onClick={() => setMeetupTime(t)}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            meetupTime === t
-                              ? "bg-[#1b3554] text-white"
-                              : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
-                          }`}
-                        >
-                          {t} น.
-                        </button>
-                      ))}
+                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => {
+                        const isPastPreset =
+                          startKey === todayKey &&
+                          new Date(`${startKey}T${t}:00+07:00`).getTime() <
+                            new Date(simulatedNowIso).getTime();
+                        return (
+                          <button
+                            key={`meetup-${t}`}
+                            type="button"
+                            disabled={isPastPreset}
+                            onClick={() => setMeetupTime(t)}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                              isPastPreset
+                                ? "cursor-not-allowed bg-slate-100 text-slate-300 line-through"
+                                : meetupTime === t
+                                  ? "bg-[#1b3554] text-white"
+                                  : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
+                            }`}
+                          >
+                            {t} น.
+                          </button>
+                        );
+                      })}
                     </div>
+                    {isMeetupInPast && (
+                      <p className="mt-2 text-xs font-semibold text-rose-600">
+                        เวลานัดรับอุปกรณ์ไม่สามารถเป็นเวลาในอดีตได้ (เวลาปัจจุบันในระบบ:{" "}
+                        {new Date(simulatedNowIso).toLocaleTimeString("th-TH", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: "Asia/Bangkok",
+                        })}{" "}
+                        น.)
+                      </p>
+                    )}
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -856,21 +1002,33 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
                       className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1b3554] shadow-xs focus:border-[#3f6593] focus:outline-none"
                     />
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => (
-                        <button
-                          key={`return-${t}`}
-                          type="button"
-                          onClick={() => setReturnTime(t)}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                            returnTime === t
-                              ? "bg-[#1b3554] text-white"
-                              : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
-                          }`}
-                        >
-                          {t} น.
-                        </button>
-                      ))}
+                      {["09:00", "10:00", "12:00", "15:00", "18:00"].map((t) => {
+                        const isInvalidReturnPreset =
+                          startKey === endKey && t <= meetupTime;
+                        return (
+                          <button
+                            key={`return-${t}`}
+                            type="button"
+                            disabled={isInvalidReturnPreset}
+                            onClick={() => setReturnTime(t)}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                              isInvalidReturnPreset
+                                ? "cursor-not-allowed bg-slate-100 text-slate-300 line-through"
+                                : returnTime === t
+                                  ? "bg-[#1b3554] text-white"
+                                  : "border border-slate-200 bg-white text-slate-600 hover:border-[#3f6593]"
+                            }`}
+                          >
+                            {t} น.
+                          </button>
+                        );
+                      })}
                     </div>
+                    {isReturnBeforePickup && (
+                      <p className="mt-2 text-xs font-semibold text-rose-600">
+                        เวลานัดคืนอุปกรณ์ต้องอยู่หลังเวลานัดรับอุปกรณ์
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1157,11 +1315,29 @@ export default function BookingClient({ data }: { data: BookingPageData }) {
 
                       // ตรวจสอบวันและเวลานัดรับสินค้า ต้องไม่เป็นเวลาในอดีต (TC09)
                       if (startKey) {
-                        const [sY, sM, sD] = startKey.split("-").map(Number);
-                        const [mH, mM] = (meetupTime || "12:00").split(":").map(Number);
-                        const pickupDate = new Date(sY, sM - 1, sD, mH, mM);
-                        if (pickupDate.getTime() < Date.now()) {
-                          setSubmitError("ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้");
+                        const currentSimMs = new Date(simulatedNowIso).getTime();
+                        const pickupMs = new Date(
+                          `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+                        ).getTime();
+                        if (pickupMs < currentSimMs) {
+                          setSubmitError(
+                            "ช่วงเวลาที่เลือกไม่ถูกต้อง ไม่สามารถเลือกวันหรือเวลานัดรับในอดีตได้",
+                          );
+                          return;
+                        }
+                      }
+
+                      if (startKey && endKey) {
+                        const pickupMs = new Date(
+                          `${startKey}T${(meetupTime || "12:00").padStart(5, "0")}:00+07:00`,
+                        ).getTime();
+                        const returnMs = new Date(
+                          `${endKey}T${(returnTime || "12:00").padStart(5, "0")}:00+07:00`,
+                        ).getTime();
+                        if (returnMs <= pickupMs) {
+                          setSubmitError(
+                            "ช่วงเวลาที่เลือกไม่ถูกต้อง เวลานัดคืนสินค้าต้องอยู่หลังเวลานัดรับสินค้า",
+                          );
                           return;
                         }
                       }

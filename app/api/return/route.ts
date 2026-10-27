@@ -111,7 +111,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await admin
       .from("rentalorder")
-      .select("order_id, user_id, item_id, end_date, return_time, status")
+      .select("order_id, user_id, item_id, end_date, return_time, status, rental_fee, fee, net_income")
       .eq("order_id", orderId)
       .maybeSingle();
 
@@ -233,6 +233,12 @@ export async function POST(request: Request) {
     let newStatus = order.status;
     if (bothUploaded) {
       newStatus = "completed";
+      const rentalFee = Number(order.rental_fee) || 0;
+      const fee =
+        order.fee != null ? Number(order.fee) : Math.round(rentalFee * 0.1);
+      const netIncome =
+        order.net_income != null ? Number(order.net_income) : rentalFee - fee;
+
       try {
         await supabase.rpc("settle_rental_order", {
           p_order_id: orderId,
@@ -244,7 +250,12 @@ export async function POST(request: Request) {
       }
       await admin
         .from("rentalorder")
-        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .update({
+          status: "completed",
+          fee,
+          net_income: netIncome,
+          updated_at: new Date().toISOString(),
+        })
         .eq("order_id", orderId);
     }
 

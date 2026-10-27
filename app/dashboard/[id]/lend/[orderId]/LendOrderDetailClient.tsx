@@ -344,6 +344,14 @@ export default function LendOrderDetailClient({
   const totalPaid = Number(order.total_paid) || 0;
   const rentalBase = rentPerDay * days;
   const discount = rentalBase > rentalFee ? rentalBase - rentalFee : 0;
+  const platformFee =
+    order.fee != null && Number(order.fee) > 0
+      ? Number(order.fee)
+      : Math.round(rentalFee * 0.1);
+  const netIncome =
+    order.net_income != null && Number(order.net_income) > 0
+      ? Number(order.net_income)
+      : rentalFee - platformFee;
 
   const step = statusStep(currentStatus, hasPending);
   const isCancelled = step === -1;
@@ -404,6 +412,39 @@ export default function LendOrderDetailClient({
       router.refresh();
     } catch (err) {
       console.error("Error approving payment:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  async function handleRejectPayment() {
+    try {
+      setIsUpdating(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+
+      const res = await fetch("/api/payments/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.order_id }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        setErrorMsg(result.message || "ไม่สามารถปฏิเสธสลิปได้");
+        return;
+      }
+
+      setPaymentsList((prev) =>
+        prev.map((p) =>
+          p.status === "pending" ? { ...p, status: "rejected" } : p
+        )
+      );
+      setSuccessMsg("ปฏิเสธสลิปเรียบร้อยแล้ว แจ้งเตือนผู้เช่าให้อัปโหลดใหม่แล้ว");
+      router.refresh();
+    } catch (err) {
+      console.error("Error rejecting payment:", err);
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsUpdating(false);
@@ -549,8 +590,8 @@ export default function LendOrderDetailClient({
             <CountdownBanner
               deadlineISO={slipDeadlineISO}
               orderId={order.order_id}
-              title="กรุณาตรวจสอบสลิปและยืนยันการชำระเงินภายในเวลา 8 ชั่วโมง มิฉะนั้นระบบจะอนุมัติให้อัตโนมัติ"
-              expiredTitle="เลยกำหนดเวลาตรวจสอบสลิป 8 ชั่วโมงแล้ว — ระบบอนุมัติการชำระเงินให้อัตโนมัติ"
+              title="กรุณาตรวจสอบสลิปและยืนยันการชำระเงินภายในเวลา 8 ชั่วโมง มิฉะนั้นระบบจะยกเลิกคำสั่งเช่าและคืนเงินให้ผู้เช่าอัตโนมัติ"
+              expiredTitle="เลยกำหนดเวลาตรวจสอบสลิป 8 ชั่วโมงแล้ว — ระบบยกเลิกคำสั่งเช่าและคืนเงินให้ผู้เช่าอัตโนมัติ"
               variant="warning"
               onExpired={fetchLatestOrder}
             />
@@ -644,6 +685,18 @@ export default function LendOrderDetailClient({
                             )}
                           </div>
                         )}
+                        {(dsp.rentalreporttype?.type_name === "false_advertisement" || dsp.description?.includes("ตรงปก") || dsp.verdict?.includes("สินค้าตรงปก")) && (dsp.status === "dismissed" || dsp.verdict?.includes("สินค้าตรงปก")) && (
+                          <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-200 text-emerald-800 space-y-1">
+                            <p className="font-bold text-xs flex items-center gap-1.5 text-emerald-900">
+                              <span className="text-emerald-600 font-bold">✓</span> รายละเอียดการคืนเงินและการกระจายรายได้ (สินค้าตรงปก):
+                            </p>
+                            <p className="text-xs text-emerald-800 leading-relaxed">
+                              • คืนเงินประกัน 100% ({thb.format(deposit)}) ให้แก่ผู้เช่า
+                              <br />
+                              • โอนค่าเช่าหลังหักค่าธรรมเนียมแพลตฟอร์ม 10% ({thb.format(order.net_income || (rentalFee * 0.9))}) ให้แก่คุณ
+                            </p>
+                          </div>
+                        )}
                         {dsp.rentalreportimage && dsp.rentalreportimage.length > 0 && (
                           <div>
                             <p className="font-bold text-slate-600 mb-1.5">
@@ -709,6 +762,21 @@ export default function LendOrderDetailClient({
                   {currentStatus === "rejected_at_meetup" && (
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
                       ตามเงื่อนไข FR-28 กรณีที่ 3: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("กะทันหัน") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ผู้เช่ายกเลิกกะทันหัน (ภายใน 2 วันก่อนนัดรับ): ระบบได้คืนเงินประกันให้ผู้เช่า และโอนค่าเช่าหลังหักค่าธรรมเนียมแพลตฟอร์ม 10% ({thb.format(order.net_income || (rentalFee * 0.9))}) ให้แก่คุณเพื่อชดเชยค่าเสียโอกาสแล้ว
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("ล่วงหน้า") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ผู้เช่ายกเลิกล่วงหน้า (มากกว่า 2 วันก่อนนัดรับ): ระบบได้คืนเงินเต็มจำนวนให้แก่ผู้เช่า และปลดล็อกสินค้าของคุณให้พร้อมสำหรับการจองใหม่แล้ว
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("ไม่ตรวจสลิป") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      คำขอเช่าถูกยกเลิกอัตโนมัติเนื่องจากไม่มีการตรวจสอบสลิปภายใน 8 ชั่วโมง ระบบได้คืนเงินให้แก่ผู้เช่าแล้ว
                     </p>
                   )}
                   {cancellationReport && (
@@ -1083,6 +1151,16 @@ export default function LendOrderDetailClient({
                       )}
                       <span>ตรวจสอบและยืนยันการชำระเงิน</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRejectPayment}
+                      disabled={isUpdating}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-xs font-semibold text-rose-600 transition duration-200 hover:bg-rose-50 active:scale-95 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      <span>ปฏิเสธสลิป (สลิปไม่ถูกต้อง / แนบใหม่)</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
@@ -1185,14 +1263,35 @@ export default function LendOrderDetailClient({
                         : "ถ่ายรูปสภาพหลังใช้งาน & รับคืน"}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDisputeModal(true)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-xs font-semibold text-rose-700 transition duration-200 hover:bg-rose-100 active:scale-95"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
+                    <span>รายงานสินค้าเสียหาย / ผู้เช่าไม่คืนสินค้า</span>
+                  </button>
                 </div>
               ) : currentStatus === "completed" ? (
-                <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
-                  <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
-                  </p>
-                  <p className="text-xs text-emerald-700">ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว</p>
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
+                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>การเช่าเสร็จสมบูรณ์เรียบร้อยแล้ว</span>
+                    </p>
+                    <p className="text-xs text-emerald-700">ตรวจรับอุปกรณ์คืนและบันทึกสภาพเรียบร้อยแล้ว</p>
+                  </div>
+                  {disputes.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDisputeModal(true)}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100/60 transition active:scale-95"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                      <span>รายงานสินค้าเสียหายหลังการเช่า</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
@@ -1216,11 +1315,15 @@ export default function LendOrderDetailClient({
                 {discount > 0 && (
                   <SummaryRow label="ส่วนลดเช่าระยะยาว" value={`−${thb.format(discount)}`} accent />
                 )}
+                <SummaryRow
+                  label="ค่าธรรมเนียมแพลตฟอร์ม (10%)"
+                  value={`−${thb.format(platformFee)}`}
+                />
                 <SummaryRow label="เงินประกัน (พักไว้กับระบบ)" value={thb.format(deposit)} muted />
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <span className="text-sm font-bold text-slate-900">รายได้สุทธิของคุณ</span>
                   <span className="text-lg font-extrabold text-emerald-700">
-                    +{thb.format(rentalFee)}
+                    +{thb.format(netIncome)}
                   </span>
                 </div>
               </dl>

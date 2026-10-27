@@ -252,23 +252,24 @@ export async function processSimulatedExpiredOrders(
             }
           }
         } else {
-          // FR-24: จำกัดเวลาผู้ให้เช่าในการตรวจสอบสลิป ไม่เกิน 8 ชั่วโมง (เกินแล้วอนุมัติอัตโนมัติ)
+          // TC05: ผู้ให้เช่าไม่กดยืนยัน/ปฏิเสธหลักฐานภายใน 8 ชั่วโมง -> ระบบปฏิเสธหลักฐาน ยกเลิกรายการ และคืนเงินทั้งหมดให้ผู้เช่า
           const slipTimeStr = pendingPayment.date || ord.updated_at;
           const slipMs = new Date(slipTimeStr).getTime();
           const slipDeadlineMs =
             slipMs + slipReviewTimeoutHours * 3600 * 1000;
 
           if (nowMs > slipDeadlineMs) {
-            // อนุมัติสลิปอัตโนมัติ
+            // ปฏิเสธหลักฐานและคืนเงินให้ผู้เช่า
             await admin
               .from("payment")
-              .update({ status: "paid" })
+              .update({ status: "refunded" })
               .eq("payment_id", pendingPayment.payment_id);
 
             const { error: upErr } = await admin
               .from("rentalorder")
               .update({
-                status: "paid",
+                status: "cancelled",
+                cancel_reason: "ผู้ให้เช่าไม่ตรวจสลิปตามเวลาที่กำหนด",
                 updated_at: timeInfo.simulatedNowIso,
               })
               .eq("order_id", ord.order_id);
@@ -277,8 +278,8 @@ export async function processSimulatedExpiredOrders(
               processed.push({
                 orderId: ord.order_id,
                 previousStatus: ord.status,
-                newStatus: "paid",
-                outcome: "slip_auto_approved",
+                newStatus: "cancelled",
+                outcome: "lender_slip_timeout",
               });
             }
           }

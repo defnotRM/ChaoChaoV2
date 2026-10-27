@@ -1,17 +1,25 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Scale,
+  AlertTriangle,
   CheckCircle2,
+  XCircle,
+  Clock,
   Eye,
   X,
   ExternalLink,
+  ShieldAlert,
+  Calendar,
+  DollarSign,
   User,
   Package,
+  FileText,
   RefreshCw,
   Search,
+  ChevronRight,
+  UserX,
 } from "lucide-react";
 
 interface ReportImage {
@@ -126,7 +134,7 @@ export default function AdminDisputesPage() {
     text: string;
   } | null>(null);
 
-  const fetchDisputes = useCallback(async () => {
+  const fetchDisputes = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/disputes?status=${statusFilter}`);
@@ -142,12 +150,11 @@ export default function AdminDisputesPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDisputes();
-  }, [fetchDisputes]);
+  }, [statusFilter]);
 
   const openResolveDialog = (dispute: DisputeReport) => {
     setSelectedDispute(dispute);
@@ -517,15 +524,12 @@ export default function AdminDisputesPage() {
                                   onClick={() => setPreviewImage(img.image_url)}
                                   className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-100 transition hover:border-[#3f6593]"
                                 >
-                                  <Image
+                                  <img
                                     src={img.image_url}
-                                    alt="ภาพหลักฐานข้อพิพาท"
-                                    fill
-                                    sizes="80px"
-                                    className="object-cover transition group-hover:scale-105"
-                                    unoptimized={img.image_url.startsWith("data:") || img.image_url.startsWith("blob:")}
+                                    alt="Evidence"
+                                    className="h-full w-full object-cover transition group-hover:scale-105"
                                   />
-                                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                                     <Eye className="h-4 w-4 text-white" />
                                   </div>
                                 </div>
@@ -695,14 +699,11 @@ export default function AdminDisputesPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="relative mt-3 flex min-h-[300px] max-h-[75vh] w-full items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
-              <Image
+            <div className="mt-3 flex max-h-[75vh] items-center justify-center overflow-auto rounded-2xl bg-slate-900/5 p-2">
+              <img
                 src={previewImage}
-                alt="ภาพหลักฐานข้อพิพาทขนาดเต็ม"
-                width={800}
-                height={600}
+                alt="Evidence"
                 className="max-h-[70vh] w-auto rounded-xl object-contain"
-                unoptimized={previewImage.startsWith("data:") || previewImage.startsWith("blob:")}
               />
             </div>
             <div className="mt-3 flex justify-end">
@@ -895,15 +896,18 @@ export default function AdminDisputesPage() {
                         onChange={() => {
                           setSelectedOutcome("false_advertisement_rejected");
                           setReportStatus("dismissed");
+                          setVerdictText(
+                            "ตรวจสอบหลักฐานแล้วพบว่าสินค้าตรงปกตามที่ระบุในรายการ คืนเงินประกัน 100% ให้แก่ผู้เช่า และโอนค่าเช่าหลังหักค่าธรรมเนียม 10% ให้แก่ผู้ให้เช่า"
+                          );
                         }}
                         className="mt-0.5 text-[#1b3554]"
                       />
                       <div className="text-xs">
                         <span className="font-bold text-slate-800 block">
-                          ปฏิเสธ: สินค้าตรงตามที่ระบุไว้
+                          ปฏิเสธ: สินค้าตรงตามที่ระบุไว้ (สินค้าตรงปก)
                         </span>
                         <span className="text-slate-500">
-                          ยกเลิกข้อพิพาท ดำเนินการต่อตามปกติ
+                          ยกเลิกข้อพิพาท คืนเงินประกัน 100% ให้ผู้เช่า และโอนค่าเช่าหักค่าธรรมเนียม 10% ให้ผู้ให้เช่า
                         </span>
                       </div>
                     </label>

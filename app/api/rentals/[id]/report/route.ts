@@ -127,6 +127,11 @@ export async function POST(
     const formData = await request.formData();
     const reportTypeId = formData.get("reportTypeId") as string;
     const description = (formData.get("description") as string)?.trim();
+    const damageAmountRaw = formData.get("damageAmount") as string;
+    const damageAmount =
+      damageAmountRaw && !isNaN(Number(damageAmountRaw))
+        ? Number(damageAmountRaw)
+        : null;
     const imageFiles = formData.getAll("images") as File[];
 
     if (!reportTypeId) {
@@ -178,6 +183,7 @@ export async function POST(
         reported_user_id: reportedUserId,
         report_type_id: reportTypeId,
         description,
+        damage_amount: damageAmount,
         status: "pending_investigation",
       })
       .select("report_id")

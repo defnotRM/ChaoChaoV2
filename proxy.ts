@@ -81,14 +81,12 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const activeRole = request.cookies.get("chaochao_active_role")?.value;
 
-  // 0. บัญชีถูกระงับ: ล็อกไว้ที่แดชบอร์ดของตัวเองเท่านั้น (เช็คก่อนกฎอื่นทั้งหมด)
+  // 0. บัญชีถูกระงับ: บล็อกการเข้าใช้งาน และเตะออกจากระบบทันที
   if (user && (await isSuspendedUser(user.id))) {
-    if (!isSuspendedAllowedPath(pathname, user.id)) {
-      return NextResponse.redirect(
-        new URL(suspendedHome(user.id), request.url),
-      );
-    }
-    return response;
+    await supabase.auth.signOut();
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("error", "suspended");
+    return NextResponse.redirect(loginUrl);
   }
 
   // 1. ถ้าเป็น Admin: ล็อคให้อยู่เฉพาะใน /admin/* เท่านั้น

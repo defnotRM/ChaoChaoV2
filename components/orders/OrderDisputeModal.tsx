@@ -42,6 +42,7 @@ export default function OrderDisputeModal({
 }: OrderDisputeModalProps) {
   const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+  const [damageAmount, setDamageAmount] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
@@ -53,6 +54,7 @@ export default function OrderDisputeModal({
     if (isOpen) {
       setErrorMsg(null);
       setDescription("");
+      setDamageAmount("");
       setSelectedFiles([]);
       setFilePreviews([]);
 
@@ -64,7 +66,13 @@ export default function OrderDisputeModal({
           if (res.ok && data.reportTypes) {
             setReportTypes(data.reportTypes);
             if (data.reportTypes.length > 0) {
-              setSelectedTypeId(data.reportTypes[0].report_type_id);
+              const defaultType =
+                userRole === "lender"
+                  ? data.reportTypes.find(
+                      (t: any) => t.type_name === "damaged_item"
+                    ) || data.reportTypes[0]
+                  : data.reportTypes[0];
+              setSelectedTypeId(defaultType.report_type_id);
             }
           }
         } catch (err) {
@@ -125,6 +133,9 @@ export default function OrderDisputeModal({
       const formData = new FormData();
       formData.append("reportTypeId", selectedTypeId);
       formData.append("description", description.trim());
+      if (damageAmount.trim()) {
+        formData.append("damageAmount", damageAmount.trim());
+      }
 
       selectedFiles.forEach((file) => {
         formData.append("images", file);
@@ -240,6 +251,27 @@ export default function OrderDisputeModal({
               {description.length} ตัวอักษร (อย่างน้อย 10 ตัวอักษร)
             </p>
           </div>
+
+          {/* Estimated Damage Amount (for damaged_item or lender) */}
+          {userRole === "lender" && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                ประเมินค่าซ่อม / ค่าเสียหาย (บาท) <span className="font-normal text-slate-400">(ถ้ามี)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={damageAmount}
+                onChange={(e) => setDamageAmount(e.target.value)}
+                placeholder="เช่น 500 หรือ 2000"
+                className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 outline-none transition focus:border-[#3f6593] focus:ring-2 focus:ring-[#c0e6fd]/50"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                ระบุค่าซ่อมตามใบประเมินหรือค่าใช้จ่ายจริง เพื่อให้ Admin พิจารณาหักจากเงินประกันหรือเรียกเก็บส่วนต่าง
+              </p>
+            </div>
+          )}
 
           {/* Images Upload */}
           <div>

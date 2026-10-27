@@ -252,6 +252,8 @@ export async function POST(request: Request) {
     const finalFee = rentalFee ?? item.rental_fee_per_day;
     const finalDeposit = deposit ?? item.deposit;
     const finalTotal = totalPaid ?? Number(finalFee) + Number(finalDeposit);
+    const calculatedFee = Math.round(Number(finalFee) * 0.1);
+    const calculatedNetIncome = Number(finalFee) - calculatedFee;
 
     const normalizedMeetupTime = (meetupTime || "12:00").trim().slice(0, 5);
     const normalizedReturnTime = (returnTime || "12:00").trim().slice(0, 5);
@@ -297,6 +299,8 @@ export async function POST(request: Request) {
         rental_fee: finalFee,
         deposit: finalDeposit,
         total_paid: finalTotal,
+        fee: calculatedFee,
+        net_income: calculatedNetIncome,
         status: "requested",
         created_at: nowIso,
         updated_at: nowIso,

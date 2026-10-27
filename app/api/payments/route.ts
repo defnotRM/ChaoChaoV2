@@ -95,9 +95,12 @@ export async function POST(request: Request) {
       amount = Number(order.total_paid) || (Number(order.rental_fee) + Number(order.deposit)) || 0;
     }
 
-    // Default mock slip image if not provided
+    // ตรวจสอบว่าต้องมีรูปภาพสลิปเสมอ (TC03)
     if (!slipDataUri) {
-      slipDataUri = "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60";
+      return NextResponse.json(
+        { message: "กรุณาแนบรูปภาพสลิปหลักฐานการชำระเงิน" },
+        { status: 400 }
+      );
     }
 
     // 3) ลบหรืออัปเดตสลิปเดิมหากมี

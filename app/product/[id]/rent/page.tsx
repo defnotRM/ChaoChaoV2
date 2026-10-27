@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { BOOKING_BLOCKING_STATUSES } from "@/lib/booking-statuses";
 import { getOwnerRatings } from "@/lib/products/ratings";
+import { getSimulatedTimeInfo } from "@/lib/simulated-time";
 import { createAdminClient } from "@/lib/supabase/admin";
 import BookingClient from "./BookingClient";
 import type { BookingLocation, BookingPageData, DateRange } from "./types";
@@ -58,6 +59,7 @@ export default async function ProductRentPage({
     imageRes,
     ordersRes,
     ownerRatings,
+    simulatedTimeInfo,
   ] = await Promise.all([
     admin
       .from("useraccount")
@@ -89,6 +91,7 @@ export default async function ProductRentPage({
       .eq("item_id", id)
       .in("status", [...BOOKING_BLOCKING_STATUSES]),
     getOwnerRatings(admin, [item.user_id]),
+    getSimulatedTimeInfo(admin),
   ]);
 
   let owner = ownerRes.data;
@@ -187,5 +190,5 @@ export default async function ProductRentPage({
     rating,
   };
 
-  return <BookingClient key={item.item_id} data={data} />;
+  return <BookingClient key={item.item_id} data={data} initialSimulatedTime={simulatedTimeInfo.simulatedNowIso} />;
 }

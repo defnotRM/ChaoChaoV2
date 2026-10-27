@@ -418,6 +418,11 @@ export default function RentOrderDetailClient({
 
   async function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
+    if (!slipPreview && !slipFile) {
+      setErrorMsg("กรุณาเลือกรูปภาพสลิปการโอนเงินก่อนดำเนินการ");
+      return;
+    }
+
     try {
       setIsSubmittingSlip(true);
       setErrorMsg(null);
@@ -425,7 +430,7 @@ export default function RentOrderDetailClient({
       const payload = {
         orderId: order.order_id,
         amount: totalPaid,
-        slipImageUrl: slipPreview || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=60",
+        slipImageUrl: slipPreview,
       };
 
       const res = await fetch("/api/payments", {
@@ -653,6 +658,18 @@ export default function RentOrderDetailClient({
                             )}
                           </div>
                         )}
+                        {(dsp.rentalreporttype?.type_name === "false_advertisement" || dsp.description?.includes("ตรงปก") || dsp.verdict?.includes("สินค้าตรงปก")) && (dsp.status === "dismissed" || dsp.verdict?.includes("สินค้าตรงปก")) && (
+                          <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-200 text-emerald-800 space-y-1">
+                            <p className="font-bold text-xs flex items-center gap-1.5 text-emerald-900">
+                              <span className="text-emerald-600 font-bold">✓</span> รายละเอียดการคืนเงิน (สินค้าตรงปก):
+                            </p>
+                            <p className="text-xs text-emerald-800 leading-relaxed">
+                              • คืนเงินประกัน 100% ({thb.format(deposit)}) ให้แก่คุณเรียบร้อยแล้ว
+                              <br />
+                              • โอนค่าเช่าหลังหักค่าธรรมเนียม 10% ให้แก่ผู้ให้เช่าตามเงื่อนไข
+                            </p>
+                          </div>
+                        )}
                         {dsp.rentalreportimage && dsp.rentalreportimage.length > 0 && (
                           <div>
                             <p className="font-bold text-slate-600 mb-1.5">
@@ -718,6 +735,21 @@ export default function RentOrderDetailClient({
                   {currentStatus === "rejected_at_meetup" && (
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
                       ตามเงื่อนไข FR-28 กรณีที่ 3: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) รวม {thb.format(deposit + rentalFee * 0.2)} ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("กะทันหัน") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ยกเลิกกะทันหัน (ภายใน 2 วันก่อนนัดรับ): ระบบได้คืนเงินประกัน ({thb.format(deposit)}) ให้แก่คุณ และโอนค่าเช่าหลังหักค่าธรรมเนียมให้แก่ผู้ให้เช่าเพื่อชดเชยค่าเสียโอกาสตามเงื่อนไข
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("ล่วงหน้า") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ยกเลิกล่วงหน้า (มากกว่า 2 วันก่อนนัดรับ): ระบบได้คืนเงินประกันและค่าเช่าเต็มจำนวน 100% ({thb.format(deposit + rentalFee)}) ให้แก่คุณเรียบร้อยแล้ว
+                    </p>
+                  )}
+                  {(order.cancel_reason || cancelReason)?.includes("ไม่ตรวจสลิป") && (
+                    <p className="text-xs text-rose-700 leading-relaxed pl-7">
+                      ระบบยกเลิกคำสั่งเช่าอัตโนมัติเนื่องจากผู้ให้เช่าไม่ได้ตรวจสอบสลิปภายใน 8 ชั่วโมง ระบบได้คืนเงินทั้งหมด ({thb.format(deposit + rentalFee)}) ให้แก่คุณเรียบร้อยแล้ว
                     </p>
                   )}
                   {cancellationReport && (
@@ -1107,6 +1139,17 @@ export default function RentOrderDetailClient({
                 ) : currentStatus === "awaiting_payment" ? (
                   canPay ? (
                     <div className="space-y-2">
+                      {paymentsList.some((p) => p.status === "rejected") && (
+                        <div className="rounded-2xl bg-rose-50 p-3.5 border border-rose-200 text-xs text-rose-800 space-y-1">
+                          <p className="font-bold flex items-center gap-1.5 text-rose-900">
+                            <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                            <span>สลิปก่อนหน้านี้ไม่ผ่านการตรวจสอบ</span>
+                          </p>
+                          <p className="text-[11px] text-rose-700">
+                            ผู้ให้เช่าได้ปฏิเสธสลิป กรุณาตรวจสอบยอดโอนและแนบสลิปที่ถูกต้องใหม่อีกครั้ง
+                          </p>
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => setShowPaymentModal(true)}
@@ -1221,6 +1264,15 @@ export default function RentOrderDetailClient({
                           ? "ดูรูปหลักฐานการคืนของ"
                           : "ถ่ายรูปสภาพตอนคืนอุปกรณ์"}
                       </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDisputeModal(true)}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-xs font-semibold text-rose-700 transition duration-200 hover:bg-rose-100 active:scale-95"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
+                      <span>รายงานปัญหาการคืนสินค้า</span>
                     </button>
                   </div>
                 ) : currentStatus === "completed" ? (
@@ -1399,8 +1451,8 @@ export default function RentOrderDetailClient({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingSlip}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
+                  disabled={isSubmittingSlip || (!slipFile && !slipPreview)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmittingSlip ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   <span>ยืนยันการแจ้งชำระเงิน</span>

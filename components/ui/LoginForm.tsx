@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,9 +11,15 @@ import {
   EyeOff,
   AlertCircle,
   AlertTriangle,
+  ShieldCheck,
+  Sparkles,
+  Camera,
+  CheckCircle2,
+  Zap,
 } from "lucide-react";
 import {
   loginSchema,
+  roleLabels,
   type LoginFormData,
 } from "@/lib/validations/login";
 
@@ -47,12 +52,7 @@ export default function LoginForm() {
         body: JSON.stringify(data),
       });
 
-      let result: {
-        success?: boolean;
-        error?: string;
-        message?: string;
-        redirectTo?: string;
-      } | null = null;
+      let result: any = null;
       const contentType = res.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         result = await res.json().catch(() => null);
@@ -63,13 +63,12 @@ export default function LoginForm() {
           result?.message ??
             (res.status === 404
               ? "ไม่พบเส้นทาง API (กรุณารีสตาร์ทเซิร์ฟเวอร์)"
-              : `เข้าสู่ระบบไม่สำเร็จ (${res.status})`),
+              : `เข้าสู่ระบบไม่สำเร็จ (${res.status})`)
         );
         return;
       }
 
-      const redirectPath =
-        searchParams.get("redirect") || result?.redirectTo || "/";
+      const redirectPath = searchParams.get("redirect") || result.redirectTo || "/";
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth-state-change"));
       }
@@ -87,11 +86,9 @@ export default function LoginForm() {
       <div className="relative hidden w-1/2 flex-col items-center justify-center bg-gradient-to-br from-[#000f22] via-[#3f6593] to-[#1b3554] p-12 text-white lg:flex">
         <div className="max-w-md text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm">
-            <Image
+            <img
               src="/logo.svg"
-              alt="โลโก้ ChaoChao"
-              width={64}
-              height={64}
+              alt="ChaoChao"
               className="h-full w-full rounded-2xl object-cover"
             />
           </div>
@@ -108,11 +105,9 @@ export default function LoginForm() {
           {/* โลโก้ (แสดงเฉพาะจอมือถือ เพราะจอ Desktop มีฝั่งซ้ายอยู่แล้ว) */}
           <div className="mb-8 flex flex-col items-center gap-3 lg:items-start">
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#1b3554] lg:hidden">
-              <Image
+              <img
                 src="/logo.svg"
-                alt="โลโก้ ChaoChao"
-                width={48}
-                height={48}
+                alt="ChaoChao"
                 className="h-full w-full object-contain"
               />
             </div>
@@ -126,11 +121,23 @@ export default function LoginForm() {
             </div>
           </div>
 
+          {/* Suspended Account Banner */}
+          {searchParams.get("error") === "suspended" && !serverError && (
+            <div className="mb-5 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <p className="text-sm font-medium text-rose-700">
+                บัญชีผู้ใช้งานนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ
+              </p>
+            </div>
+          )}
+
           {/* Server Error Banner */}
           {serverError && (
             <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-              <p className="text-sm font-medium text-red-600">{serverError}</p>
+              <p className="text-sm font-medium text-red-600">
+                {serverError}
+              </p>
             </div>
           )}
 
@@ -209,6 +216,8 @@ export default function LoginForm() {
                 </p>
               )}
             </div>
+
+
 
             {/* Submit */}
             <button

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 
 import {
@@ -27,7 +28,36 @@ export default function ProductFilters({
   onToggleCategory,
   onReset,
 }: ProductFiltersProps) {
-  const today = getTodayInBangkok();
+  const [today, setToday] = useState(() => getTodayInBangkok());
+
+  useEffect(() => {
+    let active = true;
+    async function loadSimulated() {
+      try {
+        const res = await fetch("/api/simulated-time", { cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          if (active && json.simulatedNowIso) {
+            const dateStr = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Bangkok",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date(json.simulatedNowIso));
+            setToday(dateStr);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadSimulated();
+    const timer = setInterval(loadSimulated, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   return (
     <div className="space-y-4">

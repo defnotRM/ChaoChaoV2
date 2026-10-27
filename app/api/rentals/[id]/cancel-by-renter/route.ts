@@ -149,6 +149,19 @@ export async function POST(
       });
     }
 
+    const lenderId = (order.item as any)?.user_id;
+    // กรณีผู้เช่ายกเลิกกะทันหัน: บันทึกรายการโอนค่าเช่าสุทธิ (หลังหักค่าธรรมเนียม) ให้ผู้ให้เช่า
+    if (!isAdvance && netIncome > 0 && lenderId) {
+      await admin.from("payment").insert({
+        order_id: orderId,
+        user_id: lenderId,
+        amount: netIncome,
+        status: "paid",
+        date: nowIso,
+        transaction_ref: `PAYOUT-LENDER-CANCEL-${Date.now().toString().slice(-8)}`,
+      });
+    }
+
     // 5. อัปเดตสถานะคำสั่งเช่าเป็น cancelled
     const { data: updatedOrder, error: updateError } = await admin
       .from("rentalorder")
@@ -172,7 +185,6 @@ export async function POST(
     }
 
     // ส่งการแจ้งเตือนเรื่องการยกเลิกและการกระจายเงิน (FR-51)
-    const lenderId = (order.item as any)?.user_id;
     const itemName = (order.item as any)?.item_name || "อุปกรณ์";
     const notifs = [];
 
