@@ -171,17 +171,30 @@ export async function POST(
     }
 
     // 4. กรณีต้องการแบน/ระงับบัญชี (FR-39)
-    if (suspendUserId) {
+    // outcome = suspend_user (รายงานบัญชี) ให้ระงับบัญชีที่ถูกรายงานเสมอ แม้ client ไม่ได้ส่ง suspendUserId มา
+    const targetSuspendId =
+      suspendUserId ||
+      (outcome === "suspend_user" ? report.reported_user_id : null);
+
+    if (targetSuspendId) {
       const { error: suspendError } = await admin
         .from("useraccount")
         .update({
           status: "Suspended",
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", suspendUserId);
+        .eq("user_id", targetSuspendId);
 
       if (suspendError) {
-        console.warn("Failed to suspend useraccount:", suspendError);
+        console.error("Failed to suspend useraccount:", suspendError);
+        return NextResponse.json(
+          {
+            message:
+              "บันทึกคำตัดสินแล้ว แต่ระงับบัญชีไม่สำเร็จ กรุณาตรวจสอบสถานะบัญชีอีกครั้ง",
+            details: suspendError.message,
+          },
+          { status: 500 },
+        );
       }
     }
 

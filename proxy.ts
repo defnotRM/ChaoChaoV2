@@ -1,5 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+
+// หน้าเดียวที่บัญชีถูกระงับ (Suspended) เข้าได้
+const SUSPENDED_HOME = "/lender/dashboard";
+
+// อ่านสถานะบัญชีด้วย service role (ไม่พึ่ง RLS) ถ้าเช็กไม่ได้ให้ปล่อยผ่านเพื่อไม่ให้เว็บล่มทั้งระบบ
+async function isSuspendedUser(userId: string): Promise<boolean> {
+  const url =
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!url || !serviceKey) return false;
+  try {
+    const admin = createSupabaseClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data } = await admin
+      .from("useraccount")
+      .select("status")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data?.status === "Suspended";
+  } catch {
+    return false;
+  }
+}
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -47,6 +72,16 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const activeRole = request.cookies.get("chaochao_active_role")?.value;
+
+  // 0. บัญชีที่ถูกระงับ: ล็อกให้อยู่ที่หน้า dashboard เท่านั้น (เช็กก่อนทุกกฎ กันการแก้ cookie role)
+  if (user && (await isSuspendedUser(user.id))) {
+    const onSuspendedHome =
+      pathname === SUSPENDED_HOME || pathname.startsWith(`${SUSPENDED_HOME}/`);
+    if (!onSuspendedHome) {
+      return NextResponse.redirect(new URL(SUSPENDED_HOME, request.url));
+    }
+    return response;
+  }
 
   // 1. ถ้าเป็น Admin: ล็อคให้อยู่เฉพาะใน /admin/* เท่านั้น
   if (activeRole === "admin" && user) {

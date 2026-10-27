@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Kanit } from "next/font/google";
 import Navbarver2 from "@/components/layout/Navbarver2";
+import SuspendedBanner from "@/components/layout/SuspendedBanner";
 import Footer from "@/components/layout/Footer";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col bg-[#f8fafc]">
         <ToastProvider>
           <Navbarver2 />
+          <SuspendedBanner />
           <main className="flex-1">{children}</main>
           <Footer />
         </ToastProvider>
