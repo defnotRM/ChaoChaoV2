@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getOwnerRatings } from "@/lib/products/ratings";
 import type {
   ItemCategoryRow,
   ItemCondition,
@@ -122,7 +123,7 @@ export async function getProducts(): Promise<Product[]> {
   const ids = items.map((it) => it.item_id);
   const ownerIds = [...new Set(items.map((it) => it.user_id).filter(Boolean))];
 
-  const [catRes, imgRes, locRes, availRes, reviewRes, ownersRes] = await Promise.all([
+  const [catRes, imgRes, locRes, availRes, ratings, ownersRes] = await Promise.all([
     admin.from("itemcategory").select("category_id, category_name"),
     admin
       .from("itemimage")
@@ -137,9 +138,8 @@ export async function getProducts(): Promise<Product[]> {
       .select("item_id, start_date, end_date")
       .in("item_id", ids)
       .order("start_date", { ascending: true }),
-    admin
-      .from("review")
-      .select("rating, order:order_id!inner ( item_id )"),
+    // คะแนนสินค้าและคะแนนผู้ให้เช่า คิดแบบเดียวกับหน้าสินค้าและหน้าจอง
+    getOwnerRatings(admin, ownerIds),
     ownerIds.length > 0
       ? admin
           .from("useraccount")
@@ -180,33 +180,6 @@ export async function getProducts(): Promise<Product[]> {
     availByItem.set(a.item_id, list);
   }
 
-  // aggregate rating ต่อชิ้นจาก review (join ผ่าน rentalorder.item_id)
-  const ratingAgg = new Map<string, { sum: number; count: number }>();
-  for (const r of (reviewRes.data || []) as unknown as Array<{ rating: number; order: { item_id: string } | null }>) {
-    const itemId = r.order?.item_id;
-    if (!itemId) continue;
-    const cur = ratingAgg.get(itemId) || { sum: 0, count: 0 };
-    cur.sum += toNumber(r.rating);
-    cur.count += 1;
-    ratingAgg.set(itemId, cur);
-  }
-
-  // aggregate เรตติ้งเฉลี่ยต่อผู้ให้เช่า (owner)
-  const itemOwnerMap = new Map<string, string>(
-    items.map((it) => [it.item_id, it.user_id])
-  );
-  const ownerRatingAgg = new Map<string, { sum: number; count: number }>();
-  for (const r of (reviewRes.data || []) as unknown as Array<{ rating: number; order: { item_id: string } | null }>) {
-    const itemId = r.order?.item_id;
-    if (!itemId) continue;
-    const ownerUserId = itemOwnerMap.get(itemId);
-    if (!ownerUserId) continue;
-    const cur = ownerRatingAgg.get(ownerUserId) || { sum: 0, count: 0 };
-    cur.sum += toNumber(r.rating);
-    cur.count += 1;
-    ownerRatingAgg.set(ownerUserId, cur);
-  }
-
   const ownerMap = new Map<
     string,
     {
@@ -232,9 +205,9 @@ export async function getProducts(): Promise<Product[]> {
   }
 
   return items.map((it) => {
-    const agg = ratingAgg.get(it.item_id);
+    const itemRating = ratings.byItem.get(it.item_id);
     const ownerRow = ownerMap.get(it.user_id);
-    const ownerAgg = ownerRatingAgg.get(it.user_id);
+    const ownerRating = ratings.byOwner.get(it.user_id);
     const ownerDisplayName =
       ownerRow?.username ||
       [ownerRow?.firstname, ownerRow?.lastname].filter(Boolean).join(" ").trim() ||
@@ -251,16 +224,16 @@ export async function getProducts(): Promise<Product[]> {
       pricePerDay: toNumber(it.rental_fee_per_day),
       deposit: toNumber(it.deposit),
       condition: normalizeCondition(it.item_condition),
-      rating: agg ? agg.sum / agg.count : 0,
-      reviewCount: agg ? agg.count : 0,
+      rating: itemRating?.rating ?? 0,
+      reviewCount: itemRating?.reviewCount ?? 0,
       locations: locationsByItem.get(it.item_id) || [],
       ownerId: it.user_id,
       owner: {
         id: it.user_id,
         displayName: ownerDisplayName,
         avatarUrl: ownerRow?.avatar_url || null,
-        rating: ownerAgg ? ownerAgg.sum / ownerAgg.count : 0,
-        reviewCount: ownerAgg ? ownerAgg.count : 0,
+        rating: ownerRating?.rating ?? 0,
+        reviewCount: ownerRating?.reviewCount ?? 0,
         responseRate: 0,
         isVerified: ownerRow?.identity_verification_status === "verified",
         joinedAt: ownerRow?.created_at || it.created_at,
@@ -286,7 +259,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 
   if (error || !it) return null;
 
-  const [catRes, imgRes, locRes, availRes, termsRes, ownerRes, itemOrdersRes, ownerItemsRes] =
+  const [catRes, imgRes, locRes, availRes, termsRes, ownerRes, itemOrdersRes, ownerRatings] =
     await Promise.all([
       admin
         .from("itemcategory")
@@ -321,8 +294,7 @@ export async function getProductById(id: string): Promise<Product | null> {
         .from("rentalorder")
         .select("order_id, user_id")
         .eq("item_id", id),
-      // item ทั้งหมดของ owner (สำหรับ aggregate เรตติ้งผู้ให้เช่า)
-      admin.from("item").select("item_id").eq("user_id", it.user_id),
+      getOwnerRatings(admin, [it.user_id]),
     ]);
 
   const imgRows = (imgRes.data || []) as ImageRow[];
@@ -434,22 +406,7 @@ export async function getProductById(id: string): Promise<Product | null> {
   const itemReviewSum = reviews.reduce((sum, r) => sum + r.rating, 0);
   const itemRating = reviews.length > 0 ? itemReviewSum / reviews.length : 0;
 
-  // เรตติ้งผู้ให้เช่า = เฉลี่ยรีวิวของทุก item ที่ owner ถือครอง
-  const ownerItemIds = (ownerItemsRes.data || []).map((r) => r.item_id);
-  let ownerRating = 0;
-  let ownerReviewCount = 0;
-  if (ownerItemIds.length > 0) {
-    const { data: ownerReviews } = await admin
-      .from("review")
-      .select("rating, order:order_id!inner ( item_id )")
-      .in("order.item_id", ownerItemIds);
-    const rows = (ownerReviews || []) as Array<{ rating: number }>;
-    ownerReviewCount = rows.length;
-    ownerRating =
-      rows.length > 0
-        ? rows.reduce((sum, r) => sum + toNumber(r.rating), 0) / rows.length
-        : 0;
-  }
+  const ownerRating = ownerRatings.byOwner.get(it.user_id);
 
   let owner = ownerRes.data;
   if (!owner || !owner.username) {
@@ -515,8 +472,8 @@ export async function getProductById(id: string): Promise<Product | null> {
       id: it.user_id,
       displayName: ownerName,
       avatarUrl,
-      rating: ownerRating,
-      reviewCount: ownerReviewCount,
+      rating: ownerRating?.rating ?? 0,
+      reviewCount: ownerRating?.reviewCount ?? 0,
       responseRate: 0, // ไม่มีใน DB
       isVerified: owner?.identity_verification_status === "verified",
       joinedAt: owner?.created_at ?? it.created_at,
