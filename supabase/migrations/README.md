@@ -62,7 +62,7 @@ seed data (role, หมวดสินค้า ฯลฯ), storage bucket 4 ต
 `33_settle_outcome_guard.sql` (ผู้ใช้ทั่วไปเรียก `settle_rental_order` ได้เฉพาะ `happy` ที่มีรูปคืนของครบทั้งสองฝ่าย และ `renter_rejected_meetup` โดยผู้เช่า ผลลัพธ์อื่นเฉพาะแอดมิน/cron),
 `34_cancel_reason_notification.sql` (แจ้งเตือนผู้เช่าพร้อมเหตุผลเมื่อผู้ให้เช่ายกเลิก),
 `35_slip_review_auto_reject.sql` (เกินเวลาตรวจสลิป cron ปฏิเสธสลิปอัตโนมัติแทนการอนุมัติเอง),
-`36_notification_hours_from_config.sql` (ข้อความแจ้งเตือน "ภายใน N ชั่วโมง" อ่านค่าจาก system_config)
+`36_notification_hours_from_config.sql` (ข้อความแจ้งเตือน "ภายใน N ชั่วโมง" อ่านค่าจาก system_config), `40_cron_thai_timezone.sql` (cron ตีความเวลานัดเป็นเวลาไทย Asia/Bangkok แทน UTC)
 ไฟล์ย้อนกลับอยู่ใน `down/` เช่นเดียวกัน หมายเหตุ: `full_install.sql` ยังเป็นสภาพหลัง 26 ส่วน 27–36 ให้รันต่อท้ายตามลำดับ
 
 ## ข้อควรรู้: ไฟล์เรียงเลขไม่ใช่สำเนาที่เล่นซ้ำแล้วได้ production เป๊ะ
