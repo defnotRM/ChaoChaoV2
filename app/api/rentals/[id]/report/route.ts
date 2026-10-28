@@ -41,6 +41,7 @@ export async function GET(
           verdict,
           damage_amount,
           created_at,
+          updated_at,
           rentalreporttype (
             report_type_id,
             type_name

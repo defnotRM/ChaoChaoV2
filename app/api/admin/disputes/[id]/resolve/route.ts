@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSimulatedTimeInfo } from "@/lib/simulated-time";
 
 export const dynamic = "force-dynamic";
 
@@ -144,13 +145,15 @@ export async function POST(
     }
 
     // 3. อัปเดตข้อมูล rentalreport
+    // ดึงเวลาจำลองเพื่อให้ตรงกับนาฬิกานับถอยหลัง 48 ชม. ฝั่งผู้เช่า
+    const { simulatedNowIso } = await getSimulatedTimeInfo(admin);
     const { error: updateReportError } = await admin
       .from("rentalreport")
       .update({
         status: reportStatus,
         verdict: verdict.trim(),
         damage_amount: Number(damageAmount) || null,
-        updated_at: new Date().toISOString(),
+        updated_at: simulatedNowIso,
       })
       .eq("report_id", reportId);
 
