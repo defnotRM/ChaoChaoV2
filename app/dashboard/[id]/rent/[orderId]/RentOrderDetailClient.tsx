@@ -108,6 +108,8 @@ export interface RentOrderDetailData {
 }
 
 const PAYMENT_WINDOW_HOURS = 8;
+// ค่าเสียหายเกินเงินประกัน: ผู้เช่าต้องชำระส่วนต่างภายใน 48 ชั่วโมงหลังแอดมินตัดสิน
+const ADDITIONAL_PAYMENT_WINDOW_HOURS = 48;
 
 const thb = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -214,6 +216,9 @@ export default function RentOrderDetailClient({
   const [currentStatus, setCurrentStatus] = useState(order.status);
   const [cancelReason, setCancelReason] = useState<string | null>(order.cancel_reason || null);
   const [paymentsList, setPaymentsList] = useState(data.payments);
+  // updated_at ล่าสุดของออเดอร์ (ใช้เป็นจุดเริ่มนับ 48 ชม. ถ้าไม่มีเวลาตัดสินของข้อพิพาท)
+  const [orderUpdatedAt, setOrderUpdatedAt] = useState<string>(order.updated_at);
+  const [showExtraModal, setShowExtraModal] = useState(false);
   const [evidenceList, setEvidenceList] = useState<EvidenceRecord[]>(
     data.evidence || []
   );
@@ -253,7 +258,8 @@ export default function RentOrderDetailClient({
 
   useEffect(() => {
     fetchDisputes();
-  }, [fetchDisputes]);
+    // โหลดใหม่เมื่อสถานะออเดอร์เปลี่ยน (เช่น แอดมินตัดสินแล้วเข้า รอชำระเพิ่ม)
+  }, [fetchDisputes, currentStatus]);
 
 
   const fetchLatestOrder = useCallback(async () => {
@@ -269,6 +275,9 @@ export default function RentOrderDetailClient({
 
       if (latestOrder.status) {
         setCurrentStatus(latestOrder.status);
+      }
+      if (latestOrder.updated_at) {
+        setOrderUpdatedAt(latestOrder.updated_at);
       }
       if (latestOrder.cancel_reason) {
         setCancelReason(latestOrder.cancel_reason);
@@ -373,6 +382,35 @@ export default function RentOrderDetailClient({
         : "ยังไม่ชำระเงิน";
   const paymentShownAmount = paidAmount > 0 ? paidAmount : pendingAmount;
 
+  // ── ส่วนต่างค่าเสียหายที่เกินเงินประกัน (status = awaiting_additional_payment) ──
+  const isAwaitingExtra = currentStatus === "awaiting_additional_payment";
+  const timeOf = (v?: string | null) => {
+    const t = v ? new Date(v).getTime() : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const extraDispute = isAwaitingExtra
+    ? [...disputes]
+        .filter((d: any) => Number(d.damage_amount) > deposit)
+        .sort(
+          (a: any, b: any) =>
+            timeOf(b.updated_at || b.created_at) -
+            timeOf(a.updated_at || a.created_at),
+        )[0]
+    : undefined;
+  const damageAmountDue = extraDispute ? Number(extraDispute.damage_amount) : 0;
+  const extraDue = damageAmountDue > deposit ? damageAmountDue - deposit : 0;
+  const extraStartMs =
+    timeOf(extraDispute?.updated_at) || timeOf(orderUpdatedAt) || Date.now();
+  const extraDeadlineISO = new Date(
+    extraStartMs + ADDITIONAL_PAYMENT_WINDOW_HOURS * 3_600_000,
+  ).toISOString();
+  // ในสถานะนี้สลิปที่ยัง pending คือสลิปส่วนต่าง (สลิปค่าเช่าเดิมเป็น paid แล้ว)
+  const extraSlip = isAwaitingExtra
+    ? paymentsList
+        .filter((p) => p.status === "pending")
+        .sort((a, b) => timeOf(b.date) - timeOf(a.date))[0]
+    : undefined;
+
   const canHandover = currentStatus === "paid" || currentStatus === "item_sent";
 
   const lenderBefore = summarizeEvidence(evidenceList, "lender_before");
@@ -459,6 +497,62 @@ export default function RentOrderDetailClient({
       router.refresh();
     } catch (err) {
       console.error("Payment submit error:", err);
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setIsSubmittingSlip(false);
+    }
+  }
+
+  function openExtraModal() {
+    setSlipFile(null);
+    setSlipPreview(null);
+    setErrorMsg(null);
+    setShowExtraModal(true);
+  }
+
+  // ส่งสลิปส่วนต่างค่าเสียหาย (ผู้ให้เช่าดูอย่างเดียว ไม่มีขั้นตรวจสอบ)
+  async function handleSubmitExtraSlip(e: React.FormEvent) {
+    e.preventDefault();
+    if (!slipPreview) {
+      setErrorMsg("กรุณาเลือกรูปภาพสลิปการโอนเงินก่อนส่ง");
+      return;
+    }
+    try {
+      setIsSubmittingSlip(true);
+      setErrorMsg(null);
+
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.order_id,
+          amount: extraDue,
+          slipImageUrl: slipPreview,
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        setErrorMsg(resData.message || "ส่งสลิปไม่สำเร็จ กรุณาลองใหม่");
+        return;
+      }
+
+      setPaymentsList([
+        ...paymentsList.filter((p) => p.status !== "pending"),
+        {
+          payment_id: resData.paymentId || "pending-extra",
+          amount: extraDue,
+          status: "pending",
+          slip_image_url: resData.slipUrl || slipPreview,
+          date: new Date().toISOString(),
+        },
+      ]);
+      setShowExtraModal(false);
+      setSlipFile(null);
+      setSlipPreview(null);
+      setSuccessMsg("ส่งสลิปการโอนส่วนต่างให้ผู้ให้เช่าเรียบร้อยแล้ว");
+      fetchLatestOrder();
+    } catch (err) {
+      console.error("Extra slip submit error:", err);
       setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     } finally {
       setIsSubmittingSlip(false);
@@ -554,6 +648,24 @@ export default function RentOrderDetailClient({
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
             <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* นาฬิกานับถอยหลัง 48 ชม. (กรณีค่าเสียหายเกินเงินประกัน ต้องชำระส่วนต่าง) */}
+        {isAwaitingExtra && (
+          <div className="mb-6">
+            <CountdownBanner
+              deadlineISO={extraDeadlineISO}
+              orderId={order.order_id}
+              title={
+                extraSlip
+                  ? "ส่งสลิปส่วนต่างให้ผู้ให้เช่าแล้ว (เวลาที่เหลือสำหรับชำระส่วนต่างค่าเสียหาย)"
+                  : "กรุณาชำระส่วนต่างค่าเสียหายภายใน 48 ชั่วโมง มิฉะนั้นระบบจะระงับบัญชีและดำเนินคดีตามกฎหมาย"
+              }
+              expiredTitle="เลยกำหนดชำระส่วนต่างค่าเสียหาย 48 ชั่วโมงแล้ว — ระบบอาจระงับบัญชีและดำเนินคดีตามกฎหมาย"
+              variant={extraSlip ? "info" : "warning"}
+              onExpired={fetchLatestOrder}
+            />
           </div>
         )}
 
@@ -1275,6 +1387,74 @@ export default function RentOrderDetailClient({
                       <span>รายงานปัญหาการคืนสินค้า</span>
                     </button>
                   </div>
+                ) : currentStatus === "awaiting_additional_payment" ? (
+                  <div className="space-y-2.5">
+                    <div className="rounded-2xl bg-rose-50 p-4 border border-rose-200 space-y-2">
+                      <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                        <span>ค่าเสียหายเกินเงินประกัน ต้องชำระส่วนต่าง</span>
+                      </p>
+                      {extraDue > 0 ? (
+                        <dl className="space-y-1 text-xs text-rose-800">
+                          <div className="flex items-center justify-between gap-3">
+                            <dt>ค่าเสียหายที่แอดมินกำหนด</dt>
+                            <dd className="font-semibold">{thb.format(damageAmountDue)}</dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <dt>หักจากเงินประกัน</dt>
+                            <dd className="font-semibold">−{thb.format(deposit)}</dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 border-t border-rose-200 pt-1.5 text-sm font-extrabold text-rose-900">
+                            <dt>ส่วนต่างที่ต้องชำระ</dt>
+                            <dd>{thb.format(extraDue)}</dd>
+                          </div>
+                        </dl>
+                      ) : (
+                        <p className="text-xs text-rose-700">กำลังโหลดรายละเอียดค่าเสียหาย...</p>
+                      )}
+                      <p className="text-[11px] leading-relaxed text-rose-700">
+                        โอนส่วนต่างภายใน 48 ชั่วโมง แล้วแนบสลิปเพื่อส่งให้ผู้ให้เช่าดู
+                        (ระบบไม่ตรวจสอบสลิปให้)
+                      </p>
+                    </div>
+
+                    {extraSlip ? (
+                      <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
+                        <p className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-4 w-4 text-sky-600 shrink-0" />
+                          <span>ส่งสลิปให้ผู้ให้เช่าแล้ว</span>
+                        </p>
+                        {extraSlip.slip_image_url && (
+                          <a
+                            href={extraSlip.slip_image_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 underline"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            <span>ดูสลิปที่ส่งไป</span>
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={openExtraModal}
+                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-[#3f6593] hover:bg-sky-50 active:scale-95"
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>ส่งสลิปใหม่</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={openExtraModal}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#1b3554]/15 transition duration-200 hover:from-[#000f22] hover:to-[#1b3554] active:scale-95"
+                      >
+                        <Wallet className="h-4 w-4" />
+                        <span>แนบสลิปการโอนส่วนต่าง</span>
+                      </button>
+                    )}
+                  </div>
                 ) : currentStatus === "completed" ? (
                   <div className="space-y-3">
                     <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200 space-y-1.5">
@@ -1376,6 +1556,106 @@ export default function RentOrderDetailClient({
         evidenceList={evidenceList}
         onSuccess={handleEvidenceSuccess}
       />
+      {/* Modal แนบสลิปส่วนต่างค่าเสียหาย (ส่งให้ผู้ให้เช่าดูอย่างเดียว) */}
+      {showExtraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowExtraModal(false)}
+              disabled={isSubmittingSlip}
+              aria-label="ปิด"
+              className="absolute right-4 top-4 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 pr-8">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#c0e6fd]/40 text-[#1b3554]">
+                <Wallet className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  แนบสลิปส่วนต่างค่าเสียหาย
+                </h3>
+                {extraDue > 0 && (
+                  <p className="text-xs text-slate-500">
+                    ยอดส่วนต่างที่ต้องชำระ {thb.format(extraDue)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitExtraSlip} className="mt-4 space-y-4">
+              <p className="rounded-2xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                สลิปนี้จะถูกส่งให้ผู้ให้เช่าดูเท่านั้น ระบบไม่มีการตรวจสอบหรืออนุมัติสลิป
+              </p>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                  แนบสลิปหลักฐานการโอนเงิน <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-5 text-center hover:bg-slate-50">
+                  {slipPreview ? (
+                    <div className="space-y-2">
+                      <img
+                        src={slipPreview}
+                        alt="สลิปโอนเงินส่วนต่าง"
+                        className="mx-auto max-h-48 rounded-xl object-contain shadow-sm"
+                      />
+                      <p className="text-xs text-slate-500">{slipFile?.name || "สลิปที่เลือก"}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">
+                        เลือกรูปภาพสลิปการโอนเงิน
+                      </p>
+                      <p className="text-[11px] text-slate-400">รองรับไฟล์ JPG, PNG, WebP</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange}
+                    className="mt-3 block w-full text-xs text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-[#1b3554] file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[#000f22]"
+                  />
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className="rounded-xl bg-rose-50 p-3 text-xs text-rose-600">{errorMsg}</div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowExtraModal(false)}
+                  disabled={isSubmittingSlip}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSlip || !slipPreview}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#1b3554] to-[#3f6593] px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-[#000f22] hover:to-[#1b3554] disabled:opacity-50"
+                >
+                  {isSubmittingSlip ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  <span>ส่งสลิปให้ผู้ให้เช่า</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">

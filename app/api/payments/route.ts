@@ -84,14 +84,62 @@ export async function POST(request: Request) {
     if (orderError || !order) {
       return NextResponse.json({ message: "ไม่พบออเดอร์นี้" }, { status: 404 });
     }
-    if (order.status !== "awaiting_payment" && order.status !== "requested") {
+    // สลิปส่วนต่างค่าเสียหาย (ค่าเสียหายเกินเงินประกัน) ส่งได้เมื่อออเดอร์อยู่ในสถานะ awaiting_additional_payment
+    const isAdditional = order.status === "awaiting_additional_payment";
+
+    if (
+      order.status !== "awaiting_payment" &&
+      order.status !== "requested" &&
+      !isAdditional
+    ) {
       return NextResponse.json(
         { message: "ออเดอร์นี้ไม่อยู่ในสถานะรอชำระเงิน" },
         { status: 400 }
       );
     }
 
-    if (!amount || amount <= 0) {
+    if (isAdditional) {
+      // เฉพาะผู้เช่าของออเดอร์นี้เท่านั้นที่ส่งสลิปส่วนต่างได้
+      const supabase = await createServerClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return NextResponse.json(
+          { message: "กรุณาเข้าสู่ระบบก่อนดำเนินการ" },
+          { status: 401 }
+        );
+      }
+      if (user.id !== order.user_id) {
+        return NextResponse.json(
+          { message: "เฉพาะผู้เช่าของออเดอร์นี้เท่านั้นที่ส่งสลิปได้" },
+          { status: 403 }
+        );
+      }
+
+      // ยอดส่วนต่าง = ค่าเสียหายที่แอดมินตัดสินล่าสุด − เงินประกัน (ไม่เชื่อยอดจากฝั่งผู้ใช้)
+      const { data: damageReport } = await admin
+        .from("rentalreport")
+        .select("damage_amount")
+        .eq("order_id", orderId)
+        .gt("damage_amount", 0)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const extraDue =
+        Number(damageReport?.damage_amount || 0) - Number(order.deposit || 0);
+      if (extraDue > 0) {
+        amount = extraDue;
+      }
+      if (!amount || amount <= 0) {
+        return NextResponse.json(
+          { message: "ไม่พบยอดส่วนต่างค่าเสียหายของออเดอร์นี้" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (!isAdditional && (!amount || amount <= 0)) {
       amount = Number(order.total_paid) || (Number(order.rental_fee) + Number(order.deposit)) || 0;
     }
 
@@ -119,7 +167,9 @@ export async function POST(request: Request) {
         amount,
         date: transferDate,
         slip_image_url: slipDataUri,
-        transaction_ref: transactionRef || `TXN-${Date.now().toString().slice(-8)}`,
+        transaction_ref:
+          transactionRef ||
+          `${isAdditional ? "EXTRA" : "TXN"}-${Date.now().toString().slice(-8)}`,
         status: "pending",
       })
       .select("payment_id")
@@ -134,7 +184,8 @@ export async function POST(request: Request) {
     }
 
     // ตรวจสอบสถานะ order ให้อยู่ใน awaiting_payment
-    if (order.status !== "awaiting_payment") {
+    // สลิปส่วนต่างค่าเสียหาย ห้ามเปลี่ยนสถานะออเดอร์
+    if (order.status !== "awaiting_payment" && !isAdditional) {
       await admin
         .from("rentalorder")
         .update({ status: "awaiting_payment", updated_at: nowIso })

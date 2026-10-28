@@ -240,7 +240,8 @@ export default function LendOrderDetailClient({
 
   useEffect(() => {
     fetchDisputes();
-  }, [fetchDisputes]);
+    // โหลดใหม่เมื่อสถานะออเดอร์เปลี่ยน (เช่น แอดมินตัดสินแล้วเข้า รอชำระเพิ่ม)
+  }, [fetchDisputes, currentStatus]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -388,6 +389,29 @@ export default function LendOrderDetailClient({
   const slipDeadlineISO = new Date(
     new Date(slipTime).getTime() + SLIP_REVIEW_WINDOW_HOURS * 3_600_000
   ).toISOString();
+
+  // ── ส่วนต่างค่าเสียหายที่เกินเงินประกัน (ผู้ให้เช่าดูสลิปอย่างเดียว ไม่ต้องตรวจสอบ) ──
+  const timeOf = (v?: string | null) => {
+    const t = v ? new Date(v).getTime() : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const isAwaitingExtra = currentStatus === "awaiting_additional_payment";
+  const extraDispute = isAwaitingExtra
+    ? [...disputes]
+        .filter((d: any) => Number(d.damage_amount) > deposit)
+        .sort(
+          (a: any, b: any) =>
+            timeOf(b.updated_at || b.created_at) -
+            timeOf(a.updated_at || a.created_at),
+        )[0]
+    : undefined;
+  const damageAmountDue = extraDispute ? Number(extraDispute.damage_amount) : 0;
+  const extraDue = damageAmountDue > deposit ? damageAmountDue - deposit : 0;
+  const extraSlip = isAwaitingExtra
+    ? paymentsList
+        .filter((p) => p.status === "pending")
+        .sort((a, b) => timeOf(b.date) - timeOf(a.date))[0]
+    : undefined;
 
   async function handleApprovePayment() {
     try {
@@ -1272,6 +1296,58 @@ export default function LendOrderDetailClient({
                     <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
                     <span>รายงานสินค้าเสียหาย / ผู้เช่าไม่คืนสินค้า</span>
                   </button>
+                </div>
+              ) : currentStatus === "awaiting_additional_payment" ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200 space-y-1.5">
+                    <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>รอผู้เช่าชำระส่วนต่างค่าเสียหาย</span>
+                    </p>
+                    {extraDue > 0 && (
+                      <p className="text-xs text-amber-800">
+                        ส่วนต่างที่ผู้เช่าต้องชำระ: <strong>{thb.format(extraDue)}</strong>{" "}
+                        (ค่าเสียหาย {thb.format(damageAmountDue)} − เงินประกัน {thb.format(deposit)})
+                      </p>
+                    )}
+                    <p className="text-[11px] leading-relaxed text-amber-700">
+                      ผู้เช่ามีเวลา 48 ชั่วโมงในการโอนและแนบสลิป ระบบไม่ตรวจสอบสลิปให้
+                      กรุณาตรวจสอบยอดเงินในบัญชีของคุณเอง
+                    </p>
+                  </div>
+
+                  {extraSlip ? (
+                    <div className="rounded-2xl bg-sky-50 p-4 border border-sky-200 space-y-2">
+                      <p className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-sky-600 shrink-0" />
+                        <span>ผู้เช่าส่งสลิปส่วนต่างแล้ว</span>
+                      </p>
+                      <p className="text-[11px] text-sky-700">
+                        {extraSlip.date && timeOf(extraSlip.date) > 0
+                          ? `ส่งเมื่อ ${dateTimeFmt.format(new Date(extraSlip.date))} · `
+                          : ""}
+                        ยอด {thb.format(Number(extraSlip.amount) || 0)}
+                      </p>
+                      {extraSlip.slip_image_url && (
+                        <a
+                          href={extraSlip.slip_image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block overflow-hidden rounded-xl border border-sky-200 bg-white"
+                        >
+                          <img
+                            src={extraSlip.slip_image_url}
+                            alt="สลิปส่วนต่างค่าเสียหาย"
+                            className="max-h-56 w-full object-contain"
+                          />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                      ผู้เช่ายังไม่ได้ส่งสลิป
+                    </p>
+                  )}
                 </div>
               ) : currentStatus === "completed" ? (
                 <div className="space-y-3">
