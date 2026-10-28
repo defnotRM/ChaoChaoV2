@@ -767,7 +767,7 @@ export default function LendOrderDetailClient({
                         : currentStatus === "lender_noshow"
                           ? "ปิดการเช่า: ผู้ให้เช่าไม่อัปโหลดรูปหลักฐานภายใน 1 ชั่วโมง (ผู้ให้เช่าไม่มาตามนัด)"
                           : currentStatus === "rejected_at_meetup"
-                            ? "ปิดการเช่า: ผู้เช่าปฏิเสธรับสินค้าหน้างาน (FR-28 กรณีที่ 3)"
+                            ? "ปิดการเช่า: ผู้เช่าปฏิเสธรับสินค้าหน้างาน"
                             : (order.cancel_reason || cancelReason)
                               ? `สถานะ: ยกเลิกคำขอ (${order.cancel_reason || cancelReason})`
                               : `สถานะ: ${chip.label}`}
@@ -775,17 +775,17 @@ export default function LendOrderDetailClient({
                   </div>
                   {currentStatus === "renter_noshow" && (
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
-                      ตามเงื่อนไข FR-28 กรณีที่ 1: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) ให้แก่ผู้เช่า และโอนค่าเช่าทั้งหมด ({thb.format(rentalFee)}) แก่ผู้ให้เช่า
+                      ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) ให้แก่ผู้เช่า และโอนค่าเช่าทั้งหมด ({thb.format(rentalFee)}) แก่ผู้ให้เช่า
                     </p>
                   )}
                   {currentStatus === "lender_noshow" && (
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
-                      ตามเงื่อนไข FR-28 กรณีที่ 2: ระบบคืนเงินทั้งหมด (เงินประกัน {thb.format(deposit)} + ค่าเช่า {thb.format(rentalFee)} = {thb.format(deposit + rentalFee)}) ให้แก่ผู้เช่า
+                      ระบบคืนเงินทั้งหมด (เงินประกัน {thb.format(deposit)} + ค่าเช่า {thb.format(rentalFee)} = {thb.format(deposit + rentalFee)}) ให้แก่ผู้เช่า
                     </p>
                   )}
                   {currentStatus === "rejected_at_meetup" && (
                     <p className="text-xs text-rose-700 leading-relaxed pl-7">
-                      ตามเงื่อนไข FR-28 กรณีที่ 3: ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
+                      ระบบคืนเงินประกันทั้งหมด ({thb.format(deposit)}) พร้อมค่าเช่า 20% ({thb.format(rentalFee * 0.2)}) ให้แก่ผู้เช่า และโอนค่าเช่าอีก 80% ({thb.format(rentalFee * 0.8)}) เป็นค่าเสียเวลาแก่ผู้ให้เช่า
                     </p>
                   )}
                   {(order.cancel_reason || cancelReason)?.includes("กะทันหัน") && (
